@@ -41,6 +41,37 @@ riktiga risken.
 - **Servering:** **Ollama** (GGUF) för litet team/enkel drift; **vLLM** (AWQ/GPTQ) för fler samtidiga
   användare/genomströmning.
 
+## 11 GB VRAM (t.ex. alienqronk) — vad som faktiskt ryms
+
+**Hård sanning:** de modeller som tool-callar *tillförlitligt* (juni 2026) är alla **≥27B**
+(Gemma 4 27B, Qwen3 32B, Qwen3-Coder 30B, GLM-5.1 32B, Llama 3.3 70B) → **får inte plats på 11 GB**.
+Modeller under 7B och otränade allmänmodeller emitterar ofta **felaktiga verktygsanrop**. Det är den
+reella begränsningen på den här hårdvaran.
+
+**Vad som ryms (Q4_K_M):**
+- 7–8B (~5–6 GB) — gott om KV-cache-utrymme.
+- 12–14B (~7–9 GB) — ryms, men **kort kontext** (lite KV-rum kvar).
+- 32B (~20 GB) ryms **inte**. MoE-modeller som Qwen3-30B-A3B ryms inte heller — *alla* experter måste
+  vara residenta (~18 GB), trots få aktiva parametrar.
+- Konkreta kandidater: **Gemma 3 12B** (~6,7 GB), **Phi-4 14B**, **Qwen3 14B**, **Qwen2.5-Coder 7B/14B**,
+  Llama 3.x 8B, och **function-calling-specialiserade** små modeller (xLAM-2-8B-klass).
+
+**Lösningen = din instinkt: multi-modell-routing.**
+- **Agent-loop / `pm_*`-anrop** (där tillförlitlighet betyder mest): en **function-calling-tränad**
+  liten modell (xLAM-2-8B) eller Qwen-Coder — inte den "smartaste", utan den som *anropar verktyg rätt*.
+- **Allmänt / narrativ / sammanfattning:** Gemma 3 12B eller Phi-4.
+- **Kod:** Qwen2.5-Coder.
+- På 11 GB är bara **en** laddad åt gången → swap (latens) eller välj en modell som räcker till båda.
+
+**Mitigeringar som lyfter små modeller över sin viktklass:**
+- **Strikt strukturerad I/O + schema-validering + retry** — gateway avvisar ett felaktigt verktygsanrop
+  och ber modellen försöka igen. Höjer effektiv tillförlitlighet rejält.
+- **Retrieval ("dumpa aldrig", `SAFETY.md`)** håller kontexten kort → liten KV-cache → ryms på 11 GB.
+
+**Dom för alienqronk @ 11 GB:** utmärkt **dogfood-/test-box** för att bygga eval-sviten och hitta vilken
+liten modell som tool-callar tillräckligt bra. För **skarp kunddrift** sikta ändå på 24 GB (32B), där
+de bevisat tillförlitliga modellerna bor.
+
 ## Ärlig dom
 - **Realistiskt** för Memaix tack vare determinismgränsen: en **32B med hög BFCL-poäng (Qwen3-Coder-30B
   / Mistral Small 4) på en 24 GB-GPU** är den pragmatiska startpunkten.
