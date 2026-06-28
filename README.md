@@ -61,6 +61,7 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 | [docs/SECURITY.md](docs/SECURITY.md) | Härdning + kända fallgropar (OAuth, Cloudflare) |
 | [docs/WHITE-LABEL.md](docs/WHITE-LABEL.md) | Byt namn, domän, branding |
 | [docs/AI-CLIENTS.md](docs/AI-CLIENTS.md) | Koppla in Claude, ChatGPT, Mistral m.fl. |
+| [docs/MCP-API.md](docs/MCP-API.md) | Verktygsreferens — vad man kan göra via MCP |
 | [docs/SERVICE-PROVIDERS.md](docs/SERVICE-PROVIDERS.md) | Sälja installation/hosting till kunder |
 | [docs/BUILD.md](docs/BUILD.md) | Bygg-spec för gateway-implementationen |
 
