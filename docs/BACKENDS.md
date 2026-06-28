@@ -53,9 +53,19 @@ Med andra ord: self-host + single-tenant **flyttar bort den dyra publika app-ver
 Memaix-produkten. Kostnaden blir istället en engångs-OAuth-registrering per kund (som wizard/
 installer guidar, eller som du gör i installationstjänsten).
 
-> Undantag: ren **konsument-Gmail** (inte Workspace) kan inte göra interna appar → då krävs publik
-> verifiering + CASA. Rekommendation: kräv Workspace för Google-kunder, eller kör dem på IMAP med
-> OAuth om de har det. M365 motsvarande: kräver en tenant (alla affärskunder har det).
+### Att använda sin egen mail/dokument är ett förstklassigt scenario
+Vi **utesluter inget** — alla får koppla sin egen Gmail/M365 och läsa sina dokument. Det enda
+som skiljer är registreringsvägen per kontotyp:
+
+- **Workspace / M365** (där affärskunderna finns): egen intern/single-tenant-app → ingen publik
+  verifiering, ingen CASA. Ren väg.
+- **Konsument-Gmail** (privat, ej Workspace): stöds också, men kan inte använda intern-app-
+  undantaget. Vägar: (a) enskild självhostare kör Googles **testing-läge** med sig själv som
+  testanvändare — fungerar, men refresh-token förnyas var 7:e dag (friktion); (b) som **publik
+  tjänst i skala** krävs verifiering + CASA ($500–4 500/år).
+
+CASA-kostnaden gäller alltså bara publik åtkomst till *privat* Gmail i skala — inte Workspace,
+inte M365. Det är ett vägval per kund, inte en spärr.
 
 ## Config (per projekt-resurs)
 
