@@ -2,6 +2,9 @@
 
 .PHONY: install up down seed logs
 
+init:                  ## Front-dörren: ≤3 frågor → genererar all config + hemligheter, seedar demo
+	python3 scripts/bootstrap.py --init
+
 install:               ## Automatisk installation + Nextcloud-provisionering + vault-seed
 	@command -v python3 >/dev/null || { echo "python3 krävs"; exit 1; }
 	python3 scripts/bootstrap.py --tunnel

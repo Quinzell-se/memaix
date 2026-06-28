@@ -43,19 +43,15 @@ följer med.
 
 ```bash
 git clone <ditt-memaix-repo> memaix && cd memaix
-cp .env.example .env                         # fyll i hemligheter
-cp config/brand.example.yaml   config/brand.yaml
-cp config/memaix.example.yaml  config/memaix.yaml
-cp config/acl.example.yaml     config/acl.yaml
-# redigera config/* — domän, tunnel, projekt, användare, backends
-make install                                 # bootstrap: containrar + Nextcloud-provisionering + vault-seed
+make init      # ≤3 frågor → genererar all config + hemligheter, seedar demo-projekt
+make up        # reser hela stacken (bara Docker krävs)
+make doctor    # grönt
 ```
 
-`make install` startar containrarna, provisionerar Nextcloud automatiskt från `acl.yaml`
-(användare, app-lösenord, kalendrar) och seedar minnesvaulten. Har du egen backend:
-`make install-no-nextcloud`. Lägg sedan in din publika URL som custom connector i din AI
-(se `docs/AI-CLIENTS.md`).
-Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
+Du redigerar **ingen** YAML och genererar **inga** hemligheter för hand — `make init` gör allt.
+Default = lokal trial (stdio, inget externt konto). Vill du nå det från mobilen/teamet:
+`make go-remote` (lägger tunnel + OAuth). Vilken AI ska driva det? → **[docs/CHOOSE-YOUR-LLM.md](docs/CHOOSE-YOUR-LLM.md)**.
+Förenklingsplan: **[docs/SETUP-SIMPLIFICATION.md](docs/SETUP-SIMPLIFICATION.md)** · full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Dokumentation
 
