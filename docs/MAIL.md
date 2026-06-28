@@ -74,7 +74,28 @@ Det får **inte** gå via brevlådeleverantören:
   eller MailerSend.
 
 **Ren separation:** brevlådeleverantör = människors inkorgar; transaktionsleverantör = systemmejl.
-Config: `system_mail: { provider: ses|mailgun|mailersend, ... }` skilt från projektens `mail`-backend.
+Config: `system_mail: { provider: smtp|ses|mailgun|mailersend, ... }` skilt från projektens `mail`-backend.
+
+### Kostnad (2026)
+| Leverantör | Pris | Gratisnivå |
+|---|---|---|
+| **Amazon SES** | **$0,10 / 1 000 mejl** (~$0,0001/st) | låg/ingen; dedikerad IP $15–25/mån (behövs ej i början) |
+| **MailerSend** | Hobby $7/mån (5 000) | Free 500/mån (100/dag) |
+| **Mailgun** | Basic $15/mån (10 000) | Free 100/dag |
+| **Postmark** | $15/mån (10 000) | Free 100/mån (premium deliverability) |
+
+Memaix systemmejl-volym är **liten** (onboarding, auth-länkar, larm) → ofta tiotal–hundratal/mån.
+Det betyder **ören på SES** eller gratis på MailerSend/Mailgun. Kostnaden är ingen tröskel.
+
+### Kan vi klara oss med Purelymail ett tag? Ja — för dogfooding.
+- **Tidig fas (du + Bob + några testanvändare):** ja, skicka systemmejl via instansens SMTP
+  (Purelymail). Enstaka onboarding-/auth-mejl per dag är inte "massutskick" och bryter inte ToS.
+- **Förbehåll:** transaktionsmejl bär login-/säkerhetslänkar — hamnar de i skräpkorgen bryts
+  onboardingen. Dedikerade leverantörer har bättre deliverability. Och **automatisera inte volym**
+  på Purelymail (då riskerar du kontot).
+- **Gör `system_mail` pluggbart från dag ett** → byte är en config-ändring, inget omarbete.
+- **Bytestrigger:** första externa kunden, växande volym, eller när du börjar fakturera. Då
+  rekommenderas **SES** (billigast, skalar) — eller MailerSend/Mailgun gratisnivå för enklare setup.
 
 ## Slutanvändarens gränssnitt — du behöver inte välja
 
