@@ -9,7 +9,33 @@
 - Backends: en IMAP/SMTP-brevlåda, och CalDAV/WebDAV (t.ex. Nextcloud) om du vill ha
   kalender och filer.
 
-## Steg
+## Snabbaste vägen — automatisk installation
+
+```bash
+git clone <ditt-memaix-repo> memaix && cd memaix
+cp config/brand.example.yaml  config/brand.yaml
+cp config/memaix.example.yaml config/memaix.yaml
+cp config/acl.example.yaml    config/acl.yaml      # fyll i projekt + användare
+make install                                       # eller: python3 scripts/bootstrap.py --tunnel
+```
+
+`scripts/bootstrap.py` gör resten automatiskt:
+- genererar saknade hemligheter i `.env` (OAuth-nyckel, NC-admin-lösenord),
+- startar containrarna,
+- **provisionerar Nextcloud från `acl.yaml`** — skapar en användare per projekt, mintar
+  app-lösenord och skriver in dem i `.env`, skapar kalender per projekt,
+- seedar minnesvaults från `vault-template/` och git-initierar dem.
+
+Har kunden redan egen Nextcloud/filserver: `make install-no-nextcloud` (hoppar över NC,
+provisionerar inget — du pekar `acl.yaml` mot befintliga backends själv).
+
+> Validera occ-/OCS-stegen mot din Nextcloud-version första gången. Det är installations-
+> automation, inte en svart låda — allt syns i `scripts/bootstrap.py`.
+
+Återstår manuellt oavsett väg: skapa Cloudflare-tunneln och lägg `CLOUDFLARE_TUNNEL_TOKEN` i
+`.env` (kan inte automatiseras utan Cloudflare-API-credentials), samt koppla in AI-klienten.
+
+## Manuell väg (steg för steg)
 
 1. **Klona och konfigurera**
    ```bash

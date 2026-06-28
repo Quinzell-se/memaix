@@ -43,10 +43,13 @@ cp config/brand.example.yaml   config/brand.yaml
 cp config/memaix.example.yaml  config/memaix.yaml
 cp config/acl.example.yaml     config/acl.yaml
 # redigera config/* — domän, tunnel, projekt, användare, backends
-docker compose up -d
+make install                                 # bootstrap: containrar + Nextcloud-provisionering + vault-seed
 ```
 
-Lägg sedan in din publika URL som custom connector i din AI (se `docs/AI-CLIENTS.md`).
+`make install` startar containrarna, provisionerar Nextcloud automatiskt från `acl.yaml`
+(användare, app-lösenord, kalendrar) och seedar minnesvaulten. Har du egen backend:
+`make install-no-nextcloud`. Lägg sedan in din publika URL som custom connector i din AI
+(se `docs/AI-CLIENTS.md`).
 Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Dokumentation

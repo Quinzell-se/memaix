@@ -24,11 +24,23 @@ services:
 
   # Valfritt: Nextcloud som backend för kalender (CalDAV) + filer (WebDAV).
   # Hoppa över om kunden redan har en filserver/kalender.
+  # Admin skapas automatiskt från .env → scripts/bootstrap.py provisionerar resten.
   nextcloud:
     image: nextcloud:latest
     restart: unless-stopped
+    environment:
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost ${NEXTCLOUD_PUBLIC_HOST:-}"
     volumes:
       - nextcloud-data:/var/www/html
+    ports:
+      - "127.0.0.1:8081:80"               # lokalt, för provisionering (ej publikt)
+    healthcheck:
+      test: ["CMD", "php", "occ", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     profiles: ["nextcloud"]               # aktivera med: docker compose --profile nextcloud up -d
 
 volumes:
