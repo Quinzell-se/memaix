@@ -19,11 +19,14 @@ Rekommendation: bundla på samma maskin för enkelhet; erbjud extern Nextcloud s
 
 ## 2. Mejl: återförsäljare eller wizard?
 
-### Slutsats: wizard via API — inte återförsäljare
-- **Inget publikt återförsäljar-/partnerprogram** hittades hos Purelymail. (Hör med dem direkt om
-  ett formellt partnerskap är intressant — men blockera inget på det.)
-- **Purelymail har ett API** som kan skapa/ändra/radera användare, hantera domäner, routing-regler
-  och billing (upp till 1000 användare per konto). Det räcker för full provisionering.
+> Full mejlstrategi (posturer, leverantörsval MXroute/Mailcheap/Purelymail, transaktionsmejl,
+> slutanvändar-UI): **[MAIL.md](MAIL.md)**. Sammanfattning nedan.
+
+### Slutsats: wizard via API — inte master-konto-reselling
+- **Purelymail saknar kundunika paneler** → fungerar för eget konto (Posture A), inte som skalbar
+  reseller-affär. Det har dock ett **API** för provisionering (skapa/ändra/radera användare, domäner).
+- Vill du **sälja** mejl med kundpaneler: **MXroute** (white-label DirectAdmin-reseller) eller
+  **Mailcheap** (API-först). Se MAIL.md.
 
 ### Rekommenderad modell: wizard provisionerar kundens *egna* Purelymail-konto
 Wizarden tar kundens egna Purelymail-API-token och skapar deras brevlådor/domäner via API:t.
