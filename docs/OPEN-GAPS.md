@@ -3,6 +3,31 @@
 Ärlig genomgång av vad vi *inte* tänkt på (efter 40 dokument). Inte rehash — bara reella hål, med
 åtgärd och vart de hör hemma. Sorterat på allvar.
 
+## Status — åtgärdat i planeringsstadiet
+✅ = eget designdok · 📝 = inskrivet i befintligt dok · 📋 = planerad (måldok namngivet)
+
+| # | Lucka | Status |
+|---|---|---|
+| 1 | Prompt injection | ✅ THREAT-MODEL.md |
+| 2 | Exfiltrering / egress | ✅ THREAT-MODEL.md |
+| 3 | Hemligheter i minnet | 📝 SAFETY §10 |
+| 4 | Granulär access inom projekt | 📝 SAFETY §14 |
+| 5 | Supply chain / SBOM | 📝 SECURITY |
+| 6 | Omedelbar återkallning | 📝 SAFETY §13 |
+| 7 | Visa-ditt-arbete / tillit | 📋 OBSERVABILITY |
+| 8 | Ångra | 📝 SAFETY §12 |
+| 9 | Notis-kanaler/preferenser | 📋 SYSTEM-MAIL |
+| 10 | Kallstart & import | ✅ IMPORT.md |
+| 11 | Förstagångs-upptäckbarhet | ✅ IMPORT.md |
+| 12 | Mobil & röst | 📋 ACCESS-MODES |
+| 13 | Idempotens | 📝 SAFETY §11 |
+| 14 | Motor-/RBAC-tester | ✅ TESTING.md |
+| 15 | Export / portabilitet | 📋 BACKUP |
+| 16 | Tidszoner (pervasivt) | 📋 PM-DATA-MODEL |
+| 17 | Webhooks / events | 📋 ARCHITECTURE |
+
+De 📋-märkta är **planerade med konkret åtgärd nedan**, ännu ej inskrivna i sitt måldok. Detaljerna:
+
 ## 🔴 Säkerhet — de allvarliga missarna
 
 ### 1. Prompt injection / indirekt injektion (GLARING MISS)

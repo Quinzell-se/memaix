@@ -19,6 +19,15 @@
   hanterar inkommande.
 - Logga verktygsanrop per användare + projekt (`features.audit_log: true`).
 
+## Supply chain (publik repo + många beroenden)
+Hydra, Nextcloud, Ollama, Python-libs och base-images = stor attackyta, särskilt med öppen kod.
+- **Pinna beroenden** (versioner + hashar), generera **SBOM**, **image-scanning** i CI, och
+  **signera releaser**. (OPEN-GAPS #5)
+
+## AI-specifika hot
+Prompt injection och exfiltrering (en AI som läser fientligt mejl/innehåll) hanteras separat i
+**[THREAT-MODEL.md](THREAT-MODEL.md)** — den största säkerhetsluckan; läs den.
+
 ## Granska alltid
 Memaix låter en AI agera på riktig data. Granska utkast och åtgärder innan de skickas eller
 publiceras. `email_send` och andra skrivåtgärder bör ha mänsklig bekräftelse tills du litar på

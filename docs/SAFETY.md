@@ -55,6 +55,30 @@ mot juridiskt ansvar. Konfigurerbart per verktyg, default = bekräfta.
 Setup-UI och admin-åtgärder kräver **MFA** (TOTP/WebAuthn), inte bara engångstoken. En komprometterad
 maskin ska inte ge full åtkomst på en faktor.
 
+## 10. Hemligheter får inte hamna i minnet
+Användare klistrar lösenord/nycklar i chatten → annars för evigt i git-historik + backup.
+- **Secret-scanning vid `memory_write`/`backlog_*`** — avvisa eller maskera detekterade hemligheter
+  (API-nycklar, lösenord, tokens) innan de skrivs. Samma kontroll på backup. (OPEN-GAPS #3)
+
+## 11. Idempotens för skrivande åtgärder
+AI:n retrear ett anrop (nätverksglapp) → dubbla mejl/kalenderhändelser/items.
+- **Idempotensnyckel** på alla skrivande verktyg (`calendar_create`, `email_*`, `backlog_add`,
+  `memory_write`, importsteg). Samma nyckel → skapa-en-gång. (OPEN-GAPS #13)
+
+## 12. Ångra (undo)
+- **`undo`** backar senaste skrivande verktygsanrop (kalenderhändelse, utkast, fil, minnesnotering).
+  Minne/backlog har redan git-revert; lyft det till en enhetlig "ångra senaste"-åtgärd. (OPEN-GAPS #8)
+
+## 13. Omedelbar återkallning
+Person slutar / enhet tappas → måste kunna dödas direkt.
+- **Kill-switch:** revoke OAuth-token (Hydra) + ta bort grant i `acl.yaml` + invalidera sessioner,
+  på ett ställe. Verifieras av doctor (ingen kvarglömd access). (OPEN-GAPS #6)
+
+## 14. Granulär åtkomst *inom* ett projekt
+RBAC är per projekt — men en extern konsult ska kanske inte se *hela* inkorgen.
+- **Resurs-nivå-grants** (per mapp/etikett/kalender), inte bara per projekt. Default minst-möjligt för
+  `collaborator`/externa; ägaren öppnar upp explicit. (OPEN-GAPS #4)
+
 ## Audit (lyft till kärna)
 Basal audit — vem/vilket verktyg/vilket projekt/vilken resurs, tidsstämplat — är **kärna**, inte
 bara enterprise. Enterprise lägger på immutabilitet + SIEM-export (ENTERPRISE.md).

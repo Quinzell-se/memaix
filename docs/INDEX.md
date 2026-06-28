@@ -18,6 +18,8 @@ Läs i den ordning som passar din roll.
    · [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) — planeringsmotor: resurser, allokering, what-if, rapport.
    · [PM-DATA-MODEL.md](PM-DATA-MODEL.md) — konkret SQLite-schema (resurser, uppgifter, scenarier, plan).
 5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
+   · [THREAT-MODEL.md](THREAT-MODEL.md) — AI-hot: prompt injection & exfiltrering (största säkerhetsluckan).
+   · [TESTING.md](TESTING.md) — teststrategi: motor-korrekthet, RBAC, idempotens, injection, eval.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
    · [MEMAIX-PLUGIN.md](MEMAIX-PLUGIN.md) — konkret plugin-innehåll + automation (hooks/server/cron).
@@ -27,6 +29,7 @@ Läs i den ordning som passar din roll.
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
    · [QUICK-INSTALL.md](QUICK-INSTALL.md) — **ett kommando i terminalen** (curl … | sh).
    · [SETUP-SIMPLIFICATION.md](SETUP-SIMPLIFICATION.md) — tre nivåer; börja smått (trial → remote).
+   · [IMPORT.md](IMPORT.md) — kallstart & import (största adoptionshindret).
 2. [WIZARD.md](WIZARD.md) — den guidade uppsättningen, steg för steg.
    · [SETUP-UI.md](SETUP-UI.md) — webb-wizard vs native app + säkerhetsdesign.
 3. [AUTO-INSTALLER.md](AUTO-INSTALLER.md) — hela planen för det auto-installerande systemet.
