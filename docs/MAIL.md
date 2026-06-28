@@ -42,8 +42,32 @@ intäktsström.
 
 ## Kritiskt: separera transaktions-/systemmejl
 
-Memaix skickar **själv** systemmejl — onboarding-länkar, `auth_required`-länkar, aviseringar,
-statusrapporter till ledning. Det får **inte** gå via brevlådeleverantören:
+Memaix skickar **själv** systemmejl — automatiska, händelsestyrda, ett-till-en. Inte
+marknadsföring, inte massutskick.
+
+### Vad transaktionsmejlen används till
+**Till slutanvändare:**
+- **Inbjudningar** — "du har fått access till projekt X, här är din uppkopplingslänk".
+- **Onboarding / kontolänkning** — `/link/google`-länk, setup-token, "koppla din Gmail/M365".
+- **`auth_required` / omlänkning** — token har gått ut, länka om ditt konto.
+- **Säkerhetsnotiser** — ny connector/enhet kopplad, konto avlänkat, behörighet ändrad.
+- **Verifiering** — bekräfta en mejladress vid registrering.
+- **Schemalagda rapporter (valfritt)** — morgonbrief, dagsavslut, `pm_status_report` till ledning,
+  *om* mottagaren vill ha dem mejlade istället för i assistenten.
+
+**Till operatör/leverantör (du):**
+- **Drift-/systemlarm** — doctor-fel, backup-status, certifikat som löper ut, kvot-varningar.
+- **Provisioneringsresultat** — kundinstallation klar/misslyckad.
+
+**Vid försäljning av hosting:**
+- **Billing** — fakturor, förnyelsepåminnelser, trial som löper ut.
+
+> **Princip:** föredra notis **i assistenten** där det går (det är primärt UI). Transaktionsmejl är
+> den **out-of-band-kanal** som behövs när assistenten inte är rätt/tillgänglig yta — innan en person
+> är uppkopplad (inbjudan/onboarding), säkerhetslarm, operatörslarm, mejlade rapporter och billing.
+
+### Varför separat leverantör
+Det får **inte** gå via brevlådeleverantören:
 - Purelymail/MXroute **tillåter inte** massutskick/automatiserade blast → bryter ToS, sänker
   IP-ryktet och kan stänga kontot.
 - Routa Memaix egen utgående systemmejl via en **transaktionsleverantör**: Amazon SES, Mailgun
