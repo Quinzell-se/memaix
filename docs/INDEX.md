@@ -6,6 +6,7 @@ Läs i den ordning som passar din roll.
 1. [PRODUCT.md](PRODUCT.md) — vad det är, problem som löses, use cases, 5 branscher, pitch.
 2. [FOR-LEDNINGSGRUPPEN.md](FOR-LEDNINGSGRUPPEN.md) — en sida utan teknik: fråga & följ upp projekt.
 3. [ADDON-PROJECT-MANAGEMENT.md](ADDON-PROJECT-MANAGEMENT.md) — PM-agenten (agil + vattenfall), affärsvärde.
+4. [ENTERPRISE.md](ENTERPRISE.md) — enterprise-tiern: SSO/SCIM, audit, flotthantering.
 
 ## 🏗️ Ska du bygga gatewayen?
 1. [ARCHITECTURE.md](ARCHITECTURE.md) — hur delarna hänger ihop.
@@ -47,3 +48,4 @@ Läs i den ordning som passar din roll.
 | Backup & återställning? | BACKUP |
 | Hur uppdaterar jag säkert? | UPDATE |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
+| Vad krävs för storföretag? | ENTERPRISE |
