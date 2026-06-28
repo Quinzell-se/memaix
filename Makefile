@@ -9,6 +9,12 @@ install:               ## Automatisk installation + Nextcloud-provisionering + v
 install-no-nextcloud:  ## Som install men utan medföljande Nextcloud (egen backend)
 	python3 scripts/bootstrap.py --tunnel --no-nextcloud
 
+trial:                 ## Tier 0: lokal utvärdering — stdio-MCP, inget tunnel/OAuth/domän
+	python3 scripts/bootstrap.py --trial --no-nextcloud
+
+go-remote:             ## Uppgradera en trial till mobil/multi-user (tunnel + Hydra OAuth)
+	python3 scripts/bootstrap.py --tunnel
+
 up:                    ## Starta containrar
 	docker compose --profile tunnel --profile nextcloud up -d
 

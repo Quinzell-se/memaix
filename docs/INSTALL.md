@@ -1,5 +1,9 @@
 # Installation (självhostat)
 
+> **Tre vägar — börja smått.** Tier 0: `make trial` (lokalt stdio-MCP, inget tunnel/OAuth/domän —
+> utvärdera på minuter). Tier 1: full self-host (mobil/team) nedan. Tier 2: managed (du installerar
+> åt kund). Detaljer & förenklingsstrategi: [SETUP-SIMPLIFICATION.md](SETUP-SIMPLIFICATION.md).
+
 ## Krav
 - En server du kontrollerar (egen maskin eller egen molnhosting).
 - Docker + Docker Compose.
