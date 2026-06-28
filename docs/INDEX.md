@@ -14,6 +14,7 @@ Läs i den ordning som passar din roll.
 2. [MCP-API.md](MCP-API.md) — gränssnittskontraktet: vad man kan göra via MCP.
 3. [BUILD.md](BUILD.md) — bygg-ordning, moduler, faser för kärnan.
 4. [ADDON-PM-BUILD.md](ADDON-PM-BUILD.md) + [MCP-API-PM.md](MCP-API-PM.md) — PM-modulen: bygg-spec + signaturer.
+   · [PM-AGENT.md](PM-AGENT.md) — agent-arkitektur & best practice för PM-agenten.
 5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 
@@ -45,6 +46,7 @@ Läs i den ordning som passar din roll.
 | Vad är det och varför? | PRODUCT, FOR-LEDNINGSGRUPPEN |
 | Vad kan man göra via MCP? | MCP-API, MCP-API-PM |
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
+| Hur bygger man en specialiserad agent (PM)? | PM-AGENT |
 | Hur installerar/driver jag? | INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Hur verifierar jag installationen? | DOCTOR |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
