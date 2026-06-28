@@ -7,7 +7,7 @@ Vad som säkras, hur, och hur man återställer en Memaix-instans. Hör ihop med
 
 | Data | Var | Känslighet | Metod | Frekvens |
 |---|---|---|---|---|
-| **Vaults** (minne, backlog, PM) | git-repon | medel (institutionell kunskap) | git-push till remote + restic | per commit / dagligen |
+| **Vaults** (minne, backlog, PM) | SQLite + git-repon | medel (institutionell kunskap) | git-push till remote + restic | dagligen |
 | **Config** (brand/memaix/acl) | `config/*.yaml` | låg–medel | restic | dagligen |
 | **Hemligheter** (`.env`, token-store) | `.env`, krypterad token-store | **hög** | restic, krypterat | dagligen |
 | **Nextcloud-data** (filer, kalender, kontakter) | NC data-dir + databas | hög | restic (+ maintenance mode/snapshot) | dagligen |

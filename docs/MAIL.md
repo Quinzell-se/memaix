@@ -143,7 +143,6 @@ Notiser går via AI-appen och transaktionsleverantören. Memaix kringgår push-g
 bero på iOS Mail. (Vill en kund ändå ha native-Mail-push: rekommendera annan app, eller Fastmail.)
 
 ## Beslut som behövs
-- [ ] Ska Memaix erbjuda **förvaltad mejl** (Posture B) eller bara koppla kundens egen (Posture A)?
-- [ ] Om B: **MXroute** (panel-först) eller **Mailcheap** (API-först) som start?
+- [x] Posture? **Beslutat (v2): A — BYO-infra, ingen reseller.** Projektspecifik provisionering kvar (se ovan).
 - [ ] Vilken transaktionsleverantör för systemmejl (SES/Mailgun/MailerSend)?
 - [ ] Vilket slutanvändar-UI promotas — assistent+native, eller även Nextcloud Mail?

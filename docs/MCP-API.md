@@ -57,7 +57,7 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 | `files_search` | `project, query` | `[path]` | collaborator |
 | `files_write` | `project, path, content` | `{path, bytes}` | collaborator |
 
-## Minne  (backend: git-versionerad markdown)
+## Minne  (backend: SQLite aktivt + git async historik)
 
 | Verktyg | Parametrar | Returnerar | Roll |
 |---|---|---|---|

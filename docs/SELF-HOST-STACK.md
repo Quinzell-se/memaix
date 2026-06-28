@@ -25,8 +25,9 @@ Rekommendation: bundla på samma maskin för enkelhet; erbjud extern Nextcloud s
 ### Slutsats: wizard via API — inte master-konto-reselling
 - **Purelymail saknar kundunika paneler** → fungerar för eget konto (Posture A), inte som skalbar
   reseller-affär. Det har dock ett **API** för provisionering (skapa/ändra/radera användare, domäner).
-- Vill du **sälja** mejl med kundpaneler: **MXroute** (white-label DirectAdmin-reseller) eller
-  **Mailcheap** (API-först). Se MAIL.md.
+- **v2-beslut:** mejl-reseller är **struken** (BYO-infra). Behåll *projektspecifik provisionering* i
+  kundens egna leverantör för tillfälliga konsulter. (MXroute/Mailcheap kvarstår bara som bakgrund i
+  MAIL.md.) Se REVIEW-RESPONSE.md.
 
 ### Rekommenderad modell: wizard provisionerar kundens *egna* Purelymail-konto
 Wizarden tar kundens egna Purelymail-API-token och skapar deras brevlådor/domäner via API:t.

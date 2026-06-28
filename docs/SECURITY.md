@@ -1,10 +1,11 @@
 # Säkerhet & kända fallgropar
 
 ## Hårda regler
-- **Egen OAuth, ingen Access framför.** Memaix är sin egen OAuth 2.1-server (PKCE + CIMD).
-  Lägg **inte** Cloudflare Access "Managed OAuth" MCP-portal framför endpointen — det finns en
-  dokumenterad bugg där claude.ai **webb + mobil** misslyckas med OAuth medan desktop funkar mot
-  samma URL. Tunneln ska vara en ren proxy.
+- **OAuth via ory Hydra, ingen Access framför.** Auth hanteras av **ory Hydra** (certifierad
+  OAuth2/DCR), inte hemsnickrad kod — gateway validerar tokens. Lägg **inte** Cloudflare Access
+  "Managed OAuth" MCP-portal framför endpointen — dokumenterad bugg där claude.ai **webb + mobil**
+  misslyckas med OAuth medan desktop funkar mot samma URL. Tunneln ska vara en ren proxy.
+  *(v2 — se `REVIEW-RESPONSE.md`.)*
 - **Stäng av Bot Fight Mode / "Block AI training bots"** för MCP-hostnamnet, annars blockerar
   Cloudflare AI-leverantörens anrop.
 - **Backend-credentials serverside.** Lösenord (IMAP/SMTP, WebDAV) ligger i `.env`, refereras via

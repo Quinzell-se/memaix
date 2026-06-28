@@ -23,7 +23,7 @@ Alla verktyg tar `project` och valideras mot acl.yaml innan körning.
 | `calendar_*` | collaborator | CalDAV |
 | `files_*` | collaborator | WebDAV |
 | `memory_read/search` | reader | git-vault |
-| `memory_append/write` | collaborator | git-vault (commit per skrivning) |
+| `memory_append/write` | collaborator | SQLite (aktivt) + git async (historik) |
 | `memory_history/revert` | reader / collaborator | git |
 | `backlog_add/score/comment` | collaborator | markdown i vault |
 | `backlog_set_status` | owner | markdown i vault |
@@ -38,9 +38,10 @@ Alla verktyg tar `project` och valideras mot acl.yaml innan körning.
 5. **Koppla in AI.** Lägg connectorn på webben; testa OAuth från mobil.
 6. **Onboarding + flerpersoner.** Profil-intervju, externa med ett projekt.
 
-## Minne & backlog som markdown
-- Vault = git-repo per projekt. `memory_write` skriver fil + `git commit`. Serialisera skrivningar
-  per vault. `memory_history`/`memory_revert` = git-logg/revert.
+## Minne & backlog (SQLite aktivt + git async)
+- **Aktivt tillstånd i SQLite** (transaktioner, samtidighet); kunskapsnoteringar som markdown. Git
+  tar historiken **asynkront** (batchade snapshots) — inte commit-per-skrivning. `memory_history`/
+  `memory_revert` = git-logg/revert. Se `SAFETY.md` + `REVIEW-RESPONSE.md`.
 - Backlog-item = markdown med frontmatter (id, title, author, category, status, value, complexity,
   risk). Statusflöde: inbox → triaged → evaluated → approved/rejected → in-dev → done.
 
