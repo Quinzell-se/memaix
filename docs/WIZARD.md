@@ -4,6 +4,9 @@ Den guidade uppsättningen (`memaix init`, eller `make install` när config sakn
 från `git clone` till en körande, verifierad instans — utan att redigera YAML för hand. Samlar det
 som annars är utspritt i INSTALL, SELF-HOST-STACK, BACKENDS, PER-USER-OAUTH och AUTO-INSTALLER.
 
+> **Bärare:** detta flöde presenteras via en lokal webb-wizard (localhost, token-skyddad,
+> självavstängande) eller non-interaktivt via CLI/config. Beslut och säkerhetsdesign: [SETUP-UI.md](SETUP-UI.md).
+
 ## Principer
 - **Interaktiv som standard**, men kan köras **non-interaktivt** (config/flaggor förifyllda).
 - **Idempotent och återupptagbar:** en statefil spårar avklarade steg; omkörning fyller bara luckor.
