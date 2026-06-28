@@ -92,9 +92,9 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 | `whoami` | — | `{user, projects:[{project, role}]}` | alla |
 
 ## PM-modulen (tillägg)
-`pm_*`-verktyg (sprintplanering, WBS, milstolpar, schemaläggning, RAID, statusrapport) specas i
-`ADDON-PM-BUILD.md`. De följer samma konventioner: `project` obligatoriskt, RBAC, artefakter som
-git-committad markdown.
+`pm_*`-verktyg (sprintplanering, WBS, milstolpar, schemaläggning, RAID, statusrapport) har full
+signaturreferens i **[MCP-API-PM.md](MCP-API-PM.md)**. De följer samma konventioner: `project`
+obligatoriskt, RBAC, artefakter som git-committad markdown.
 
 ## Versionering
 Detta är v1 av gränssnittet. Tillägg av verktyg/fält är bakåtkompatibelt; ändrad semantik på
