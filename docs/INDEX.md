@@ -26,6 +26,7 @@ Läs i den ordning som passar din roll.
 8. [SELF-HOST-STACK.md](SELF-HOST-STACK.md) — topologi (Nextcloud-samlokalisering) + mejl-provisionering.
 9. [MAIL.md](MAIL.md) — mejlstrategi: leverantörer, reseller-postur, transaktionsmejl, slutanvändar-UI.
 10. [SYSTEM-MAIL.md](SYSTEM-MAIL.md) — systemmejl: config, avsändardomän/DKIM, mallar.
+11. [BACKUP.md](BACKUP.md) — backup & återställning (vaults, config, hemligheter, Nextcloud).
 
 ## 💼 Ska du sälja installation/hosting?
 1. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
@@ -42,4 +43,5 @@ Läs i den ordning som passar din roll.
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
 | Self-host: Nextcloud + mejl-provisionering? | SELF-HOST-STACK |
 | Mejlstrategi & systemmejl? | MAIL, SYSTEM-MAIL |
+| Backup & återställning? | BACKUP |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
