@@ -22,6 +22,7 @@ Läs i den ordning som passar din roll.
    · [SETUP-UI.md](SETUP-UI.md) — webb-wizard vs native app + säkerhetsdesign.
 3. [AUTO-INSTALLER.md](AUTO-INSTALLER.md) — hela planen för det auto-installerande systemet.
    · [DOCTOR.md](DOCTOR.md) — verifiering & hälsokontroll (alla checkar, rapportformat).
+   · [OBSERVABILITY.md](OBSERVABILITY.md) — drift-insyn: loggar, metrics, larm.
 4. [SECURITY.md](SECURITY.md) — härdning + kända fallgropar (OAuth, Cloudflare).
 5. [AI-CLIENTS.md](AI-CLIENTS.md) — koppla in Claude, ChatGPT, Mistral m.fl.
 6. [BACKENDS.md](BACKENDS.md) — koppla in Gmail, M365, Nextcloud m.fl. (adaptrar).
@@ -52,4 +53,5 @@ Läs i den ordning som passar din roll.
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
 | Vad krävs för storföretag? | ENTERPRISE |
 | Skydd mot skenande AI / concurrency? | SAFETY |
+| Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
