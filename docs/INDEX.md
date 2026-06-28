@@ -37,7 +37,9 @@ Läs i den ordning som passar din roll.
 | Vad är det och varför? | PRODUCT, FOR-LEDNINGSGRUPPEN |
 | Vad kan man göra via MCP? | MCP-API, MCP-API-PM |
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
-| Hur installerar/driver jag? | INSTALL, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
+| Hur installerar/driver jag? | INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
+| Hur verifierar jag installationen? | DOCTOR |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
 | Self-host: Nextcloud + mejl-provisionering? | SELF-HOST-STACK |
+| Mejlstrategi & systemmejl? | MAIL, SYSTEM-MAIL |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
