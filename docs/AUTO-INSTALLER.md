@@ -13,7 +13,7 @@ svart-låda, idempotent (kör om utan att förstöra).
 | **C. Wizard** | `memaix init` — guidad CLI som ställer frågor (brand, domän, projekt, personer, backends) och skriver config-filerna. Ingen YAML för hand | Planerad |
 | **D. Tunnel-automation** | Valfri Cloudflare-API-integration (operatör ger API-token) → skapar tunnel + DNS automatiskt. Bobrs instruktioner | Planerad |
 | **E. Livscykel** | `make update` (ny image, migrera config, kör om idempotent provisionering), backup/restore (vaults→git-remote, NC-data), avinstallation | Planerad |
-| **F. Backend-adaptrar** | Utöver Nextcloud: rena IMAP/CalDAV/WebDAV + adaptrar för Google Workspace / M365 där kunden redan har dem. Installern upptäcker och konfigurerar | Planerad |
+| **F. Backend-adaptrar** | Utöver Nextcloud: rena IMAP/CalDAV/WebDAV + adaptrar för Google Workspace / M365 där kunden redan har dem (se [BACKENDS.md](BACKENDS.md)). Installern upptäcker och konfigurerar | Planerad |
 | **G. Idempotens & state** | Statefil spårar vad som gjorts → säker omkörning, partiell reparation | Planerad |
 
 ## Designprinciper
