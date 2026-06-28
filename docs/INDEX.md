@@ -13,6 +13,8 @@ Läs i den ordning som passar din roll.
 2. [MCP-API.md](MCP-API.md) — gränssnittskontraktet: vad man kan göra via MCP.
 3. [BUILD.md](BUILD.md) — bygg-ordning, moduler, faser för kärnan.
 4. [ADDON-PM-BUILD.md](ADDON-PM-BUILD.md) + [MCP-API-PM.md](MCP-API-PM.md) — PM-modulen: bygg-spec + signaturer.
+5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
+6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
@@ -49,3 +51,5 @@ Läs i den ordning som passar din roll.
 | Hur uppdaterar jag säkert? | UPDATE |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
 | Vad krävs för storföretag? | ENTERPRISE |
+| Skydd mot skenande AI / concurrency? | SAFETY |
+| Vad ändrades efter extern granskning? | REVIEW-RESPONSE |

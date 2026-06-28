@@ -28,17 +28,27 @@ intäktsström.
 > Mailcheap från ~$5–10/mån). Purelymail saknar kundunika paneler → fungerar för polare, inte som
 > skalbar reseller-affär.
 
-## Rekommendation
+## Beslut (v2 efter granskning): BYO-infra, ingen mejl-reseller
 
+> Posture B (Memaix som mejl-hotell/återförsäljare) är **struken** — låg marginal, deliverability-/
+> blocklist-/DNS-support stjäl fokus från AI-bryggan. Avsnittet ovan står kvar som bakgrund, men är
+> inte längre planen. Se `REVIEW-RESPONSE.md`.
+
+- **Posture A (enda affären):** kunden har eget mejl (Purelymail/Gmail/M365/valfri IMAP). Memaix
+  **kopplar** via adapter. Vi blir aldrig mejl-host → ingen deliverability-risk.
 - **Behåll adaptern leverantörsoberoende** — lås inte produkten till en leverantör.
-- **Posture A (default):** kundens egna konto. Purelymail/Gmail/M365. Det vi redan specat.
-- **Posture B när du vill sälja mejl:**
-  - **MXroute** som pragmatisk start — riktig white-label-panel där kunder själva byter lösenord,
-    skapar alias och hanterar sin inkorg. Deliverability och IP-rykte sköts av MXroute.
-  - **Mailcheap** när du vill att *Memaix själv* skapar en brevlåda automatiskt vid registrering
-    (API-first) — djupare plattformsintegration.
-- Börja inte med Posture B dag ett: förvaltad mejl = supportbörda, deliverability-ansvar och
-  abuse-hantering. Lägg till den när efterfrågan finns.
+
+### Behåll som *funktion*: projektspecifik mejl-provisionering
+För tillfälliga externa konsulter kan Memaix skapa en **projekt-scopad adress** (t.ex.
+`konsult@kundprojekt.se`) **i kundens egna mejlleverantör** (Google Workspace / M365 / deras domän),
+kopplad till projektets RBAC, och **riva den automatiskt när access upphör**.
+
+- Brevlådan lever i **kundens** tenant, inte din — du automatiserar bara en adress i deras infra,
+  knuten till konsultens livscykel. Ingen mejl-hosting, ingen deliverability-risk för Memaix.
+- Provisionering via providerns admin-API (Google Admin SDK / M365 Graph admin). Där det inte tillåts:
+  fallback till alias eller delad projektbrevlåda som kunden skapar manuellt, som Memaix kopplar till.
+- **Kostnad:** en extra brevlåda/säte i *kundens* abonnemang under uppdraget (alias ofta gratis).
+  Inget för Memaix-produkten.
 
 ## Kritiskt: separera transaktions-/systemmejl
 

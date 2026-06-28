@@ -8,13 +8,13 @@
         │  (Cloudflare tunnel rekommenderas: outbound, auto-TLS, ingen portöppning)
         ▼
   Memaix gateway
-        ├── AuthN: egen OAuth 2.1-server (CIMD + PKCE)
+        ├── AuthN: OAuth 2.1 via beprövad AS (ory Hydra; DCR+PKCE) — gateway validerar tokens
         ├── AuthZ: acl.yaml → vem får vilka projekt (RBAC)
         │
         ├── email_*     → IMAP/SMTP        [per projekt]
         ├── calendar_*  → CalDAV           [per projekt]
         ├── files_*     → WebDAV           [per projekt]
-        ├── memory_*    → git-vaults       [per projekt]
+        ├── memory_*    → SQLite (aktivt) + git (historik) [per projekt]
         └── backlog_*   → markdown i vault [per projekt]
 ```
 
@@ -25,7 +25,10 @@
 - **En connector, RBAC bakom.** Alla användare lägger in samma URL. `acl.yaml` avgör vad var och
   en ser. Externa låses till exakt ett projekt.
 - **Öppna standarder i backenden.** IMAP/SMTP, CalDAV, WebDAV, git — inga proprietära beroenden.
-- **Minne = git.** Varje projekt-vault är ett git-repo. Skrivningar committas → historik + rollback.
+- **Auth via beprövad komponent.** OAuth2 hanteras av ory Hydra (certifierad, DCR), inte hemsnickrad
+  kod. Tunneln är ren proxy (ingen Access). Se `REVIEW-RESPONSE.md`.
+- **Minne = SQLite + git.** Aktivt tillstånd i SQLite (snabbt, transaktioner, concurrency); git tar
+  versionshistorik **asynkront** (rollback). Inte commit-per-skrivning i het väg. Se `SAFETY.md`.
 - **AI-agnostiskt.** MCP är öppen standard → Claude, ChatGPT, Mistral, Perplexity m.fl.
 
 ## Verktyg (alla projekt-scopade, valideras mot acl.yaml)
