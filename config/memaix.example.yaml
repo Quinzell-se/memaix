@@ -21,6 +21,14 @@ features:
   allow_send: false                       # AI får bara skapa utkast tills detta är true
   audit_log: true                         # logga verktygsanrop per användare + projekt
 
+# Modell — bara för server-side lägen (Memaix-egen chatt / lokal modell / bot).
+# BYO AI (egen Claude/ChatGPT-connector) behöver INTE detta. Se docs/CHOOSE-YOUR-LLM.md.
+model:
+  provider: anthropic            # anthropic | openai | mistral | ollama | vllm
+  name: "claude-sonnet-4-x"
+  api_key_ref: LLM_API_KEY       # moln-API → .env; utelämna för lokal
+  endpoint: ""                   # lokal: http://localhost:11434 (Ollama) / vLLM-URL
+
 # Backends definieras per projekt i acl.yaml (mailbox/calendar/files).
 # Globala defaults kan sättas här om alla projekt delar t.ex. en Nextcloud:
 defaults:

@@ -61,6 +61,7 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 Börja i **[docs/INDEX.md](docs/INDEX.md)** — innehållsförteckning i läsordning per roll.
 Ska du **bygga** detta? Börja i **[HANDOFF.md](HANDOFF.md)** — hämta-hem + byggordning + v2-beslut.
+Vilken **AI** ska driva Memaix? → **[docs/CHOOSE-YOUR-LLM.md](docs/CHOOSE-YOUR-LLM.md)** (beslutsguide).
 
 | Dokument | Innehåll |
 |---|---|
