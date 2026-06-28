@@ -27,6 +27,7 @@ Läs i den ordning som passar din roll.
 9. [MAIL.md](MAIL.md) — mejlstrategi: leverantörer, reseller-postur, transaktionsmejl, slutanvändar-UI.
 10. [SYSTEM-MAIL.md](SYSTEM-MAIL.md) — systemmejl: config, avsändardomän/DKIM, mallar.
 11. [BACKUP.md](BACKUP.md) — backup & återställning (vaults, config, hemligheter, Nextcloud).
+12. [UPDATE.md](UPDATE.md) — uppdatering: versionsmigrering, rollback, nedtid.
 
 ## 💼 Ska du sälja installation/hosting?
 1. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
@@ -44,4 +45,5 @@ Läs i den ordning som passar din roll.
 | Self-host: Nextcloud + mejl-provisionering? | SELF-HOST-STACK |
 | Mejlstrategi & systemmejl? | MAIL, SYSTEM-MAIL |
 | Backup & återställning? | BACKUP |
+| Hur uppdaterar jag säkert? | UPDATE |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
