@@ -66,6 +66,25 @@ En riktig brevlåda (MXroute m.fl.) stödjer **allt** samtidigt, eftersom det ä
 som valfri enad webmail-upplevelse för dem som vill ha allt på ett ställe. Tvinga inte fram ett val
 — samma brevlåda räcker för alla tre.
 
+## iOS native Mail & push — inte ett leverantörsval
+
+iOS inbyggda Mail-app får **ingen push** från små/självhostade leverantörer. Apple slopade IMAP
+IDLE och gömde push bakom en proprietär mekanism (`XAPPLEPUSHSERVICE`) som kräver certifikat *från
+Apple*. Bara enstaka leverantörer (Fastmail) har dem.
+
+- **Purelymail:** kan inte → poll/manuell hämtning på iOS Mail (dokumenterar det själva).
+- **MXroute:** stödjer IDLE men **ingen** push-mekanism → **samma begränsning**. Att byta hit löser
+  alltså *inte* iOS-native-Mail-problemet.
+
+**Vad som faktiskt fixar det:**
+1. Använd en **annan iOS-mejlapp** (Outlook/Spark m.fl.) — egen IDLE-koppling ger direkt notis.
+2. **Fastmail** om native Mail-push är ett måste (dyrare, ingen reseller).
+3. Självhostad Dovecot med Apple-push-plugin + eget APNs-cert (krångligt).
+
+**För Memaix:** lågt problem. iOS native Mail är **inte** det primära gränssnittet — assistenten är.
+Notiser går via AI-appen och transaktionsleverantören. Memaix kringgår push-gapet genom att inte
+bero på iOS Mail. (Vill en kund ändå ha native-Mail-push: rekommendera annan app, eller Fastmail.)
+
 ## Beslut som behövs
 - [ ] Ska Memaix erbjuda **förvaltad mejl** (Posture B) eller bara koppla kundens egen (Posture A)?
 - [ ] Om B: **MXroute** (panel-först) eller **Mailcheap** (API-först) som start?
