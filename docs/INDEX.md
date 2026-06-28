@@ -29,6 +29,7 @@ Läs i den ordning som passar din roll.
    · [OBSERVABILITY.md](OBSERVABILITY.md) — drift-insyn: loggar, metrics, larm.
 4. [SECURITY.md](SECURITY.md) — härdning + kända fallgropar (OAuth, Cloudflare).
 5. [AI-CLIENTS.md](AI-CLIENTS.md) — koppla in Claude, ChatGPT, Mistral m.fl.
+   · [ACCESS-MODES.md](ACCESS-MODES.md) — använda Memaix *utan* egen AI (server-modell, lokal modell, GUI).
 6. [BACKENDS.md](BACKENDS.md) — koppla in Gmail, M365, Nextcloud m.fl. (adaptrar).
 7. [PER-USER-OAUTH.md](PER-USER-OAUTH.md) — koppla din egen Gmail/M365 (länkning, token, refresh).
 8. [SELF-HOST-STACK.md](SELF-HOST-STACK.md) — topologi (Nextcloud-samlokalisering) + mejl-provisionering.
@@ -53,6 +54,7 @@ Läs i den ordning som passar din roll.
 | Hur installerar/driver jag? | INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Hur verifierar jag installationen? | DOCTOR |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
+| Använda Memaix utan egen AI? | ACCESS-MODES |
 | Self-host: Nextcloud + mejl-provisionering? | SELF-HOST-STACK |
 | Mejlstrategi & systemmejl? | MAIL, SYSTEM-MAIL |
 | Backup & återställning? | BACKUP |
