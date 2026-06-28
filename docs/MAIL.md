@@ -66,6 +66,8 @@ marknadsföring, inte massutskick.
 > den **out-of-band-kanal** som behövs när assistenten inte är rätt/tillgänglig yta — innan en person
 > är uppkopplad (inbjudan/onboarding), säkerhetslarm, operatörslarm, mejlade rapporter och billing.
 
+> Config, avsändardomän/DKIM och mall-uppsättning specas i **[SYSTEM-MAIL.md](SYSTEM-MAIL.md)**.
+
 ### Varför separat leverantör
 Det får **inte** gå via brevlådeleverantören:
 - Purelymail/MXroute **tillåter inte** massutskick/automatiserade blast → bryter ToS, sänker
