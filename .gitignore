@@ -1,0 +1,15 @@
+# Secrets & local config — never commit
+.env
+config/*.yaml
+!config/*.example.yaml
+
+# Runtime data
+vaults/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,27 @@
+# Huvudkonfiguration. Kopiera till memaix.yaml.
+
+server:
+  public_url: "https://mcp.example.com"   # kundens egen domän
+  bind: "0.0.0.0:8080"
+
+tunnel:
+  provider: "cloudflared"                 # cloudflared | none (sköt reverse proxy själv)
+  hostname: "mcp.example.com"
+  # OBS: lägg INTE Cloudflare Access "Managed OAuth" framför — bryter iOS/webb (se SECURITY.md).
+  # Stäng av Bot Fight Mode för detta hostname.
+
+auth:
+  issuer: "https://mcp.example.com"       # = public_url
+  # Memaix är sin egen OAuth 2.1-server (PKCE + CIMD). Inga externa IdP krävs.
+  registration: ["cimd", "dcr"]           # klientregistrering Claude/ChatGPT stödjer
+
+vaults_dir: "/srv/vaults"                 # ett git-repo per projekt
+
+features:
+  allow_send: false                       # AI får bara skapa utkast tills detta är true
+  audit_log: true                         # logga verktygsanrop per användare + projekt
+
+# Backends definieras per projekt i acl.yaml (mailbox/calendar/files).
+# Globala defaults kan sättas här om alla projekt delar t.ex. en Nextcloud:
+defaults:
+  nextcloud_base_url: "https://cloud.example.com"

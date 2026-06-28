@@ -1,0 +1,22 @@
+[project]
+name = "memaix-gateway"
+version = "0.1.0"
+description = "Memaix — self-hosted, AI-agnostic assistant gateway (MCP)"
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    # MCP-server med Streamable HTTP + OAuth. Lås versioner vid implementation.
+    "mcp",                 # eller "fastmcp"
+    "pyyaml",
+    "imap-tools",          # IMAP
+    "caldav",              # CalDAV
+    "requests",            # WebDAV / HTTP
+    # OAuth 2.1-server-bibliotek väljs vid implementation (PKCE + CIMD/DCR).
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

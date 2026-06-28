@@ -1,0 +1,35 @@
+# Memaix — single-tenant deployment. En instans per kund.
+# Tjänster: gateway (kärnan) + valfri cloudflared (tunnel) + valfri nextcloud (backend).
+
+services:
+  gateway:
+    build: ./gateway
+    image: memaix/gateway:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config:/app/config:ro            # brand.yaml, memaix.yaml, acl.yaml
+      - ./vaults:/srv/vaults               # git-versionerade minnesvaults
+    ports:
+      - "127.0.0.1:8080:8080"              # exponeras INTE direkt; via tunnel/reverse proxy
+    # Gatewayen läser config/memaix.yaml för domän, auth och backends.
+
+  # Valfritt: Cloudflare-tunnel. Tar bort behovet av portöppning; ger auto-TLS.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [gateway]
+    profiles: ["tunnel"]                   # aktivera med: docker compose --profile tunnel up -d
+
+  # Valfritt: Nextcloud som backend för kalender (CalDAV) + filer (WebDAV).
+  # Hoppa över om kunden redan har en filserver/kalender.
+  nextcloud:
+    image: nextcloud:latest
+    restart: unless-stopped
+    volumes:
+      - nextcloud-data:/var/www/html
+    profiles: ["nextcloud"]               # aktivera med: docker compose --profile nextcloud up -d
+
+volumes:
+  nextcloud-data:
