@@ -32,4 +32,5 @@ Läs i den ordning som passar din roll.
 | Vad kan man göra via MCP? | MCP-API, MCP-API-PM |
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
 | Hur installerar/driver jag? | INSTALL, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
+| Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
