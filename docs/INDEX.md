@@ -21,6 +21,7 @@ Läs i den ordning som passar din roll.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
    · [MEMAIX-PLUGIN.md](MEMAIX-PLUGIN.md) — konkret plugin-innehåll + automation (hooks/server/cron).
+8. [OPEN-GAPS.md](OPEN-GAPS.md) — kritisk självgranskning: säkerhet/UX/programmatiska luckor.
 
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
@@ -75,4 +76,5 @@ Läs i den ordning som passar din roll.
 | Skydd mot skenande AI / concurrency? | SAFETY |
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
+| Vad har vi missat (kritiskt)? | OPEN-GAPS |
 | Juridik, GDPR & ansvar? | LEGAL |
