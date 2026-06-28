@@ -7,6 +7,7 @@ Läs i den ordning som passar din roll.
 2. [FOR-LEDNINGSGRUPPEN.md](FOR-LEDNINGSGRUPPEN.md) — en sida utan teknik: fråga & följ upp projekt.
 3. [ADDON-PROJECT-MANAGEMENT.md](ADDON-PROJECT-MANAGEMENT.md) — PM-agenten (agil + vattenfall), affärsvärde.
 4. [ENTERPRISE.md](ENTERPRISE.md) — enterprise-tiern: SSO/SCIM, audit, flotthantering.
+5. [LEGAL.md](LEGAL.md) — juridik & ansvar: GDPR-roller, DPA, AI som underbiträde (checklista).
 
 ## 🏗️ Ska du bygga gatewayen?
 1. [ARCHITECTURE.md](ARCHITECTURE.md) — hur delarna hänger ihop.
@@ -55,3 +56,4 @@ Läs i den ordning som passar din roll.
 | Skydd mot skenande AI / concurrency? | SAFETY |
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
+| Juridik, GDPR & ansvar? | LEGAL |
