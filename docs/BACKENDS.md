@@ -108,7 +108,8 @@ projects:
 1. **Adapter-abstraktion** — bryt ut nuvarande IMAP/CalDAV/WebDAV bakom ett gemensamt interface.
 2. **Microsoft Graph-adapter** — mail/kalender/OneDrive (störst affärsmarknad; basic auth dör 2026).
 3. **Google-adapter** — Gmail/Calendar/Drive API, intern-app-flöde för Workspace.
-4. **Per-användar-OAuth** — länkad identitet, token per användare, refresh.
+4. **Per-användar-OAuth** — länkad identitet, token per användare, refresh. Detaljspec:
+   [PER-USER-OAUTH.md](PER-USER-OAUTH.md).
 5. **Wizard-stöd** — guida OAuth-app-registreringen (kan inte fullautomatiseras; konsol-steg hos
    Google/Microsoft) och skriv in credentials i `.env`.
 
