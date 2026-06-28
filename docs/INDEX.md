@@ -35,8 +35,9 @@ Läs i den ordning som passar din roll.
 12. [UPDATE.md](UPDATE.md) — uppdatering: versionsmigrering, rollback, nedtid.
 
 ## 💼 Ska du sälja installation/hosting?
-1. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
-2. [WHITE-LABEL.md](WHITE-LABEL.md) — kör under kundens eget namn, domän och tunnel.
+1. [BUSINESS-CASE.md](BUSINESS-CASE.md) — kostnad, pris, kritisk bedömning (publik-OSS-verklighet).
+2. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
+3. [WHITE-LABEL.md](WHITE-LABEL.md) — kör under kundens eget namn, domän och tunnel.
 
 ## Snabbkarta
 | Fråga | Läs |
@@ -51,7 +52,8 @@ Läs i den ordning som passar din roll.
 | Mejlstrategi & systemmejl? | MAIL, SYSTEM-MAIL |
 | Backup & återställning? | BACKUP |
 | Hur uppdaterar jag säkert? | UPDATE |
-| Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
+| Hur tjänar vi pengar? | BUSINESS-CASE, SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
+| Kostnad, pris & lönsamhet? | BUSINESS-CASE |
 | Vad krävs för storföretag? | ENTERPRISE |
 | Skydd mot skenande AI / concurrency? | SAFETY |
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
