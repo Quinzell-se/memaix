@@ -20,3 +20,6 @@ seed:                  ## Bara seed-vaults (om de saknas)
 
 logs:                  ## Följ gateway-loggar
 	docker compose logs -f gateway
+
+docs-check:            ## Flagga om något docs/*.md saknas i INDEX.md
+	python3 scripts/check-docs-index.py
