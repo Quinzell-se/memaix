@@ -16,6 +16,7 @@ Läs i den ordning som passar din roll.
 4. [ADDON-PM-BUILD.md](ADDON-PM-BUILD.md) + [MCP-API-PM.md](MCP-API-PM.md) — PM-modulen: bygg-spec + signaturer.
    · [PM-AGENT.md](PM-AGENT.md) — agent-arkitektur & best practice för PM-agenten.
    · [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) — planeringsmotor: resurser, allokering, what-if, rapport.
+   · [PM-DATA-MODEL.md](PM-DATA-MODEL.md) — konkret SQLite-schema (resurser, uppgifter, scenarier, plan).
 5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 
