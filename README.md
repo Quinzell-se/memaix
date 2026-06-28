@@ -54,6 +54,8 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Dokumentation
 
+Börja i **[docs/INDEX.md](docs/INDEX.md)** — innehållsförteckning i läsordning per roll.
+
 | Dokument | Innehåll |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Komplett installationsguide |
