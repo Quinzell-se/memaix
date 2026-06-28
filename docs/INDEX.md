@@ -20,6 +20,7 @@ Läs i den ordning som passar din roll.
 4. [AI-CLIENTS.md](AI-CLIENTS.md) — koppla in Claude, ChatGPT, Mistral m.fl.
 5. [BACKENDS.md](BACKENDS.md) — koppla in Gmail, M365, Nextcloud m.fl. (adaptrar).
 6. [PER-USER-OAUTH.md](PER-USER-OAUTH.md) — koppla din egen Gmail/M365 (länkning, token, refresh).
+7. [SELF-HOST-STACK.md](SELF-HOST-STACK.md) — topologi (Nextcloud-samlokalisering) + mejl-provisionering.
 
 ## 💼 Ska du sälja installation/hosting?
 1. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
@@ -33,4 +34,5 @@ Läs i den ordning som passar din roll.
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
 | Hur installerar/driver jag? | INSTALL, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
+| Self-host: Nextcloud + mejl-provisionering? | SELF-HOST-STACK |
 | Hur tjänar vi pengar? | SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
