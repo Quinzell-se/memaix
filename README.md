@@ -55,6 +55,7 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 ## Dokumentation
 
 Börja i **[docs/INDEX.md](docs/INDEX.md)** — innehållsförteckning i läsordning per roll.
+Ska du **bygga** detta? Börja i **[HANDOFF.md](HANDOFF.md)** — hämta-hem + byggordning + v2-beslut.
 
 | Dokument | Innehåll |
 |---|---|
