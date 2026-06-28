@@ -22,6 +22,7 @@ Läs i den ordning som passar din roll.
 
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
+   · [QUICK-INSTALL.md](QUICK-INSTALL.md) — **ett kommando i terminalen** (curl … | sh).
    · [SETUP-SIMPLIFICATION.md](SETUP-SIMPLIFICATION.md) — tre nivåer; börja smått (trial → remote).
 2. [WIZARD.md](WIZARD.md) — den guidade uppsättningen, steg för steg.
    · [SETUP-UI.md](SETUP-UI.md) — webb-wizard vs native app + säkerhetsdesign.
@@ -54,7 +55,7 @@ Läs i den ordning som passar din roll.
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
 | Hur bygger man en specialiserad agent (PM)? | PM-AGENT |
 | Resursplanering, allokering, konsekvensanalys? | PM-PLANNING-ENGINE |
-| Hur installerar/driver jag? | INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
+| Hur installerar/driver jag? | QUICK-INSTALL, INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Hur verifierar jag installationen? | DOCTOR |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
 | Vilken LLM ska jag välja & hur? | CHOOSE-YOUR-LLM |

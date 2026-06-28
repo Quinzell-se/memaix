@@ -41,6 +41,14 @@ följer med.
 
 ## Snabbstart (självhostat)
 
+**Ett kommando i Linux-terminalen** (enda förkunskap: Docker):
+```bash
+curl -fsSL https://get.memaix.example/install.sh | sh
+```
+Skriptet kollar Docker, hämtar koden och kör wizarden. Säkerhetsmedveten? Ladda ner och läs först —
+se **[docs/QUICK-INSTALL.md](docs/QUICK-INSTALL.md)**.
+
+Eller manuellt:
 ```bash
 git clone <ditt-memaix-repo> memaix && cd memaix
 make init      # ≤3 frågor → genererar all config + hemligheter, seedar demo-projekt
