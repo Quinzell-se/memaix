@@ -4,6 +4,11 @@
 
 **Bring your own AI. Own your memory.**
 
+> En AI-agnostisk ingång till ett team-gemensamt minne — projektkunskap, personkunskap och
+> utvecklingsbehov — plus en projektledaragent som håller koll på vad som ska göras, vem som gör vad,
+> när, vilka beroenden som finns, och konsekvenserna om något inte görs i tid. **Hjärnan minns.
+> Agenten agerar.**
+
 Memaix är en självhostad, AI-agnostisk assistent-gateway. En enda connector gör vilken
 MCP-kapabel AI som helst — Claude, ChatGPT, Mistral, Perplexity — till en **delad
 affärsassistent** för ditt team. Projekt-baserad åtkomststyrning, git-versionerat minne och en

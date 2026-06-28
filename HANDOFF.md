@@ -1,5 +1,8 @@
 # Överlämning → lokala bygg-sessionen (qronkclawd)
 
+> **Vision:** en AI-agnostisk ingång till team-gemensamt minne (projekt-, person-, utvecklingskunskap)
+> + en projektledaragent som håller koll på vad/vem/när/beroenden/konsekvenser. Hjärnan minns, agenten agerar.
+
 Läs detta först. Allt material (plan, specar, utvecklingsinstruktioner, vault-utkast) ligger i
 git-repot `your-monorepo` på branchen `claude/cowork-assistant-setup-hhd5ij`. Inget viktigt
 ligger utanför repot.

@@ -1,5 +1,14 @@
 # Memaix — produkt, marknad & pitch
 
+## Vision (kanonisk)
+
+> **Memaix är en AI-agnostisk ingång till ett team-gemensamt minne — projektkunskap, personkunskap
+> och utvecklingsbehov — som vilken AI som helst (Claude, ChatGPT, Mistral) når. Ovanpå minnet en
+> projektledaragent som håller koll på vad som ska göras, vem som gör vad, när, vilka beroenden som
+> finns, och vilka konsekvenser det blir om något inte görs i tid.**
+>
+> **Hjärnan minns. Agenten agerar.**
+
 ## Pitch (kort)
 
 > **Memaix — Bring your own AI. Own your memory.**
