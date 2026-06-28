@@ -58,6 +58,30 @@ bygg-ordning: `ADDON-PM-BUILD.md`.
 - Genererar en statusrapport som fil i `<projekt>/pm/reports/STATUS-YYYY-MM-DD.md` (committas).
 - `audience`: t.ex. `team` \| `ledning` — styr detaljnivå och ton (kort exekutiv vs detaljerad).
 
+## Planeringsmotor — resurser, allokering, konsekvens
+Se `PM-PLANNING-ENGINE.md` + `PM-DATA-MODEL.md`. Beräkning sker i kod; LLM tolkar, räknar aldrig.
+
+| Verktyg | Parametrar | Returnerar | Roll |
+|---|---|---|---|
+| `pm_resource_add` | `project, name, capacity_hours_per_day?, cost_per_hour?, skills?[]` | `{id}` | collaborator |
+| `pm_resource_list` | `project` | `[{id, name, capacity, skills, active}]` | reader |
+| `pm_resource_availability` | `project, resource, start, end, hours_per_day, reason?` | `{id}` | collaborator |
+| `pm_task_upsert` | `project, title, estimate_hours?, required_skill?, priority?, milestone?, depends_on?[], backlog_id?, id?` | `{id}` | collaborator |
+| `pm_log_actual` | `project, task, date, hours?, percent_complete?, note?` | `{ok}` | collaborator |
+| `pm_allocate` | `project, scenario?` | `{scenario, allocations:[{task, resource, start, end, hours}], critical_path:[task], finish_date, conflicts:[{resource, period, overload_hours}]}` | **owner** |
+| `pm_whatif` | `project, base?, changes:[{entity, id, field, value}]` | `{scenario, diff:{finish_delta_days, milestone_impact:[{milestone, delta_days}], new_conflicts, critical_changes:[task]}}` | reader |
+| `pm_commit_plan` | `project, scenario` | `{committed, baseline_id}` | **owner** |
+| `pm_variance` | `project` | `{tasks:[{task, planned_finish, percent_complete, slippage_days}], over_allocated:[{resource, period}], summary}` | reader |
+| `pm_utilization` | `project, start, end` | `[{resource, period, allocated_hours, capacity_hours, pct}]` | reader |
+
+- **`pm_allocate`** kör schemaläggaren (RCPSP-heuristik → OR-Tools CP-SAT) → skriver `allocation` +
+  `schedule` för scenariot; `conflicts` = resursöverbelastning (allokerat > kapacitet) per period.
+- **`pm_whatif`** skapar ett isolerat `whatif`-scenario (rör ej committed plan), applicerar `changes`
+  (`entity`: task|dependency|resource|availability), kör motorn och **diffar mot parent**.
+- **`pm_commit_plan`** kräver owner; fryser en `baseline` för variansreferens.
+- **`pm_variance`** jämför baseline mot `actual` (slippage, överbelastning); **`pm_utilization`**
+  jämför allokerade timmar mot kapacitet.
+
 ## Konventioner specifika för PM
 - **Arbetsenhet = backlog-item.** PM-verktygen läser/utökar items (`estimate`, `sprint`,
   `milestone`, `depends_on`), de skapar ingen parallell datakälla.
