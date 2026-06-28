@@ -19,6 +19,7 @@ Läs i den ordning som passar din roll.
    · [PM-DATA-MODEL.md](PM-DATA-MODEL.md) — konkret SQLite-schema (resurser, uppgifter, scenarier, plan).
 5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
+7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
 
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
@@ -54,6 +55,7 @@ Läs i den ordning som passar din roll.
 | Vad kan man göra via MCP? | MCP-API, MCP-API-PM |
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
 | Hur bygger man en specialiserad agent (PM)? | PM-AGENT |
+| Connector, skill eller plugin? | PACKAGING |
 | Resursplanering, allokering, konsekvensanalys? | PM-PLANNING-ENGINE |
 | Hur installerar/driver jag? | QUICK-INSTALL, INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Hur verifierar jag installationen? | DOCTOR |
