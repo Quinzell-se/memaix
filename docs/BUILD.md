@@ -32,12 +32,21 @@ Alla verktyg tar `project` och valideras mot acl.yaml innan körning.
 
 ## Faser
 1. **Skelett + ACL (stdio).** config + acl + `whoami` + ett projekt med `files_*` mot lokal mapp.
-   Verifiera att användare utan grant nekas.
+   Verifiera att användare utan grant nekas. **Detta bevis måste finnas före allt annat.**
+1b. **Config-wizard (tidig, grafisk uppsättning).** Tunn webb/CLI som *skriver och validerar*
+   `acl.yaml`/`memaix.yaml`/`.env` — lägg till projekt, användare, roller, secret-`*_ref`. Beror bara
+   på config-schemat (stabilt), **inte** på backends → kan byggas nu. Skriver bara config + kör
+   schemavalidering; provisionerar inget ännu. Se `SETUP-UI.md`.
 2. **Backends.** email/calendar/files/memory/backlog. Testa via lokal kodassistent (stdio).
 3. **Remote + auth.** Streamable HTTP + Hydra (token-validering). Exponera via tunnel.
 4. **RBAC skarpt.** Alla projekt/roller; verifiera isolering mellan projekt.
 5. **Koppla in AI.** Lägg connectorn på webben; testa OAuth från mobil.
 6. **Onboarding + flerpersoner.** Profil-intervju, externa med ett projekt.
+
+> **Safety-motorn (`SAFETY.md`) byggs parallellt från Fas 2 — inte som en sista fas.**
+> **Provisionerings-stegen** (Nextcloud-konton, OAuth-länkning, tunnel-setup, doctor mot levande
+> tjänster) växer in i wizarden **funktion för funktion i takt med respektive backend** (Fas 2–5) —
+> inte i Fas 1b, som bara skriver config.
 
 ## Minne & backlog (SQLite aktivt + git async)
 - **Aktivt tillstånd i SQLite** (transaktioner, samtidighet); kunskapsnoteringar som markdown. Git

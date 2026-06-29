@@ -50,6 +50,18 @@ Den måste därför:
    supply chain).
 7. **TLS.** Via tunneln eller lokalt cert; aldrig hemligheter i klartext.
 
+## Byggordning (tidig config-wizard, sen provisionering)
+Wizarden byggs i två lager (se `BUILD.md` Fas 1b → 2–5):
+- **Config-wizard (tidigt, Fas 1b):** skriver + validerar `acl.yaml`/`memaix.yaml`/`.env` — projekt,
+  användare, roller, secret-`*_ref`. Beror bara på config-schemat (stabilt), inte på backends → kan
+  byggas direkt efter ACL-skelettet. Ger grafisk projekt/användar-uppsättning tidigt.
+- **Provisionering (växer in stegvis):** Nextcloud-konton, OAuth-länkning, tunnel-setup, doctor mot
+  levande tjänster läggs till **i takt med respektive backend** (Fas 2–5), inte i Fas 1b.
+
+Detta tidigarelägger inte på bekostnad av fundamentet: **RBAC-isoleringsbeviset (Fas 1) och
+safety-motorn (parallellt) går först** — en config-editor över otestad åtkomstkontroll är farligare
+än ingen.
+
 ## Arkitektur
 - Ett **setup-läge** i samma paket: `memaix init` startar en liten webbserver på
   `127.0.0.1:8088`, skriver ut URL + engångstoken.

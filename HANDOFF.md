@@ -45,9 +45,13 @@ annorlunda, gäller detta:
 ## 5. Byggordning (Fas 1 →, från `BUILD.md` med v2-deltan)
 1. **Skelett + ACL (stdio):** `config.py` + `acl.py` finns redan i `memaix/gateway/`. Lägg `whoami`
    + ett projekt (`acme`) med `files_*` mot lokal mapp. **Verifiera RBAC-isolering** (användare
-   utan grant nekas).
+   utan grant nekas) — detta bevis först.
+1b. **Config-wizard (tidig):** tunn webb/CLI som skriver + validerar `acl.yaml`/`memaix.yaml`/`.env`
+   (projekt, användare, roller, secret-`*_ref`). Beror bara på config-schemat → kan byggas nu; skriver
+   bara config, provisionerar inget. Ger Alice grafisk projekt/användar-uppsättning tidigt.
 2. **Backends:** `email_*`/`calendar_*`/`files_*`/`memory_*`/`backlog_*`. Minne = SQLite + git async.
-3. **Safety-motor** parallellt — inte sist.
+3. **Safety-motor** parallellt — inte sist. Provisionerings-stegen (Nextcloud/OAuth-länk/tunnel/doctor)
+   växer in i wizarden i takt med respektive backend, inte i Fas 1b.
 4. **Remote + auth:** Streamable HTTP + **Hydra**. Exponera via cloudflared. **Doctor** grön.
 5. **RBAC skarpt + onboarding + per-användar-OAuth** (`PER-USER-OAUTH.md`).
 
