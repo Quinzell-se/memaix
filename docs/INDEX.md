@@ -8,6 +8,7 @@ Läs i den ordning som passar din roll.
 3. [ADDON-PROJECT-MANAGEMENT.md](ADDON-PROJECT-MANAGEMENT.md) — PM-agenten (agil + vattenfall), affärsvärde.
 4. [ENTERPRISE.md](ENTERPRISE.md) — enterprise-tiern: SSO/SCIM, audit, flotthantering.
 5. [LEGAL.md](LEGAL.md) — juridik & ansvar: GDPR-roller, DPA, AI som underbiträde (checklista).
+6. [LICENSING.md](LICENSING.md) — komponentlicenser + vilken licens vår egen kod ska ha.
 
 ## 🏗️ Ska du bygga gatewayen?
 1. [ARCHITECTURE.md](ARCHITECTURE.md) — hur delarna hänger ihop.
@@ -85,3 +86,4 @@ Läs i den ordning som passar din roll.
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
 | Vad har vi missat (kritiskt)? | OPEN-GAPS |
 | Juridik, GDPR & ansvar? | LEGAL |
+| Licenser (komponenter + vår kod)? | LICENSING |
