@@ -5,7 +5,9 @@ Inte en pitch — en strategisk karta.
 
 ## Styrkor (internt +)
 - **AI-agnostiskt via öppen MCP-standard** — ingen inlåsning; byt AI fritt. Få gör detta.
-- **Self-host / dataägande** — stark integritets-/compliance-story (EU, Schrems II, AI Act).
+- **Self-host / dataägande av *system-of-record*** — minne/kunskap/filer ligger hos kunden. (Full
+  zero-egress kräver **lokal modell**; med moln-AI = ägande + kontroll, inte noll överföring — se ärlig
+  invändning i syntesen.)
 - **Tvålagersmodellen** — delat minne (kunskap) + projektledaragent (handling). Tydligt, differentierat.
 - **Deterministisk motor** (matematik i kod, LLM i kanterna) — pålitligt; gör att även små/lokala modeller fungerar.
 - **Single-tenant-isolering** — ren dataseparation, enterprise-vänligt.
@@ -23,7 +25,8 @@ Inte en pitch — en strategisk karta.
 
 ## Möjligheter (externt +)
 - **Stigande efterfrågan på integritets-först AI** — EU-reglering, Schrems II, AI Act driver det.
-- **Nischer som *inte får* använda Copilot** — juridik/finans/vård/myndighet, underbetjänade.
+- **Nischer som *inte får* använda Copilot** — juridik/finans/vård/myndighet. OBS: löses bara med
+  **lokal modell**; med moln-AI kvarstår samma egress-problem (se syntesen).
 - **MCP-standardiseringen skapar ett ekosystem** — rid på vågen (plugins, connectors).
 - **"Bring your own AI" resonerar** när modell-landskapet fragmenteras (Claude/GPT/Mistral/öppna).
 - **PM/PMO + kunskapsbas som betalmoduler** — tydlig uppförsäljning, hög marginal.
@@ -50,7 +53,22 @@ Inte en pitch — en strategisk karta.
 - **Bekvämlighetsbias är den tysta dödaren** → setup-förenklingen (trial/auto-install) är inte UX-polish,
   den är *överlevnad*.
 
-## Den enda meningen
-Memaix vinner om det blir **det självklara valet för dem som av juridiska/integritetsskäl inte kan
-lägga sin data i Copilot** — levererat med så låg setup-tröskel att bekvämlighetsbias inte hinner döda
-det, och med säkerheten (injection!) löst så att en incident aldrig får inträffa. Allt annat är sekundärt.
+## Ärlig invändning: "privacy-flykt från Copilot" håller inte rakt av
+Om man inte får köra Copilot för att *data inte får gå till tredjeparts moln*, löser **inte** Memaix
+det med en **moln-AI** (Claude/ChatGPT/Mistral) — då går det lästa innehållet till *den* leverantören
+istället, ofta samma USA-moln. Med *fler* anslutbara AI:er har man dessutom potentiellt **mindre**
+kontroll om det inte styrs. **Full sovereignty (inget lämnar) kräver lokal modell (läge 3).**
+
+Därför, ärligt två separata löften:
+- **"Data får inte lämna huset"-nischen** → betjänas av Memaix **bara med lokal modell**. Den äkta
+  Schrems-II-säkra konfigurationen — smal men reell.
+- **Bredare marknad (moln-AI)** → vinkeln är **ägande + kontroll + ingen inlåsning**, *inte* noll
+  överföring. Du äger system-of-record (minne/kunskap/filer), **styr vad som skickas** (retrieval,
+  minimering, RBAC, draft-only) — mer granulärt än att ösa allt i Copilot — och är inte gift med en
+  leverantör. Starkare än Copilot på *kontroll*, men inte "inget lämnar".
+
+## Den enda meningen (korrigerad)
+Memaix vinner på **två skilda löften, inte ett**: för zero-egress-nischen — *"din assistent, helt lokal
+AI, inget lämnar huset"*; för alla andra — *"äg din kunskap, styr vad som delas, byt AI fritt"*. Båda
+kräver låg setup-tröskel och löst injection-försvar. **Blanda inte ihop dem** — det var precis
+misstaget i den tidigare Copilot-vinkeln.

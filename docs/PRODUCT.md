@@ -25,8 +25,10 @@
    minne som varje AI läser vid start och skriver till.
 2. **Leverantörsinlåsning.** Byter du från Claude till något annat tappar du hela din uppsättning.
    Memaix är AI-agnostiskt — arbetssättet bor i din vault, inte i en plattform.
-3. **Data lämnar din kontroll.** Self-hosted, öppna standarder. Inget går till tredje part.
-   Avgörande för integritetskänsliga branscher.
+3. **Du äger system-of-record & styr vad som delas.** Minne, kunskap och filer är self-hosted — bor
+   hos dig, portabelt. *Ärligt: med moln-AI går det AI:n **läser** ändå till den leverantören; "inget
+   lämnar huset" kräver **lokal modell** (ACCESS-MODES/LOCAL-MODEL). Du styr dock vad som skickas
+   (retrieval, minimering, RBAC) — mer kontroll än ett tenant-brett verktyg.*
 4. **Inget team-lager.** Vanliga AI-assistenter är enanvändare. Memaix ger flera personer, delad
    kontext och åtkomststyrning per projekt — externa låses till exakt ett projekt.
 5. **Copy-paste-skatten.** Slut på att klistra in kontext manuellt. AI:n når källorna direkt.
@@ -62,8 +64,8 @@
 
 **1. Liten advokatbyrå.** Ärenden = projekt. Klientsekretess via RBAC (en jurist ser bara sina
 ärenden). Assistenten drar ärendeminne, utkast-skriver korrespondens, sammanfattar handlingar.
-Datan stannar on-prem → uppfyller sekretess- och dataskyddskrav. *Smärta löst: compliance + manuellt
-dokumentarbete.*
+System-of-record stannar on-prem; **för att klient­data inte ska lämna alls krävs lokal modell** (annars
+går det AI:n läser till AI-leverantören). *Smärta löst: kontroll/compliance + manuellt dokumentarbete.*
 
 **2. Byggentreprenör.** Projekt = byggarbetsplatser. Underentreprenörer (externa) låses till en
 plats. Ändrings-PM och RFI:er fångas som backlog med risk-poäng. Ritningar/dokument i WebDAV,
