@@ -8,6 +8,7 @@ can call verify_token(raw_token) → AccessToken | None.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import jwt
@@ -43,7 +44,7 @@ class HydraTokenVerifier:
                 options={"verify_aud": False},
             )
         except Exception as exc:
-            logger.debug("token verification failed: %s", exc)
+            logger.warning("token verification failed: %s", exc)
             return None
 
         # Scopes — Hydra uses "scp" (list or space-separated string), fallback "scope".
@@ -77,5 +78,8 @@ class HydraTokenVerifier:
         ``{issuer}/.well-known/jwks.json``.
         """
         issuer: str = cfg["memaix"]["auth"]["issuer"]
-        jwks_uri = f"{issuer}/.well-known/jwks.json"
+        # Use internal Hydra URL for JWKS to avoid external DNS/IPv6 roundtrip
+        # from inside Docker. The issuer claim in JWTs still uses the public URL.
+        hydra_internal = os.environ.get("HYDRA_INTERNAL_URL", "http://hydra:4444")
+        jwks_uri = f"{hydra_internal}/.well-known/jwks.json"
         return cls(jwks_uri=jwks_uri, issuer=issuer)
