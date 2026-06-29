@@ -154,12 +154,20 @@ async def consent_get(consent_challenge: str = ""):
         return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
 
     requested_scope = info.get("requested_scope", [])
+
+    # Hydra v2.2 doesn't map the `resource` param to requested_access_token_audience
+    # automatically, so we parse it from request_url and grant it explicitly.
+    from urllib.parse import parse_qs, urlparse as _urlparse
+    _rurl = info.get("request_url", "")
+    _resource = parse_qs(_urlparse(_rurl).query).get("resource", [])
+    audience = list(set(_resource) | set(info.get("requested_access_token_audience") or []))
+
     redirect = _hydra_accept(
         "/admin/oauth2/auth/requests/consent/accept",
         "consent_challenge", consent_challenge,
         {
             "grant_scope": requested_scope,
-            "grant_access_token_audience": info.get("requested_access_token_audience", []),
+            "grant_access_token_audience": audience,
             "remember": True,
             "remember_for": 86400 * 30,
             "session": {
