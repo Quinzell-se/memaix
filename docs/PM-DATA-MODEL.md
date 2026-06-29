@@ -134,6 +134,8 @@ CREATE INDEX ix_actual_task ON actual(task_id);
 - **Historik:** SQLite är aktivt tillstånd; git async snapshottar (DB-dump eller markdown-export) för
   rollback (SAFETY.md).
 - **Audit:** `scenario.committed_by` + audit-loggen visar vem som godkände vilken plan.
+- **Tidszoner:** `resource` bär tidszon; all tid lagras normaliserad (UTC) och visas i användarens TZ.
+  "Morgon"-brief och scheman är explicita om tidszon — pervasivt, inte bara här. (OPEN-GAPS #16)
 
 ## Acceptanskriterier
 - [ ] Resurser har kapacitet, tillgänglighet (undantag) och kompetenser.

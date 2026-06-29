@@ -40,4 +40,8 @@
 | Filer | `files_list/read/search/write` |
 | Minne | `memory_read/search/append/write/history/revert` |
 | Backlog | `backlog_add/list/get/score/comment/set_status` (set_status = owner) |
+| Events | utgående **webhooks** vid ändring · inkommande (signerade) endpoints (formulär → backlog) |
 | Övrigt | `whoami` |
+
+> **Webhooks/events** (OPEN-GAPS #17): integration åt båda håll — Memaix notifierar andra system, och
+> externa händelser kan skapa items. Signerade och projekt-scopade.

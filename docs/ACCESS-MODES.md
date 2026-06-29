@@ -53,6 +53,12 @@ Möter dem där de är; operatören betalar API.
   **3** (lokal modell) som integritets-maximalt val.
 - **Alltid-golv:** bygg det **deterministiska GUI:t** (läge 4) över planeringsmotorn — det gör Memaix
   värt något även helt utan AI, och sänker tröskeln rejält.
+
+## Mobil & röst ("på språng")
+Kärnkravet är mobil — designa flödena explicit, inte bara "MCP funkar på iOS":
+- **Röst-in som förstaklassig input** (diktera en idé → backlog-item; en fråga → brief).
+- **Snabbåtgärder & glanceable brief** — morgonbrief läsbar på en skärm; en-tap-bekräftelser.
+- Native AI-appen (Claude/Mistral) är bäraren; Memaix levererar korta, mobilvänliga svar. (OPEN-GAPS #12)
 - Allt delar samma verktyg/data → ingen dubblerad logik, oavsett hur många frontends ni stödjer.
 
 ## Att utvärdera innan beslut

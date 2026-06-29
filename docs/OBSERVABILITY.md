@@ -46,6 +46,12 @@ Tröskelbrott skickar `operator_alert`-mejl (SYSTEM-MAIL.md): felandel över X %
 circuit öppen, kö-mättnad, disk/kvot, cert nära utgång. Så en trasig kundinstans larmar **dig innan
 kunden ringer**.
 
+## Visa-ditt-arbete (användar-vänd transparens)
+Audit ovan är *operatörs*-vänd. Användaren behöver också se **vad AI:n läste och varför** — avgörande
+för tillit till en AI som agerar på känslig data.
+- Svar kan åtföljas av härkomst: *"Jag läste dessa 3 mejl + denna händelse för att svara."*
+- Skiljt från audit: detta är *för användaren i stunden*, inte en compliance-logg. (OPEN-GAPS #7)
+
 ## Config (`config/observability.yaml`)
 ```yaml
 observability:

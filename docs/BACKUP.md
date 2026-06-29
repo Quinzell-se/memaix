@@ -45,6 +45,11 @@ backup:
 - **Automatiserat + schemalagt + verifierat** — en backup du aldrig testat återställa är ingen backup.
 - **Retention-policy** så gammalt rensas och kostnaden hålls nere.
 
+## Export & portabilitet
+Utöver backup: kunden ska kunna **ta ut all sin data** (GDPR-portabilitet + "lämna Memaix").
+- **`memaix export`** → vaults (markdown) + struktur (backlog/PM i öppna format, t.ex. JSON/CSV).
+- Git/markdown är redan portabelt; export-kommandot paketerar allt på ett ställe. (OPEN-GAPS #15)
+
 ## Återställnings-runbook
 1. Provisionera ren instans (compose upp, samma version).
 2. Återställ **hemligheter + config** (restic restore → `.env`, `config/`).

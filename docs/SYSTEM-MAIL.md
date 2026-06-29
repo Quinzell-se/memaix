@@ -62,6 +62,12 @@ templates/email/
   `_layout`. White-label utan kodändring.
 - **Lokalisering:** välj språk per mottagare (default `en`, `sv` ingår). Lägg fler språkmappar vid behov.
 
+## Notis-kanaler & preferenser
+Vart landar morgonbrief, deadline-larm och aviseringar? Inte bara mejl.
+- **Kanaler:** i AI-appen (primärt), transaktionsmejl (out-of-band), ev. push/Slack via webhooks.
+- **Preferenser per användare:** vilka notiser, vilken kanal, **stör-ej**-tider.
+- Default: viktigt i appen; sammanfattningar/rapporter via mejl om man valt det. (OPEN-GAPS #9)
+
 ## Säkerhet
 
 - **Alla åtgärdslänkar** (`setup_url`, `link_url`, `relink_url`, `verify_url`) bär en **signerad,
