@@ -9,6 +9,12 @@
 >
 > **Hjärnan minns. Agenten agerar.**
 
+## Vad vi konkurrerar på (och inte)
+Vi slår **aldrig** jättarnas LLM:er på kvalitet — och försöker inte. Värdet är **samarbete mellan
+individer som föredrar olika AI-tjänster**, som delar **samma projektminne**, plus en
+**projektledningsagent (PMA)** som koordinerar arbete, progress och beroenden. Konkurrensytan är
+**interop + delat minne + koordination** — inte modellkvalitet, och (för moln-AI) inte integritet.
+
 ## Pitch (kort)
 
 > **Memaix — Bring your own AI. Own your memory.**

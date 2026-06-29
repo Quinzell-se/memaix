@@ -16,7 +16,7 @@ du väljer. Den här guiden tar dig till rätt väg på 30 sekunder. Bakgrund: `
 | Din situation | Läge | Modell att välja | Hur du kopplar |
 |---|---|---|---|
 | Har Claude/ChatGPT/Mistral | 1 BYO | **Claude** (bäst agentiskt) · **Mistral Le Chat** (billigast, free funkar) · **ChatGPT Business** (för skriv) | connector-URL i AI-appen |
-| Inget abonnemang, vill starta billigt + bra | 2 API | en **frontier-modell**: Claude Sonnet, GPT, eller Mistral Large | `model`-block i `memaix.yaml` + nyckel i `.env` |
+| Inget abonnemang, vill starta billigt + bra | 2 API | en **frontier-modell** (Claude/GPT/Mistral) — eller **OpenRouter** = en nyckel, alla leverantörer | `model`-block i `memaix.yaml` + nyckel i `.env` |
 | Ingen data får lämna huset | 3 Lokal | 24 GB: **Qwen3-Coder-30B / Mistral Small 4** · 11 GB: **xLAM-2-8B / Gemma 3 12B** (dogfood) | `endpoint` mot Ollama/vLLM |
 | Bara planering/kunskap | 4 GUI | — (ingen) | — |
 
@@ -25,10 +25,10 @@ BYO AI (läge 1) behöver **inget** av detta — modellen bor i din AI-app. För
 ```yaml
 # config/memaix.yaml
 model:
-  provider: anthropic          # anthropic | openai | mistral | ollama | vllm
-  name: "claude-sonnet-4-x"    # modellnamn
+  provider: anthropic          # anthropic | openai | openrouter | mistral | google | openai-compatible | ollama | vllm
+  name: "claude-sonnet-4-x"    # via openrouter: "anthropic/claude-..." osv
   api_key_ref: LLM_API_KEY     # moln-API → .env; utelämna för lokal
-  endpoint: ""                 # lokal: http://localhost:11434 (Ollama) / vLLM-URL
+  endpoint: ""                 # openrouter/openai-compatible: bas-URL; lokal: http://localhost:11434
 ```
 
 ## Ärlig kvalitets-/kostnadsordning

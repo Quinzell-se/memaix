@@ -17,7 +17,11 @@ Stbobr i Memaix identitet (AI-agnostiskt, self-hosted).
 
 **B. Autonom/schemalagd (tunn server-side loop).** En liten agent-loop på qronkclawd (Claude Agent
 SDK eller eget tunt loop) kör **schemalagda** PM-uppgifter — nattlig statusrapport, deadline-vakt,
-sprint-rollover — utan att en människa öppnar en chat. Anropar ett LLM-API + **samma** MCP-verktyg.
+sprint-rollover — utan att en människa öppnar en chat. Anropar ett LLM + **samma** MCP-verktyg.
+
+> **PMA:ns hjärna är pluggbar** (`model:`-blocket, se CHOOSE-YOUR-LLM): **lokal modell** (sovereignty)
+> *eller* **API-nyckel** — Anthropic, OpenAI, **OpenRouter** (en nyckel → alla leverantörer), Mistral,
+> Google, eller valfri OpenAI-kompatibel endpoint. Oberoende av vilka AI:er *människorna* använder.
 
 Båda delar samma verktyg och samma projektstatus → **ingen dubblerad logik**.
 
