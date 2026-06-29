@@ -40,6 +40,52 @@
 | **BSL / SSPL** | Mycket starkt (förbjuder konkurrerande SaaS) | Medel | **Ej** OSI-öppen |
 | Open-core + **dual-license** | Starkt + kommersiell väg | Hög | AGPL-kärna + kommersiell |
 
+## Fler licensalternativ (hela menyn)
+**OSI-öppna:**
+- **MIT / BSD** — permissiv; gör nästan vad som helst, behåll notisen. Max adoption, noll skydd.
+- **Apache 2.0** — permissiv + patentgrant + NOTICE-krav. Företagsvänlig permissiv.
+- **MPL-2.0** — *fil-nivå*-copyleft: ändrar du MPL-filer delas de; får kombineras med proprietärt. Mellanläge.
+- **LGPL** — biblioteks-copyleft: länka fritt, dela ändringar i själva biblioteket.
+- **GPL-3.0** — stark copyleft men *bara vid distribution* → "SaaS-luckan" (modifierad GPL som tjänst behöver ej delas).
+- **AGPL-3.0** — GPL + nätverksklausul som stänger SaaS-luckan. (Vårt val.)
+- **EUPL-1.2** — EU:s copyleft, AGPL-likt, flerspråkigt, interop-vänligt. Värt en titt givet EU/integritets-vinkeln.
+
+**Source-available (ej OSI-öppna):**
+- **BSL 1.1** — källa öppen, konkurrerande/produktionsbruk begränsat i N år (oftast 4) → konverterar sen till öppen (Apache). HashiCorp/Sentry/MariaDB.
+- **FSL (Functional Source License)** — lättare BSL; konverterar till MIT/Apache efter ~2 år, begränsar konkurrerande kommersiell användning under tiden.
+- **Elastic License 2.0** — får ej erbjudas som managed-tjänst; enklare än SSPL.
+- **SSPL** — AGPL-plus: erbjuder du det som tjänst måste *hela din stack* öppnas. Aggressivt, kontroversiellt, ej OSI.
+
+**+ Kommersiell/proprietär** — för dual-licens-försäljningen och enterprise-modulerna.
+
+**Realistisk kortlista för Memaix:** AGPL-3.0 (kärna) · EUPL-1.2 (EU-vinkeln) · BSL/FSL (om SaaS-skydd
+väger tyngre än OSS-renhet) · alltid med **dual-license** ovanpå.
+
+## De tre artefakterna i praktiken
+Minnesregel: **rättigheter du samlar in / ger ut / hedrar.**
+
+1. **CLA/DCO — rättigheter du *samlar in* från bidragsgivare.**
+   - **DCO:** en `Signed-off-by`-rad per commit; bidragsgivaren intygar att de får bidra koden. Lätt,
+     ingen rättighetsöverföring (Linux-kärnan kör DCO).
+   - **CLA:** bidragsgivaren ger *dig* rätt att även **relicensiera** deras kod → det är detta som gör
+     **dual-licensiering** möjlig. Utan CLA behåller varje bidragsgivare sin upphovsrätt under AGPL och
+     du kan **inte** sälja deras delar kommersiellt.
+   - **I praktiken:** vill du ha dual-license-affären → samla **CLA från dag ett** (verktyg: CLA
+     Assistant-bot på PR). Retroaktivt är nästan ogörligt. Ingen dual-license-plan → DCO räcker.
+
+2. **LICENSE — rättigheter du *ger ut* till världen.**
+   - `LICENSE`-fil i repo-roten med **hela AGPL-3.0-texten** (ej bara en notis) + din copyright-rad,
+     plus `SPDX-License-Identifier: AGPL-3.0-or-later` i källfilerna. Utan full text + tydlig
+     innehavare är licensen otydlig och svår att hävda.
+
+3. **SBOM + NOTICE — rättigheter du *hedrar* hos komponenterna.**
+   - **SBOM:** maskinläsbar lista över varje beroende + version + licens (SPDX/CycloneDX), genererad i
+     CI (Syft/cdxgen). Hittar licenskonflikter, svarar på sårbarheter, krävs allt oftare av
+     företags-/myndighetsköpare.
+   - **NOTICE/attribution:** permissiva licenser (Apache/MIT/BSD) **kräver att du behåller deras
+     copyright-notiser** vid distribution. En `NOTICE`/`THIRD-PARTY-LICENSES`-fil samlar dem. Apache 2.0
+     kräver uttryckligen att NOTICE förs vidare — juridisk skyldighet, inte artighet.
+
 ## Rekommendation
 **AGPL-3.0 för kärnan + dual-licensiering + CLA/DCO + proprietära enterprise-moduler.**
 - **AGPL-kärna** skyddar mot att någon tar Memaix, förbättrar privat och säljer en stängd managed-tjänst
