@@ -12,6 +12,7 @@ dependencies = [
     "caldav",
     "requests",
     "python-dateutil",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

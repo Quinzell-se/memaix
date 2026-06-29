@@ -25,9 +25,11 @@ from .tools import memory as t_memory
 from .tools import backlog as t_backlog
 from .tools import email as t_email
 from .tools import calendar as t_cal
+from .tools import account as t_account
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None
+_token_store: "TokenStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -36,6 +38,28 @@ def _get_acl() -> Acl:
         cfg = config.load()
         _acl = Acl.from_config(cfg["acl"])
     return _acl
+
+
+def _get_token_store():
+    global _token_store
+    if _token_store is None:
+        from .backends.token_store import TokenStore
+        from cryptography.fernet import Fernet
+        key_ref = os.environ.get("TOKEN_MASTER_KEY")
+        if not key_ref:
+            # Development fallback — warn and generate a temporary key.
+            import warnings
+            warnings.warn(
+                "TOKEN_MASTER_KEY not set — using ephemeral key (tokens lost on restart)",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            key: bytes = Fernet.generate_key()
+        else:
+            key = key_ref.encode() if isinstance(key_ref, str) else key_ref
+        db_path = Path(os.environ.get("MEMAIX_TOKEN_DB", "/tmp/memaix-tokens.db"))
+        _token_store = TokenStore.for_path(db_path, key)
+    return _token_store
 
 
 def _get_audit() -> AuditLog:
@@ -96,7 +120,36 @@ mcp = FastMCP("memaix")
 @mcp.tool()
 def whoami() -> dict:
     """Return the calling user's identity and project grants."""
-    return t_whoami.whoami(_get_acl(), _user())
+    user = _user()
+    acl = _get_acl()
+    shared_vault = acl.resource("shared", "vault")
+    vault_path = Path(shared_vault) if shared_vault else None
+    return t_whoami.whoami(acl, user, vault=vault_path)
+
+
+@mcp.tool()
+def account_link(provider: str) -> dict:
+    """Get an OAuth link URL to connect your account."""
+    user = _user()
+    cfg = config.load()
+    public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "http://localhost:8080")
+    return t_account.account_link(_get_acl(), user, provider, public_url)
+
+
+@mcp.tool()
+def account_list() -> list:
+    """List your linked OAuth accounts."""
+    user = _user()
+    store = _get_token_store()
+    return t_account.account_list(_get_acl(), user, store)
+
+
+@mcp.tool()
+def account_unlink(provider: str, account: str) -> dict:
+    """Unlink an OAuth account."""
+    user = _user()
+    store = _get_token_store()
+    return t_account.account_unlink(_get_acl(), user, provider, account, store)
 
 
 @mcp.tool()
@@ -390,10 +443,105 @@ def calendar_delete(project: str, id: str) -> dict:
 def build_http_app():
     """Build the Starlette app with Bearer-auth for HTTP transport."""
     from starlette.routing import Route
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, RedirectResponse
+    from starlette.requests import Request
 
-    async def health(request):
+    # ------------------------------------------------------------------
+    # Custom HTTP handlers
+    # ------------------------------------------------------------------
+
+    async def health_handler(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "memaix"})
+
+    async def link_start(request: Request) -> "RedirectResponse | JSONResponse":
+        """Start OAuth flow for a provider."""
+        provider = request.path_params["provider"]
+        state = request.query_params.get("state", "")
+
+        PROVIDER_AUTH_URLS = {
+            "google": "https://accounts.google.com/o/oauth2/v2/auth",
+            "microsoft": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        }
+        if provider not in PROVIDER_AUTH_URLS:
+            return JSONResponse({"error": "unknown_provider"}, status_code=400)
+
+        cfg = config.load()
+        provider_cfg = cfg.get("memaix", {}).get("oauth_providers", {}).get(provider, {})
+        client_id = provider_cfg.get("client_id", "")
+        public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "http://localhost:8080")
+        redirect_uri = f"{public_url.rstrip('/')}/link/{provider}/callback"
+
+        from urllib.parse import urlencode
+        params = {
+            "client_id": client_id,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "scope": " ".join(provider_cfg.get("scopes", [])),
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        auth_url = PROVIDER_AUTH_URLS[provider] + "?" + urlencode(params)
+        return RedirectResponse(auth_url)
+
+    async def link_callback(request: Request) -> JSONResponse:
+        """Handle OAuth callback: exchange code for tokens and store them."""
+        provider = request.path_params["provider"]
+        code = request.query_params.get("code", "")
+        state = request.query_params.get("state", "")
+        error = request.query_params.get("error", "")
+
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
+
+        from .tools.account import validate_state
+        pending = validate_state(state)
+        if not pending:
+            return JSONResponse({"error": "invalid_or_expired_state"}, status_code=400)
+
+        user_id = pending["user_id"]
+        cfg = config.load()
+        provider_cfg = cfg.get("memaix", {}).get("oauth_providers", {}).get(provider, {})
+        public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "http://localhost:8080")
+        redirect_uri = f"{public_url.rstrip('/')}/link/{provider}/callback"
+
+        PROVIDER_TOKEN_URLS = {
+            "google": "https://oauth2.googleapis.com/token",
+            "microsoft": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        }
+        token_url = PROVIDER_TOKEN_URLS.get(provider, "")
+        client_secret = config.secret(provider_cfg.get("client_secret_ref", "")) or ""
+
+        import requests as req_lib
+        try:
+            resp = req_lib.post(
+                token_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": provider_cfg.get("client_id", ""),
+                    "client_secret": client_secret,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            token_data = resp.json()
+        except Exception as exc:
+            return JSONResponse(
+                {"error": "token_exchange_failed", "detail": str(exc)}, status_code=500
+            )
+
+        account_email = token_data.get("email", "") or _get_account_email(provider, token_data)
+
+        store = _get_token_store()
+        store.store(user_id, provider, account_email, token_data)
+
+        return JSONResponse(
+            {"status": "linked", "provider": provider, "account": account_email}
+        )
+
+    # ------------------------------------------------------------------
 
     cfg = config.load()
     auth_cfg = cfg.get("memaix", {}).get("auth", {})
@@ -414,19 +562,29 @@ def build_http_app():
         except AttributeError:
             pass
 
-    # Register /health before building the app so custom-routes mechanism picks it up.
+    custom_routes = [
+        Route("/health", health_handler),
+        Route("/link/{provider}", link_start),
+        Route("/link/{provider}/callback", link_callback),
+    ]
+
     try:
-        mcp._custom_starlette_routes = [Route("/health", health)]
+        mcp._custom_starlette_routes = custom_routes
         app = mcp.streamable_http_app()
     except AttributeError:
         app = mcp.streamable_http_app()
-        # Fallback: splice the route directly into the Starlette router.
         try:
-            app.routes.insert(0, Route("/health", health))
+            for route in reversed(custom_routes):
+                app.routes.insert(0, route)
         except AttributeError:
             pass
 
     return app
+
+
+def _get_account_email(provider: str, token_data: dict) -> str:
+    """Extract account email from token response or return a placeholder."""
+    return token_data.get("email", f"linked-{provider}")
 
 
 def main() -> None:
