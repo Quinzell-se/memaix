@@ -7,41 +7,45 @@ services:
     image: memaix/gateway:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      MEMAIX_TRANSPORT: http
     volumes:
       - ./config:/app/config:ro            # brand.yaml, memaix.yaml, acl.yaml
       - ./vaults:/srv/vaults               # git-versionerade minnesvaults
     ports:
-      - "127.0.0.1:8080:8080"              # exponeras INTE direkt; via tunnel/reverse proxy
-    # Gatewayen läser config/memaix.yaml för domän, auth och backends.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      hydra:
+        condition: service_started
+    profiles: ["hydra"]
+
+  login-app:
+    build: ./login-app
+    image: memaix/login-app:latest
+    restart: unless-stopped
+    env_file: .env
+    profiles: ["hydra"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:80:80"
+    depends_on:
+      - gateway
+      - hydra
+      - login-app
+    profiles: ["hydra"]
 
   # Valfritt: Cloudflare-tunnel. Tar bort behovet av portöppning; ger auto-TLS.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on: [gateway]
+    depends_on: [caddy]
     profiles: ["tunnel"]                   # aktivera med: docker compose --profile tunnel up -d
-
-  # Valfritt: Nextcloud som backend för kalender (CalDAV) + filer (WebDAV).
-  # Hoppa över om kunden redan har en filserver/kalender.
-  # Admin skapas automatiskt från .env → scripts/bootstrap.py provisionerar resten.
-  nextcloud:
-    image: nextcloud:latest
-    restart: unless-stopped
-    environment:
-      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
-      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
-      NEXTCLOUD_TRUSTED_DOMAINS: "localhost ${NEXTCLOUD_PUBLIC_HOST:-}"
-    volumes:
-      - nextcloud-data:/var/www/html
-    ports:
-      - "127.0.0.1:8081:80"               # lokalt, för provisionering (ej publikt)
-    healthcheck:
-      test: ["CMD", "php", "occ", "status"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-    profiles: ["nextcloud"]               # aktivera med: docker compose --profile nextcloud up -d
 
   postgres:
     image: postgres:16-alpine
@@ -61,14 +65,33 @@ services:
     environment:
       DSN: postgres://hydra:${HYDRA_DB_PASSWORD}@postgres:5432/hydra?sslmode=disable
       URLS_SELF_ISSUER: ${HYDRA_PUBLIC_URL:-https://mcp.example.com}
-      URLS_CONSENT: ${HYDRA_CONSENT_URL:-http://localhost:3000/consent}
-      URLS_LOGIN: ${HYDRA_LOGIN_URL:-http://localhost:3000/login}
+      URLS_CONSENT: ${HYDRA_CONSENT_URL:-https://mcp.example.com/consent}
+      URLS_LOGIN: ${HYDRA_LOGIN_URL:-https://mcp.example.com/login}
       SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET}
+      LOG_LEVEL: warn
+      OIDC_DYNAMIC_CLIENT_REGISTRATION_ENABLED: "true"
+      SERVE_PUBLIC_CORS_ENABLED: "true"
+      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: "https://claude.ai,https://api.claude.ai"
+      SERVE_PUBLIC_CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
     ports:
       - "127.0.0.1:4444:4444"   # public API
       - "127.0.0.1:4445:4445"   # admin API
     depends_on: [postgres]
     profiles: ["hydra"]
+
+  # Valfritt: Nextcloud som backend för kalender (CalDAV) + filer (WebDAV).
+  nextcloud:
+    image: nextcloud:latest
+    restart: unless-stopped
+    environment:
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost ${NEXTCLOUD_PUBLIC_HOST:-}"
+    volumes:
+      - nextcloud-data:/var/www/html
+    ports:
+      - "127.0.0.1:8081:80"
+    profiles: ["nextcloud"]
 
 volumes:
   nextcloud-data:

@@ -1,33 +1,28 @@
-# Åtkomststyrning: vem (users) får vilka projekt (grants), och vad varje projekt innehåller.
-# Kopiera till acl.yaml. Hemligheter lagras i .env och refereras via *_ref.
-
 users:
-  owner:
-    oauth_sub: "owner@example.com"
-    grants: { acme: owner, shared: owner }
-  teammate:
-    oauth_sub: "bob@example.com"
-    grants: { acme: collaborator, shared: collaborator }
-  external:
-    oauth_sub: "contractor@example.com"
-    grants: { acme: collaborator }        # BARA detta projekt — ser inget annat
-
-# Roller:
-#   owner        – läs/skriv allt + beslutar backlog-status
-#   collaborator – läs/skriv arbetsresurser + lägger till/poängsätter backlog
-#   reader       – läs
+  alice:
+    # OAuth subject från Hydra. Sätts till användarnamnet vi angav vid inloggning.
+    oauth_subjects:
+      - alice
+    grants:
+      acme: owner
+      project-a: owner
+      project-b: owner
+      personal: owner
+      shared: owner
 
 projects:
   acme:
-    mailbox:
-      imap_host: "imap.example.com"
-      smtp_host: "smtp.example.com"
-      user: "team@acme.example.com"
-      password_ref: "PM_ACME_IMAP_PASSWORD"     # → .env
-    calendar: "https://cloud.example.com/remote.php/dav/calendars/acme/work/"
-    files:    "https://cloud.example.com/remote.php/dav/files/acme/Acme/"
-    files_password_ref: "NEXTCLOUD_ACME_APP_PASSWORD"
-    code:     { forge: forgejo, repo: "team/acme-app", token_ref: "FORGE_ACME" }  # github | gitlab | forgejo | gitea
-    vault: "/srv/vaults/acme"
+    vault: /srv/vaults/acme
+    allow_send: true
+  project-a:
+    vault: /srv/vaults/project-a
+    allow_send: true
+  project-b:
+    vault: /srv/vaults/project-b
+    allow_send: false
+  personal:
+    vault: /srv/vaults/personal
+    allow_send: true
   shared:
-    vault: "/srv/vaults/shared"                 # om-filer, manual, skrivstil (ej projektresurser)
+    vault: /srv/vaults/shared
+    allow_send: false

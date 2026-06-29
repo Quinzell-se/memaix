@@ -1,35 +1,7 @@
-# Huvudkonfiguration. Kopiera till memaix.yaml.
-
 server:
-  public_url: "https://mcp.example.com"   # kundens egen domän
   bind: "0.0.0.0:8080"
-
-tunnel:
-  provider: "cloudflared"                 # cloudflared | none (sköt reverse proxy själv)
-  hostname: "mcp.example.com"
-  # OBS: lägg INTE Cloudflare Access "Managed OAuth" framför — bryter iOS/webb (se SECURITY.md).
-  # Stäng av Bot Fight Mode för detta hostname.
+  public_url: "https://mcp.example.com"
 
 auth:
-  issuer: "https://mcp.example.com"       # = public_url
-  # Auth via ory Hydra (medföljer stacken, cert. OAuth2/DCR); gateway validerar tokens.
-  registration: ["cimd", "dcr"]           # klientregistrering Claude/ChatGPT stödjer
-
-vaults_dir: "/srv/vaults"                 # ett git-repo per projekt
-
-features:
-  allow_send: false                       # AI får bara skapa utkast tills detta är true
-  audit_log: true                         # logga verktygsanrop per användare + projekt
-
-# Modell — bara för server-side lägen (Memaix-egen chatt / lokal modell / bot).
-# BYO AI (egen Claude/ChatGPT-connector) behöver INTE detta. Se docs/CHOOSE-YOUR-LLM.md.
-model:
-  provider: anthropic            # anthropic | openai | openrouter | mistral | google | openai-compatible | ollama | vllm
-  name: "claude-sonnet-4-x"      # via openrouter t.ex. "anthropic/claude-..." (en nyckel, alla modeller)
-  api_key_ref: LLM_API_KEY       # moln-API → .env; utelämna för lokal
-  endpoint: ""                   # openrouter/openai-compatible: leverantörens bas-URL; lokal: http://localhost:11434
-
-# Backends definieras per projekt i acl.yaml (mailbox/calendar/files).
-# Globala defaults kan sättas här om alla projekt delar t.ex. en Nextcloud:
-defaults:
-  nextcloud_base_url: "https://cloud.example.com"
+  issuer: "https://mcp.example.com"
+  resource_server_url: "https://mcp.example.com"

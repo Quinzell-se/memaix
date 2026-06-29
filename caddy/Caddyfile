@@ -1,0 +1,38 @@
+# Memaix reverse proxy — routes mcp.example.com → gateway / hydra / login-app
+# Cloudflare-tunneln terminerar TLS; Caddy behöver inte eget certifikat.
+
+{
+    auto_https off
+    admin off
+}
+
+:80 {
+    # Hydra public OAuth endpoints
+    handle /oauth2/* {
+        reverse_proxy hydra:4444
+    }
+
+    # OAuth/OIDC discovery
+    handle /.well-known/openid-configuration {
+        reverse_proxy hydra:4444
+    }
+    handle /.well-known/jwks.json {
+        reverse_proxy hydra:4444
+    }
+    handle /.well-known/oauth-authorization-server {
+        reverse_proxy hydra:4444
+    }
+
+    # Login/consent UI
+    handle /login* {
+        reverse_proxy login-app:3000
+    }
+    handle /consent* {
+        reverse_proxy login-app:3000
+    }
+
+    # Allt annat → memaix gateway (MCP + health + account_link-callback)
+    handle {
+        reverse_proxy gateway:8080
+    }
+}
