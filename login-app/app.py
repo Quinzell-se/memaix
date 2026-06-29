@@ -100,8 +100,8 @@ async def login_get(request: Request, login_challenge: str = ""):
         return RedirectResponse(redirect, status_code=303)
 
     return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "challenge": login_challenge, "error": ""},
+        request, "login.html",
+        {"challenge": login_challenge, "error": ""},
     )
 
 
@@ -114,8 +114,8 @@ async def login_post(
 ):
     if username not in ALLOWED_USERS or not _verify_password(password):
         return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "challenge": login_challenge, "error": "Fel användarnamn eller lösenord."},
+            request, "login.html",
+            {"challenge": login_challenge, "error": "Fel användarnamn eller lösenord."},
             status_code=401,
         )
 
