@@ -24,6 +24,7 @@ Läs i den ordning som passar din roll.
 7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
    · [MEMAIX-PLUGIN.md](MEMAIX-PLUGIN.md) — konkret plugin-innehåll + automation (hooks/server/cron).
 8. [OPEN-GAPS.md](OPEN-GAPS.md) — kritisk självgranskning: säkerhet/UX/programmatiska luckor.
+9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
@@ -62,6 +63,7 @@ Läs i den ordning som passar din roll.
 | Hur byggs det? | ARCHITECTURE, BUILD, ADDON-PM-BUILD |
 | Hur bygger man en specialiserad agent (PM)? | PM-AGENT |
 | Connector, skill eller plugin? | PACKAGING |
+| Backlog → kod → merge / GitHub-alternativ? | CODE-WORKFLOW |
 | Plugin-innehåll & automation (hooks)? | MEMAIX-PLUGIN |
 | Resursplanering, allokering, konsekvensanalys? | PM-PLANNING-ENGINE |
 | Hur installerar/driver jag? | QUICK-INSTALL, INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
