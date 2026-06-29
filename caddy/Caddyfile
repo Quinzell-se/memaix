@@ -7,7 +7,12 @@
 }
 
 :80 {
-    # Hydra public OAuth endpoints
+    # DCR via gateway (injects audience before forwarding to Hydra)
+    handle /oauth2/register {
+        reverse_proxy gateway:8080
+    }
+
+    # All other Hydra public OAuth endpoints
     handle /oauth2/* {
         reverse_proxy hydra:4444
     }

@@ -479,6 +479,39 @@ def build_http_app():
         metadata["registration_endpoint"] = f"{issuer}/oauth2/register"
         return JSONResponse(metadata)
 
+    async def dcr_handler(request: Request) -> JSONResponse:
+        """Proxy DCR to Hydra, injecting resource audience so JWTs include aud claim.
+
+        Hydra issues JWTs without aud unless the client's audience list explicitly
+        contains the resource URL. This handler ensures every dynamically registered
+        client is whitelisted for https://mcp.example.com (with and without trailing
+        slash) before forwarding to Hydra's public DCR endpoint.
+        """
+        import httpx
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        cfg = config.load()
+        issuer = cfg.get("memaix", {}).get("auth", {}).get("issuer", "https://mcp.example.com").rstrip("/")
+        resource_urls = [f"{issuer}/", issuer]
+        existing = body.get("audience") or []
+        body["audience"] = list({*existing, *resource_urls})
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "http://hydra:4444/oauth2/register",
+                    json=body,
+                    headers={"Content-Type": "application/json"},
+                    timeout=10.0,
+                )
+                return JSONResponse(resp.json(), status_code=resp.status_code)
+        except Exception as exc:
+            logger.warning("DCR proxy error: %s", exc)
+            return JSONResponse({"error": "server_error"}, status_code=500)
+
     async def link_start(request: Request) -> "RedirectResponse | JSONResponse":
         """Start OAuth flow for a provider."""
         provider = request.path_params["provider"]
@@ -588,6 +621,7 @@ def build_http_app():
     custom_routes = [
         Route("/health", health_handler),
         Route("/.well-known/oauth-authorization-server", as_metadata_handler),
+        Route("/oauth2/register", dcr_handler, methods=["POST"]),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
     ]

@@ -68,7 +68,8 @@ services:
       URLS_CONSENT: ${HYDRA_CONSENT_URL:-https://mcp.example.com/consent}
       URLS_LOGIN: ${HYDRA_LOGIN_URL:-https://mcp.example.com/login}
       SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET}
-      LOG_LEVEL: warn
+      LOG_LEVEL: debug
+      LOG_LEAK_SENSITIVE_VALUES: "true"
       STRATEGIES_ACCESS_TOKEN: jwt
       OIDC_DYNAMIC_CLIENT_REGISTRATION_ENABLED: "true"
       SERVE_PUBLIC_CORS_ENABLED: "true"
