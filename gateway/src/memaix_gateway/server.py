@@ -445,6 +445,7 @@ def build_http_app():
     from starlette.routing import Route
     from starlette.responses import JSONResponse, RedirectResponse
     from starlette.requests import Request
+    from starlette.middleware.cors import CORSMiddleware
 
     # ------------------------------------------------------------------
     # Custom HTTP handlers
@@ -548,19 +549,16 @@ def build_http_app():
 
     if auth_cfg.get("issuer"):
         from .auth.token import HydraTokenVerifier
+        from mcp.server.auth.settings import AuthSettings
         verifier = HydraTokenVerifier.from_config(cfg)
-        try:
-            from mcp.server.fastmcp.settings import AuthSettings
-            mcp.settings.auth = AuthSettings(
-                issuer_url=auth_cfg["issuer"],
-                resource_server_url=auth_cfg.get("resource_server_url", auth_cfg["issuer"]),
-            )
-        except (ImportError, AttributeError):
-            pass
-        try:
-            mcp._token_verifier = verifier
-        except AttributeError:
-            pass
+        mcp.settings.auth = AuthSettings(
+            issuer_url=auth_cfg["issuer"],
+            resource_server_url=auth_cfg.get("resource_server_url", auth_cfg["issuer"]),
+        )
+        mcp._token_verifier = verifier
+
+    # Mount at root so claude.ai finds the endpoint at the connector URL directly.
+    mcp.settings.streamable_http_path = "/"
 
     custom_routes = [
         Route("/health", health_handler),
@@ -568,16 +566,17 @@ def build_http_app():
         Route("/link/{provider}/callback", link_callback),
     ]
 
-    try:
-        mcp._custom_starlette_routes = custom_routes
-        app = mcp.streamable_http_app()
-    except AttributeError:
-        app = mcp.streamable_http_app()
-        try:
-            for route in reversed(custom_routes):
-                app.routes.insert(0, route)
-        except AttributeError:
-            pass
+    mcp._custom_starlette_routes = custom_routes
+    app = mcp.streamable_http_app()
+
+    # Wrap with CORS so claude.ai browser requests aren't blocked.
+    app = CORSMiddleware(
+        app=app,
+        allow_origins=["https://claude.ai", "https://api.claude.ai"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "mcp-session-id"],
+        expose_headers=["mcp-session-id"],
+    )
 
     return app
 

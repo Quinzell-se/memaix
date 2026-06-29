@@ -20,6 +20,8 @@
         reverse_proxy hydra:4444
     }
     handle /.well-known/oauth-authorization-server {
+        # Hydra serves RFC 8414 metadata at openid-configuration path
+        rewrite * /.well-known/openid-configuration
         reverse_proxy hydra:4444
     }
 
