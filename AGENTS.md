@@ -36,8 +36,9 @@ Se `HANDOFF.md §4` för full kontext. I korthet — bygg **inte** runt dessa:
 - **Scrub före sändning.** Inga hemligheter i utgående innehåll eller loggar.
 
 ## 3. Repo- & hemlighetsregler
-- **Inga hemligheter i repot.** `.env` är gitignored. Config refererar secrets via `*_ref` → env
-  (se `config.py`, `config/*.example.yaml`). Committa aldrig nycklar, tokens eller kunddata.
+- **Inga hemligheter i repot.** `.env` är gitignored. Config refererar secrets via `*_ref`
+  (`env:`/`file:`/`vault:`/`kms:`, se `config.py` + `docs/SECRETS.md`). Hemligheter ekas aldrig till
+  klienten, loggas aldrig, scrubbas ur fel/traces. Committa aldrig nycklar, tokens eller kunddata.
 - **Scope:** arbeta bara i repot `your-monorepo`, branch `claude/cowork-assistant-setup-hhd5ij`
   (eller `main` om PR #4 mergats). Pusha aldrig till annan branch utan tillstånd.
 - **Backuper** krypteras med kund-hållen nyckel (BYOK) — bygg aldrig in en master-nyckel.

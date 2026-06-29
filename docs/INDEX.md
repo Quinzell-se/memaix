@@ -39,6 +39,7 @@ Läs i den ordning som passar din roll.
    · [DOCTOR.md](DOCTOR.md) — verifiering & hälsokontroll (alla checkar, rapportformat).
    · [OBSERVABILITY.md](OBSERVABILITY.md) — drift-insyn: loggar, metrics, larm.
 4. [SECURITY.md](SECURITY.md) — härdning + kända fallgropar (OAuth, Cloudflare).
+   · [SECRETS.md](SECRETS.md) — hemligheter: lagring (env/file/vault/kms), kryptering i vila, rotation, scrubbing.
 5. [AI-CLIENTS.md](AI-CLIENTS.md) — koppla in Claude, ChatGPT, Mistral m.fl.
    · [CHOOSE-YOUR-LLM.md](CHOOSE-YOUR-LLM.md) — **vilken LLM & hur** (beslutsguide för nedladdaren).
    · [ACCESS-MODES.md](ACCESS-MODES.md) — använda Memaix *utan* egen AI (server-modell, lokal modell, GUI).
@@ -70,6 +71,7 @@ Läs i den ordning som passar din roll.
 | Resursplanering, allokering, konsekvensanalys? | PM-PLANNING-ENGINE |
 | Hur installerar/driver jag? | QUICK-INSTALL, INSTALL, WIZARD, SETUP-UI, AUTO-INSTALLER, SECURITY, AI-CLIENTS |
 | Hur verifierar jag installationen? | DOCTOR |
+| Hur lagrar/roterar jag API-nycklar & lösenord? | SECRETS, SETUP-UI |
 | Kan vi koppla in Gmail/M365 & egna konton? | BACKENDS, PER-USER-OAUTH |
 | Vilken LLM ska jag välja & hur? | CHOOSE-YOUR-LLM |
 | Använda Memaix utan egen AI? | ACCESS-MODES |

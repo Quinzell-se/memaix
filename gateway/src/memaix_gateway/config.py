@@ -1,4 +1,11 @@
-"""Config loading — reads config/*.yaml and resolves *_ref against the environment.
+"""Config loading — reads config/*.yaml and resolves *_ref secrets.
+
+A *_ref is a reference, never a value (see docs/SECRETS.md). It is resolved by prefix:
+  env:NAME            -> environment variable NAME (.env)         [default if no prefix]
+  file:/path          -> file contents (Docker/systemd secrets, tmpfs)
+  vault:path#field    -> OpenBao/HashiCorp Vault   [todo: wire client at implementation]
+  kms:id              -> cloud KMS / Secret Manager [todo: wire client at implementation]
+A bare name without a prefix is treated as env: for backward compatibility.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -30,10 +37,31 @@ def load() -> dict:
 
 
 def secret(ref: str | None) -> str | None:
-    """Resolve a *_ref name to its value from the environment (.env)."""
+    """Resolve a *_ref to its value by prefix (see module docstring / docs/SECRETS.md).
+
+    Never log the return value; never echo it to a client (docs/THREAT-MODEL.md).
+    """
     if not ref:
         return None
-    val = os.environ.get(ref)
-    if val is None:
-        raise KeyError(f"secret ref not set in environment: {ref}")
-    return val
+
+    scheme, _, rest = ref.partition(":")
+    if not rest:  # bare name → env (backward compatible)
+        scheme, rest = "env", ref
+
+    if scheme == "env":
+        val = os.environ.get(rest)
+        if val is None:
+            raise KeyError(f"secret ref not set in environment: {rest}")
+        return val
+
+    if scheme == "file":
+        path = Path(rest)
+        if not path.exists():
+            raise KeyError(f"secret file not found: {rest}")
+        return path.read_text().strip()
+
+    if scheme in ("vault", "kms"):
+        # TODO: wire OpenBao/Vault or cloud-KMS client at implementation (docs/SECRETS.md).
+        raise NotImplementedError(f"secret backend not yet wired: {scheme}")
+
+    raise ValueError(f"unknown secret ref scheme: {scheme!r} (use env:/file:/vault:/kms:)")

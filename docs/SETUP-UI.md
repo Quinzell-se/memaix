@@ -57,6 +57,22 @@ Den måste därför:
 - Vid "klart" kör den doctor, skriver config, och **stänger setup-läget**. Runtime-gatewayen har
   inga config-skrivande endpoints.
 
+## Löpande admin (efter installationen)
+Setup-läget är engångs och självavstängande — men nycklar behöver ändras *efteråt* (rotera
+LLM-API-nyckel, byta mejl-credential). Lös det **utan** en stående privilegierad yta:
+
+- **Efemärt admin-läge (rekommenderas):** `memaix admin` startar samma localhost-bundna, token-gated
+  webb som `memaix init`, du gör ändringen, den kör doctor, skriver, och **stänger sig själv**.
+  Bevarar "ingen stående config-skrivande endpoint i runtime".
+- **CLI/declarative:** `memaix config set model.api_key_ref … && memaix reload` — repeterbart för dig
+  som installerar åt många kunder.
+- **Stående admin-panel:** bara om kunden kräver det, och då hårt grindad — **admin-roll + MFA**,
+  localhost/tunnel-bind, **audit på varje ändring**, auto-idle-avstängning. Tyngst/störst attackyta;
+  undvik i v1.
+
+Hemlighetshantering (lagring, kryptering i vila, rotation, scrubbing) specas i `SECRETS.md`. UI:t
+visar alltid `••••• (satt)` och erbjuder *rotera*, aldrig "visa nyckel".
+
 ## Acceptanskriterier
 - [ ] Setup-webben är åtkomlig bara via localhost/tunnel, aldrig öppet publikt.
 - [ ] Engångstoken krävs för att nå wizarden.
