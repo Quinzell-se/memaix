@@ -1,0 +1,17 @@
+# Exempelkonfiguration för Memaix-gatewayen.
+# Kopiera och anpassa till din instans.
+
+users:
+  alice:
+    # oauth_subjects: lista av OAuth-subjects (sub-claim) som mappar till denna användare.
+    # Behövs inte i stdio-läge (MEMAIX_USER=jimmy räcker).
+    oauth_subjects: []
+    grants:
+      demo: owner
+
+projects:
+  demo:
+    # vault: sökväg till projektets vault-katalog (skapas automatiskt).
+    vault: /tmp/memaix-demo-vault
+    # allow_send: true = email_send tillåtet för ägare.
+    allow_send: false
