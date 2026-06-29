@@ -1,0 +1,29 @@
+Memaix
+Copyright (C) 2026 [Rättighetsinnehavarens namn]
+
+Denna produkt licensieras under AGPL-3.0-or-later (se LICENSE) och dual-licensieras
+kommersiellt av rättighetsinnehavaren.
+
+------------------------------------------------------------------------------
+TREDJEPARTSKOMPONENTER (attribution)
+------------------------------------------------------------------------------
+Memaix integrerar/buntar följande komponenter, var och en under sin egen licens.
+Fullständiga licenstexter följer med respektive komponent/image. Se docs/LICENSING.md
+och den genererade SBOM:en (sbom.cdx.json) för komplett, versionsspecifik förteckning.
+
+  ory Hydra ................. Apache-2.0
+  PostgreSQL ................ PostgreSQL License
+  Nextcloud ................. AGPL-3.0
+  Forgejo (v9+) ............. GPL-3.0-or-later     (Gitea: MIT · GitLab CE: MIT)
+  Ollama .................... MIT
+  vLLM ...................... Apache-2.0
+  cloudflared ............... Apache-2.0
+  restic / borg ............. BSD-2-Clause
+  MCP Python SDK ............ MIT
+  caldav, imap-tools, requests, pyyaml ... MIT / BSD / Apache-2.0
+
+Modeller (vid lokal körning) har egna licenser:
+  Qwen, Gemma, Mistral ...... Apache-2.0
+  Llama ..................... Meta Llama Community License (användningsrestriktioner)
+
+NOTICE-filer från Apache-2.0-licensierade komponenter förs vidare enligt deras krav.
