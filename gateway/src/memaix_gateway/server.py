@@ -454,6 +454,31 @@ def build_http_app():
     async def health_handler(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "memaix"})
 
+    async def as_metadata_handler(request: Request) -> JSONResponse:
+        """Serve OAuth AS metadata with registration_endpoint injected.
+
+        Hydra v2 doesn't advertise registration_endpoint in its discovery
+        document even when DCR is enabled — this handler proxies Hydra's
+        openid-configuration and adds the missing field.
+        """
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "http://hydra:4444/.well-known/openid-configuration",
+                    timeout=5.0,
+                )
+                metadata = resp.json()
+        except Exception:
+            # Fallback: return minimal metadata so discovery doesn't hard-fail
+            cfg = config.load()
+            issuer = cfg.get("memaix", {}).get("auth", {}).get("issuer", "https://mcp.example.com")
+            metadata = {"issuer": issuer}
+
+        issuer = metadata.get("issuer", "https://mcp.example.com").rstrip("/")
+        metadata["registration_endpoint"] = f"{issuer}/oauth2/register"
+        return JSONResponse(metadata)
+
     async def link_start(request: Request) -> "RedirectResponse | JSONResponse":
         """Start OAuth flow for a provider."""
         provider = request.path_params["provider"]
@@ -562,6 +587,7 @@ def build_http_app():
 
     custom_routes = [
         Route("/health", health_handler),
+        Route("/.well-known/oauth-authorization-server", as_metadata_handler),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
     ]
