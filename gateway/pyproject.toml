@@ -5,13 +5,13 @@ description = "Memaix — self-hosted, AI-agnostic assistant gateway (MCP)"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
-    # MCP-server med Streamable HTTP + OAuth. Lås versioner vid implementation.
+    # MCP-server med Streamable HTTP. Lås versioner vid implementation.
     "mcp",                 # eller "fastmcp"
     "pyyaml",
     "imap-tools",          # IMAP
     "caldav",              # CalDAV
     "requests",            # WebDAV / HTTP
-    # OAuth 2.1-server-bibliotek väljs vid implementation (PKCE + CIMD/DCR).
+    # Token-validering mot Hydra (JWKS) — bibliotek väljs vid implementation (t.ex. pyjwt + jwks).
 ]
 
 [build-system]

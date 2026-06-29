@@ -12,7 +12,7 @@ tunnel:
 
 auth:
   issuer: "https://mcp.example.com"       # = public_url
-  # Memaix är sin egen OAuth 2.1-server (PKCE + CIMD). Inga externa IdP krävs.
+  # Auth via ory Hydra (medföljer stacken, cert. OAuth2/DCR); gateway validerar tokens.
   registration: ["cimd", "dcr"]           # klientregistrering Claude/ChatGPT stödjer
 
 vaults_dir: "/srv/vaults"                 # ett git-repo per projekt

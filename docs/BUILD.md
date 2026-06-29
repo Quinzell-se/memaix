@@ -3,13 +3,14 @@
 Specen för den som implementerar (eller låter en AI-kodassistent implementera) Memaix-gatewayen.
 
 ## Stack
-- **Python.** MCP Python SDK / FastMCP med **Streamable HTTP-transport** och inbyggd
-  **OAuth 2.1 + PKCE (CIMD + DCR)**. Kör som container (se `gateway/Dockerfile`).
+- **Python.** MCP Python SDK / FastMCP med **Streamable HTTP-transport**. Auth via **ory Hydra**
+  (certifierad OAuth2/DCR) — gatewayen **validerar tokens** (bygger ingen egen OAuth-server). Kör som
+  container (se `gateway/Dockerfile`).
 
 ## Moduler (se `gateway/src/memaix_gateway/`)
 - `config.py` — läs `config/*.yaml` + `.env`, lös `*_ref` mot env.
 - `acl.py` — ladda acl.yaml; `check(user, project, role)`-enforcement. **Klart specat — börja här.**
-- `auth/` — OAuth 2.1-server (PKCE, CIMD, DCR), mappar OAuth-subject → intern användare.
+- `auth/` — token-validering mot Hydra (JWKS), mappar OAuth-subject → intern användare.
 - `server.py` — MCP-server, registrerar verktyg, kör AuthZ före varje anrop.
 - `tools/email.py | calendar.py | files.py | memory.py | backlog.py` — verktygen.
 
@@ -33,7 +34,7 @@ Alla verktyg tar `project` och valideras mot acl.yaml innan körning.
 1. **Skelett + ACL (stdio).** config + acl + `whoami` + ett projekt med `files_*` mot lokal mapp.
    Verifiera att användare utan grant nekas.
 2. **Backends.** email/calendar/files/memory/backlog. Testa via lokal kodassistent (stdio).
-3. **Remote + OAuth.** Streamable HTTP + OAuth 2.1/PKCE/CIMD. Exponera via tunnel.
+3. **Remote + auth.** Streamable HTTP + Hydra (token-validering). Exponera via tunnel.
 4. **RBAC skarpt.** Alla projekt/roller; verifiera isolering mellan projekt.
 5. **Koppla in AI.** Lägg connectorn på webben; testa OAuth från mobil.
 6. **Onboarding + flerpersoner.** Profil-intervju, externa med ett projekt.

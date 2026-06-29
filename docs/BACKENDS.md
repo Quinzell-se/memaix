@@ -30,9 +30,10 @@ email_* / calendar_* / files_*   (oförändrade MCP-verktyg)
 | **Google Workspace / Gmail** | Gmail API | Calendar API | Drive API | OAuth 2.0 (per användare) |
 | **Microsoft 365** | Graph API | Graph API | OneDrive/SharePoint (Graph) | OAuth 2.0 / Entra ID |
 
-## Auth — Memaix blir både OAuth-server och OAuth-klient
+## Auth — Memaix fronter en OAuth-server och är själv OAuth-klient
 
-- **Mot AI-klienten** (Claude/ChatGPT/…) är Memaix en OAuth-**server** (oförändrat).
+- **Mot AI-klienten** (Claude/ChatGPT/…) fronter Memaix en **certifierad OAuth-server (ory Hydra)**;
+  gatewayen validerar tokens (bygger ingen egen).
 - **Mot Google/Microsoft** blir Memaix en OAuth-**klient**: den begär delegerad åtkomst till
   användarens konto och lagrar/refreshar tokens serverside. Användaren godkänner *en gång* när de
   kopplar upp sig — typiskt vid sin connector-inloggning (länkad identitet).

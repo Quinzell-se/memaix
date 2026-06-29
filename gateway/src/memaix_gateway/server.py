@@ -3,7 +3,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 
 Implement against docs/BUILD.md. Responsibilities:
-  - Start an MCP server with Streamable HTTP transport + OAuth 2.1 (PKCE, CIMD/DCR).
+  - Start an MCP server with Streamable HTTP transport; validate tokens against ory Hydra (JWKS).
   - On each tool call: resolve OAuth subject -> user (Acl.user_by_subject),
     then Acl.enforce(user, project, need) BEFORE touching any backend.
   - Register tools from memaix_gateway.tools.* (email, calendar, files, memory, backlog, whoami).

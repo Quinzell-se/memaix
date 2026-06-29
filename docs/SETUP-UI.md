@@ -1,6 +1,6 @@
 # Setup-gränssnittet — webb-wizard vs native app
 
-Beslut om hur den interaktiva uppsättningen (brand, backends, Purelymail-API, OAuth-länkning,
+Beslut om hur den interaktiva uppsättningen (brand, backends, mejlleverantörs-API, OAuth-länkning,
 bekräftelser) presenteras för operatören. Kompletterar `WIZARD.md` (flödet) med *bäraren*.
 
 ## Beslut
@@ -27,14 +27,14 @@ CLI/declarative config för repeterbara installationer. Ingen native desktop-app
 | Attackyta | Måste härdas | Medel | Låg |
 
 ## Roller
-- **Webben gör det interaktiva:** brand, domän/tunnel, backends, Purelymail-API-token,
-  OAuth-länkning (Gmail/M365), projekt/personer, kör provisionering, doctor.
+- **Webben gör det interaktiva:** brand, domän/tunnel, backends, mejlleverantörs-API-token
+  (Purelymail/IMAP/Gmail/M365), OAuth-länkning (Gmail/M365), projekt/personer, kör provisionering, doctor.
 - **CLI/config gör det repeterbara:** `memaix init --yes` med förifylld YAML för dig som
   installerar åt många kunder. Samma motor bakom båda.
 - **Native desktop:** ej nu. Vid behov senare → tunn Tauri-wrapper runt samma webb (billigt).
 
 ## Säkerhetsdesign (obligatorisk — setup-ytan är högprivilegierad)
-Setup-webben skriver config, tar emot hemligheter (Purelymail-API, OAuth) och provisionerar konton.
+Setup-webben skriver config, tar emot hemligheter (mejlleverantörs-API, OAuth) och provisionerar konton.
 Den måste därför:
 
 1. **Localhost-bind.** Aldrig publikt. Nås via SSH-tunnel (`ssh -L`) eller den autentiserade

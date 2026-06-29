@@ -19,8 +19,9 @@ uppdatering i varje projekt, och som ni kan fråga vad som helst, när som helst
   från samma underlag.
 - **Kunskapen stannar.** När någon slutar försvinner inte vad de visste — allt finns kvar i
   projektminnet.
-- **Allt stannar i huset.** Informationen ligger på företagets egna servrar, inte hos en extern
-  leverantör. Rätt person ser rätt projekt — inget mer.
+- **Informationen ligger i huset.** Den lagras på företagets egna servrar, inte hos en extern
+  leverantör. Rätt person ser rätt projekt — inget mer. *(Använder ni en moln-AI ser den det ni ber
+  den läsa; vill ni att ingenting alls lämnar huset körs en lokal AI-modell.)*
 
 ## Hur ni använder den — fråga och följ upp
 

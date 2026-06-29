@@ -12,7 +12,7 @@ Varje rad är `PASS` / `WARN` / `FAIL` med en kort förklaring och en fix-pekare
 | Kontroll | PASS-villkor |
 |---|---|
 | Config parsar | brand/memaix/acl.yaml giltigt schema |
-| OAuth-nyckel | `MEMAIX_OAUTH_SIGNING_KEY` satt |
+| Hydra nåbar | Hydra-issuer + JWKS svarar (token-validering fungerar) |
 | Gateway frisk | hälso-endpoint svarar |
 | Publik URL nåbar | `public_url` svarar utifrån, giltig TLS |
 | OAuth-metadata | `.well-known`-endpoint nåbar |
@@ -23,7 +23,7 @@ Varje rad är `PASS` / `WARN` / `FAIL` med en kort förklaring och en fix-pekare
 |---|---|
 | Tunnel uppe | cloudflared ansluten / reverse proxy nåbar |
 | Bot Fight av | ingen bot-blockering på MCP-hostnamnet (annars `WARN`) |
-| Ingen Access framför | `WARN` om Cloudflare Access "Managed OAuth" tycks ligga framför (bryter iOS) |
+| Ingen Access framför | `FAIL` om Cloudflare Access "Managed OAuth" tycks ligga framför (bryter claude.ai webb + mobil) |
 
 ### RBAC / ACL
 | Kontroll | PASS-villkor |

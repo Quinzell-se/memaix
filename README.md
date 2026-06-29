@@ -23,7 +23,9 @@ följer med.
 - **En connector, alla AI:er.** MCP är en öppen standard. Lägg in samma URL i Claude, ChatGPT,
   Mistral eller Perplexity. Ingen inlåsning.
 - **Du äger datan.** Självhostad. Öppna standarder bakom: IMAP/SMTP (mejl), CalDAV (kalender),
-  WebDAV (filer), git (minne). Inget lämnar din infrastruktur.
+  WebDAV (filer), git (minne). Lagringen stannar på din infrastruktur. *Obs:* kopplar du en
+  moln-AI (Claude/ChatGPT/…) går det den läser till den leverantören — vill du att **inget** lämnar
+  huset krävs en **lokal modell** (se `docs/LOCAL-MODEL.md`).
 - **Team, inte bara individ.** En connector, flera personer, åtkomst per projekt (RBAC). En
   extern medarbetare låses till exakt ett projekt.
 - **Minne som överlever.** AI:er glömmer mellan sessioner. Memaix ger ett delat, git-versionerat
@@ -80,7 +82,7 @@ Vilken **AI** ska driva Memaix? → **[docs/CHOOSE-YOUR-LLM.md](docs/CHOOSE-YOUR
 
 ## Licens
 
-AGPL-3.0. Du får köra, ändra och hosta fritt. Ändringar du distribuerar (inkl. som nättjänst)
+AGPL-3.0-or-later. Du får köra, ändra och hosta fritt. Ändringar du distribuerar (inkl. som nättjänst)
 måste hållas öppna. Du får sälja installation och hosting som tjänst. Se [LICENSE](LICENSE).
 
 ## Status

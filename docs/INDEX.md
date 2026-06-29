@@ -11,6 +11,7 @@ Läs i den ordning som passar din roll.
 6. [LICENSING.md](LICENSING.md) — komponentlicenser + vilken licens vår egen kod ska ha.
 
 ## 🏗️ Ska du bygga gatewayen?
+0. [AGENTS.md](../AGENTS.md) — **läs först:** bindande guardrails för den byggande AI:n (v2-beslut, säkerhet, licens, byggordning).
 1. [ARCHITECTURE.md](ARCHITECTURE.md) — hur delarna hänger ihop.
 2. [MCP-API.md](MCP-API.md) — gränssnittskontraktet: vad man kan göra via MCP.
 3. [BUILD.md](BUILD.md) — bygg-ordning, moduler, faser för kärnan.

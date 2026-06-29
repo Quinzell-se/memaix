@@ -9,7 +9,7 @@ Planned modules:
   email.py     - IMAP/SMTP: list, read, search, create_draft, (send behind allow_send)
   calendar.py  - CalDAV:   list, find_free_time, create, update, delete
   files.py     - WebDAV:   list, read, search, write
-  memory.py    - git vault: read, search, append, write, history, revert (commit per write)
+  memory.py    - SQLite (aktivt) + git async (historik): read, search, append, write, history, revert
   backlog.py   - markdown:  add, list, get, score, comment, set_status (set_status = owner)
   whoami.py    - returns the caller's identity and visible projects
 """

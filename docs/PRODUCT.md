@@ -124,6 +124,6 @@ Vid dagens slut skriver AI:n en avslutsnotering i projektets minne — morgondag
 Allt på din server. Du bytte aldrig verktyg; du briefade ett system och granskade resultatet.
 
 ## Affärsmodell (sammanfattning)
-Open-core, AGPL-3.0. Gratis självhostat. Intäkt via **installation + drift på kundens infra**
+Open-core, AGPL-3.0-or-later. Gratis självhostat. Intäkt via **installation + drift på kundens infra**
 (white-label), och en framtida **enterprise-tier** (SSO, audit, support) och **betalda
 tilläggsmoduler** (se ADDON-*.md).

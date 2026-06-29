@@ -10,7 +10,8 @@ Memaix lagrar och förnyar deras token, och hur gatewayen väljer rätt persons 
    "vem är du?"                  (gateway)                   "läs den här personens mejl"
 ```
 
-1. **Memaix som OAuth-server** mot AI:n (Claude/ChatGPT) — identifierar *vem som frågar*. (Finns redan.)
+1. **Memaix fronter en OAuth-server (ory Hydra)** mot AI:n (Claude/ChatGPT) — identifierar *vem som
+   frågar*; gatewayen validerar tokens. (Del av stacken.)
 2. **Memaix som OAuth-klient** mot Google/MS — hämtar delegerad åtkomst till *den personens* konto.
 
 Det andra lagret är nytt och kan **inte** ske inuti AI-chatten (ingen webbläsar-redirect där). Det

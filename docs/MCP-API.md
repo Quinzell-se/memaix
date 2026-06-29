@@ -13,7 +13,7 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 - **Rollkontroll (RBAC):** före varje anrop kontrolleras att användaren har minst den roll som
   krävs på `project`. Bobrs `access_denied`. Roller: `reader` < `collaborator` < `owner`.
 - **Tider:** ISO 8601 med tidszon (`2026-06-28T14:00:00+02:00`).
-- **Skrivningar i minne/backlog** returnerar en git-commit-referens (spårbarhet).
+- **Skrivningar i minne/backlog** returnerar en referens till den (asynkrona) git-historiksnapshoten (spårbarhet).
 
 ## Felmodell
 | Fel | När |
@@ -68,8 +68,9 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 | `memory_history` | `project, note?, limit=20` | `[{commit, author, date, message}]` | reader |
 | `memory_revert` | `project, commit` | `{reverted_to, new_commit}` | collaborator |
 
-> Varje skrivning committas automatiskt. `note` är en sökväg i projektets vault, t.ex.
-> `decisions.md` eller `about-bob.md`.
+> Skrivningar landar i SQLite (aktivt tillstånd); git snapshottar historik **asynkront** — `commit`-
+> refen pekar på historikpunkten. `note` är en sökväg i projektets vault, t.ex. `decisions.md` eller
+> `about-bob.md`.
 
 ## Backlog  (markdown med frontmatter i vaulten)
 

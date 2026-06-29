@@ -9,7 +9,7 @@ src/memaix_gateway/
   config.py     # load config/*.yaml, resolve *_ref secrets   [done]
   acl.py        # RBAC enforcement — the security boundary     [done]
   server.py     # MCP server entrypoint                        [stub]
-  auth/         # OAuth 2.1 + PKCE + CIMD/DCR                   [todo]
+  auth/         # token-validering mot Hydra (JWKS)            [todo]
   tools/        # email, calendar, files, memory, backlog      [stub]
 ```
 
