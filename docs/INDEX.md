@@ -50,6 +50,7 @@ Läs i den ordning som passar din roll.
 
 ## 💼 Ska du sälja installation/hosting?
 1. [BUSINESS-CASE.md](BUSINESS-CASE.md) — kostnad, pris, kritisk bedömning (publik-OSS-verklighet).
+   · [SWOT.md](SWOT.md) — styrkor/svagheter/möjligheter/hot + strategisk syntes.
 2. [SERVICE-PROVIDERS.md](SERVICE-PROVIDERS.md) — affärsmodellen: en instans per kund, på kundens infra.
 3. [WHITE-LABEL.md](WHITE-LABEL.md) — kör under kundens eget namn, domän och tunnel.
 
@@ -75,6 +76,7 @@ Läs i den ordning som passar din roll.
 | Hur uppdaterar jag säkert? | UPDATE |
 | Hur tjänar vi pengar? | BUSINESS-CASE, SERVICE-PROVIDERS, WHITE-LABEL, ADDON-PROJECT-MANAGEMENT |
 | Kostnad, pris & lönsamhet? | BUSINESS-CASE |
+| Styrkor/svagheter/möjligheter/hot? | SWOT |
 | Vad krävs för storföretag? | ENTERPRISE |
 | Skydd mot skenande AI / concurrency? | SAFETY |
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
