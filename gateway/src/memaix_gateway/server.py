@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""MCP server entrypoint — Fas 2: memory, backlog, email, calendar + safety.
+"""MCP server entrypoint — Fas 3: HTTP transport + Hydra token auth.
 
-User identity comes from MEMAIX_USER env var (Fas 4 will swap in Hydra tokens).
+User identity:
+  HTTP mode  — Bearer JWT verified by HydraTokenVerifier, subject mapped via acl.yaml.
+  stdio mode — MEMAIX_USER env var (backward-compatible).
 Rate limiting: 60 req/min per user, 120 req/min per project.
 Audit: every tool call is logged to the audit DB (MEMAIX_AUDIT_DB or /tmp/...).
 """
@@ -45,6 +47,19 @@ def _get_audit() -> AuditLog:
 
 
 def _user() -> str:
+    # HTTP mode: resolve identity from the OAuth token injected by MCP SDK middleware.
+    try:
+        from mcp.server.auth.middleware.auth_context import get_access_token
+        token = get_access_token()
+        if token and token.subject:
+            uid = _get_acl().user_by_subject(token.subject)
+            if uid:
+                return uid
+            raise RuntimeError(f"OAuth subject not mapped in acl.yaml: {token.subject!r}")
+    except ImportError:
+        pass
+
+    # stdio fallback (Fas 1-style, backward-compatible).
     uid = os.environ.get("MEMAIX_USER", "").strip()
     if not uid:
         raise RuntimeError("MEMAIX_USER is not set — cannot identify caller")
@@ -372,8 +387,59 @@ def calendar_delete(project: str, id: str) -> dict:
     )
 
 
+def build_http_app():
+    """Build the Starlette app with Bearer-auth for HTTP transport."""
+    from starlette.routing import Route
+    from starlette.responses import JSONResponse
+
+    async def health(request):
+        return JSONResponse({"status": "ok", "service": "memaix"})
+
+    cfg = config.load()
+    auth_cfg = cfg.get("memaix", {}).get("auth", {})
+
+    if auth_cfg.get("issuer"):
+        from .auth.token import HydraTokenVerifier
+        verifier = HydraTokenVerifier.from_config(cfg)
+        try:
+            from mcp.server.fastmcp.settings import AuthSettings
+            mcp.settings.auth = AuthSettings(
+                issuer_url=auth_cfg["issuer"],
+                resource_server_url=auth_cfg.get("resource_server_url", auth_cfg["issuer"]),
+            )
+        except (ImportError, AttributeError):
+            pass
+        try:
+            mcp._token_verifier = verifier
+        except AttributeError:
+            pass
+
+    # Register /health before building the app so custom-routes mechanism picks it up.
+    try:
+        mcp._custom_starlette_routes = [Route("/health", health)]
+        app = mcp.streamable_http_app()
+    except AttributeError:
+        app = mcp.streamable_http_app()
+        # Fallback: splice the route directly into the Starlette router.
+        try:
+            app.routes.insert(0, Route("/health", health))
+        except AttributeError:
+            pass
+
+    return app
+
+
 def main() -> None:
-    mcp.run()
+    import sys
+    if "--http" in sys.argv or os.environ.get("MEMAIX_TRANSPORT") == "http":
+        import uvicorn
+        app = build_http_app()
+        cfg = config.load()
+        bind = cfg.get("memaix", {}).get("server", {}).get("bind", "0.0.0.0:8080")
+        host, port = bind.rsplit(":", 1)
+        uvicorn.run(app, host=host, port=int(port), log_level="info")
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

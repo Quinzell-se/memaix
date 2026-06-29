@@ -12,4 +12,5 @@ RUN pip install --no-cache-dir .
 COPY src/ ./src/
 
 EXPOSE 8080
+ENV MEMAIX_TRANSPORT=http
 CMD ["python", "-m", "memaix_gateway.server"]

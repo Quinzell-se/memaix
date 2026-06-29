@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
     "mcp",
+    "uvicorn>=0.29",
     "pyyaml",
     "imap-tools",
     "caldav",

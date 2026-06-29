@@ -43,5 +43,33 @@ services:
       retries: 30
     profiles: ["nextcloud"]               # aktivera med: docker compose --profile nextcloud up -d
 
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: ${HYDRA_DB_PASSWORD}
+      POSTGRES_DB: hydra
+    volumes:
+      - hydra-db:/var/lib/postgresql/data
+    profiles: ["hydra"]
+
+  hydra:
+    image: oryd/hydra:v2.2
+    restart: unless-stopped
+    command: serve all --dev
+    environment:
+      DSN: postgres://hydra:${HYDRA_DB_PASSWORD}@postgres:5432/hydra?sslmode=disable
+      URLS_SELF_ISSUER: ${HYDRA_PUBLIC_URL:-https://mcp.example.com}
+      URLS_CONSENT: ${HYDRA_CONSENT_URL:-http://localhost:3000/consent}
+      URLS_LOGIN: ${HYDRA_LOGIN_URL:-http://localhost:3000/login}
+      SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET}
+    ports:
+      - "127.0.0.1:4444:4444"   # public API
+      - "127.0.0.1:4445:4445"   # admin API
+    depends_on: [postgres]
+    profiles: ["hydra"]
+
 volumes:
   nextcloud-data:
+  hydra-db:
