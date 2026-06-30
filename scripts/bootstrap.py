@@ -305,14 +305,13 @@ def run_wizard() -> None:
         if tunnel_provider in ("cloudflare", "cloudflare-quick"):
             profiles += ["--profile", "tunnel"]
         sh("docker", "compose", *profiles, "up", "-d", cwd=str(ROOT))
-        print(f"\n  ✓ Stacken uppe.")
+        print("  ✓ Stacken uppe.")
         if tunnel_provider == "cloudflare-quick":
             print("  Hitta quick-tunnel-URL:en i loggarna:")
             print("  docker compose logs cloudflared | grep trycloudflare")
-        else:
-            print(f"\n  Connector-URL: {public_url}")
-            print("  Lägg in den i din AI — se docs/AI-CLIENTS.md.")
-        print("\n  Kör 'make doctor' för att verifiera att allt är grönt.")
+
+    # Generera och öppna setup-sidan
+    _generate_setup_page(public_url, admin_user)
 
     print()
     hr()
@@ -320,6 +319,22 @@ def run_wizard() -> None:
     print("  docs/BACKENDS.md  ·  docs/AI-CLIENTS.md  ·  docs/EXPOSE.md")
     hr()
     print()
+
+
+def _generate_setup_page(public_url: str, admin_user: str) -> None:
+    """Generera setup-complete.html och öppna i webbläsaren."""
+    import importlib.util, webbrowser
+    output = ROOT / "setup-complete.html"
+    spec = importlib.util.spec_from_file_location("setup_page", ROOT / "scripts" / "setup_page.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.generate(public_url, admin_user, str(output))
+    print(f"\n  ✓ Instruktioner sparade: {output.name}")
+    try:
+        webbrowser.open(output.as_uri())
+        print("  Sidan öppnas i din webbläsare.")
+    except Exception:
+        print(f"  Öppna manuellt: {output.as_uri()}")
 
 
 # ─────────────────────────── befintliga funktioner ──────────────────────────

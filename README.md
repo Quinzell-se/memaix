@@ -1,91 +1,113 @@
 <!-- Brandnamnet "Memaix" är standard men white-label: byts i config/brand.yaml -->
 
-# Memaix
+# Memaix — self-hosted AI assistant gateway
 
 **Bring your own AI. Own your memory.**
 
-> En AI-agnostisk ingång till ett team-gemensamt minne — projektkunskap, personkunskap och
-> utvecklingsbehov — plus en projektledaragent som håller koll på vad som ska göras, vem som gör vad,
-> när, vilka beroenden som finns, och konsekvenserna om något inte görs i tid. **Hjärnan minns.
-> Agenten agerar.**
+En enda connector-URL gör vilken MCP-kapabel AI som helst — Claude, ChatGPT, Mistral, Perplexity
+— till en delad assistent för ditt team. Projekt-baserad åtkomststyrning, git-versionerat minne
+och en gemensam backlog. Datan stannar på din server.
 
-Memaix är en självhostad, AI-agnostisk assistent-gateway. En enda connector gör vilken
-MCP-kapabel AI som helst — Claude, ChatGPT, Mistral, Perplexity — till en **delad
-affärsassistent** för ditt team. Projekt-baserad åtkomststyrning, git-versionerat minne och en
-gemensam backlog. Datan ligger på din server. Du byter AI när du vill; minnet och arbetssättet
-följer med.
-
-> Det är inte "ännu en MCP-server". Det är assistent-lagret — minne, backlog, roller, onboarding —
-> bakom en dörr.
-
-## Varför Memaix
-
-- **En connector, alla AI:er.** MCP är en öppen standard. Lägg in samma URL i Claude, ChatGPT,
-  Mistral eller Perplexity. Ingen inlåsning.
-- **Du äger datan.** Självhostad. Öppna standarder bakom: IMAP/SMTP (mejl), CalDAV (kalender),
-  WebDAV (filer), git (minne). Lagringen stannar på din infrastruktur. *Obs:* kopplar du en
-  moln-AI (Claude/ChatGPT/…) går det den läser till den leverantören — vill du att **inget** lämnar
-  huset krävs en **lokal modell** (se `docs/LOCAL-MODEL.md`).
-- **Team, inte bara individ.** En connector, flera personer, åtkomst per projekt (RBAC). En
-  extern medarbetare låses till exakt ett projekt.
-- **Minne som överlever.** AI:er glömmer mellan sessioner. Memaix ger ett delat, git-versionerat
-  markdown-minne som varje AI läser vid start och skriver till — med historik och rollback.
-- **Inbyggda arbetsflöden.** Gemensam backlog (fånga → utvärdera → besluta), onboarding genom
-  intervju, portabel operating manual.
-
-## Vad du kan göra
-
-- Läsa och sammanfatta mejl, skapa utkast (skicka kräver manuellt godkännande).
-- Hantera kalender — skapa, ändra, hitta lediga tider.
-- Läsa och skriva filer i din molnlagring.
-- Fånga idéer och feedback i en gemensam, poängsatt backlog per projekt.
-- Ge varje AI samma minne och samma arbetssätt, oavsett tjänst.
-
-## Snabbstart (självhostat)
-
-**Ett kommando i Linux-terminalen** (enda förkunskap: Docker):
-```bash
-git clone <ditt-memaix-repo> memaix && cd memaix && make init
 ```
-Säkerhetsmedveten? Läs `install.sh` och `scripts/bootstrap.py` direkt —
-se **[docs/QUICK-INSTALL.md](docs/QUICK-INSTALL.md)**.
-
-Eller manuellt:
-```bash
-git clone <ditt-memaix-repo> memaix && cd memaix
-make init      # ≤3 frågor → genererar all config + hemligheter, seedar demo-projekt
-make up        # reser hela stacken (bara Docker krävs)
-make doctor    # grönt
+git clone <detta-repo> memaix && cd memaix && make init
 ```
 
-Du redigerar **ingen** YAML och genererar **inga** hemligheter för hand — `make init` gör allt.
-Default = lokal trial (stdio, inget externt konto). Vill du nå det från mobilen/teamet:
-`make go-remote` (lägger tunnel + OAuth). Vilken AI ska driva det? → **[docs/CHOOSE-YOUR-LLM.md](docs/CHOOSE-YOUR-LLM.md)**.
-Förenklingsplan: **[docs/SETUP-SIMPLIFICATION.md](docs/SETUP-SIMPLIFICATION.md)** · full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
+> Bara Docker krävs. Wizarden ställer 3–4 frågor och genererar all config + hemligheter.
+> En HTML-sida öppnas med exakta instruktioner för att koppla in din AI.
+
+---
+
+## Vad är det?
+
+Memaix är ett **assistent-lager** — minne, backlog, roller, onboarding — bakom en MCP-dörr.
+
+- **En connector, alla AI:er.** MCP är en öppen standard. Samma URL funkar i Claude, ChatGPT, Mistral och fler.
+- **Du äger datan.** Självhostat. Öppna standarder: IMAP/SMTP, CalDAV, WebDAV, git. Ingen inlåsning.
+- **Team, inte bara individ.** RBAC per projekt — en extern kan låsas till exakt ett projekt.
+- **Minne som överlever sessioner.** SQLite + git-versionerade vaults med rollback.
+- **Inbyggda arbetsflöden.** Backlog, onboarding-intervju, portabel operating manual.
+
+---
+
+## Kom igång
+
+**Förutsättning:** Docker installerat.
+
+```bash
+# 1. Klona
+git clone <detta-repo> memaix && cd memaix
+
+# 2. Wizard — genererar config, hemligheter, seedar vaults, startar stacken
+make init
+
+# 3. Verifiera
+make doctor
+```
+
+Wizarden öppnar `setup-complete.html` med din connector-URL och steg-för-steg för
+Claude, ChatGPT, Mistral med flera.
+
+**Lokal trial** (inget konto, inget tunnel, ~5 min): välj spår 1 i wizarden.
+**Mobil/team**: välj spår 2 — lägger till Cloudflare-tunnel och OAuth.
+
+---
+
+## Vad kan du göra
+
+| Verktyg | Vad AI:n kan göra |
+|---|---|
+| `email_*` | Läsa, söka och skriva mejlutkast (skicka kräver godkännande) |
+| `calendar_*` | Lista, skapa, hitta lediga tider |
+| `files_*` | Läsa och skriva filer i din molnlagring |
+| `memory_*` | Läsa och skriva delat minne med git-historik och rollback |
+| `backlog_*` | Fånga idéer, poängsätta, besluta |
+| `whoami` | Visa identitet och projektbehörigheter |
+
+---
+
+## Koppla in din AI
+
+Steg-för-steg för varje tjänst, abonnemangskrav och OAuth-info finns i
+**[docs/AI-CLIENTS.md](docs/AI-CLIENTS.md)**.
+
+Snabbversion:
+
+| AI | Lägsta plan | Steg |
+|---|---|---|
+| Claude (claude.ai) | Pro ($20/mån) | Settings → Connectors → Add custom connector |
+| Mistral Le Chat | **Free** | Settings → Connectors |
+| ChatGPT | Plus ($20/mån) | Settings → Connectors/Tools |
+| Perplexity | Pro ($20/mån) | Settings → AI Tools |
+| Cursor | **Gratis** | Settings → MCP → HTTP |
+| VS Code + Copilot | Copilot ($10/mån) | Command Palette → Add MCP Server |
+
+---
+
+## Exponering — hur når AI:n servern?
+
+Sex alternativ dokumenterade i **[docs/EXPOSE.md](docs/EXPOSE.md)**:
+Cloudflare Tunnel (rekommenderas), Caddy/nginx, underkatalog på befintlig server,
+Tailscale Funnel, ngrok och Cloudflare Quick Tunnel.
+
+---
 
 ## Dokumentation
-
-Börja i **[docs/INDEX.md](docs/INDEX.md)** — innehållsförteckning i läsordning per roll.
-Ska du **bygga** detta? Börja i **[HANDOFF.md](HANDOFF.md)** — hämta-hem + byggordning + v2-beslut.
-Vilken **AI** ska driva Memaix? → **[docs/CHOOSE-YOUR-LLM.md](docs/CHOOSE-YOUR-LLM.md)** (beslutsguide).
 
 | Dokument | Innehåll |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Komplett installationsguide |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Hur det hänger ihop |
-| [docs/SECURITY.md](docs/SECURITY.md) | Härdning + kända fallgropar (OAuth, Cloudflare) |
-| [docs/WHITE-LABEL.md](docs/WHITE-LABEL.md) | Byt namn, domän, branding |
+| [docs/EXPOSE.md](docs/EXPOSE.md) | Alla exponeringsalternativ |
 | [docs/AI-CLIENTS.md](docs/AI-CLIENTS.md) | Koppla in Claude, ChatGPT, Mistral m.fl. |
-| [docs/MCP-API.md](docs/MCP-API.md) | Verktygsreferens — vad man kan göra via MCP |
-| [docs/SERVICE-PROVIDERS.md](docs/SERVICE-PROVIDERS.md) | Sälja installation/hosting till kunder |
-| [docs/BUILD.md](docs/BUILD.md) | Bygg-spec för gateway-implementationen |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Hur det hänger ihop (stack, RBAC, minne) |
+| [docs/SECURITY.md](docs/SECURITY.md) | Härdning + kända fallgropar |
+| [docs/MCP-API.md](docs/MCP-API.md) | Verktygsreferens |
+| [docs/WHITE-LABEL.md](docs/WHITE-LABEL.md) | Byt namn, domän, branding |
+| [docs/SERVICE-PROVIDERS.md](docs/SERVICE-PROVIDERS.md) | Sälja installation som tjänst |
+| [docs/INDEX.md](docs/INDEX.md) | Alla docs i läsordning per roll |
+
+---
 
 ## Licens
 
-AGPL-3.0-or-later. Du får köra, ändra och hosta fritt. Ändringar du distribuerar (inkl. som nättjänst)
-måste hållas öppna. Du får sälja installation och hosting som tjänst. Se [LICENSE](LICENSE).
-
-## Status
-
-Tidigt. Gatewayens implementation byggs mot specen i `docs/BUILD.md`. Granska alltid AI:ns
-arbete innan något skickas eller publiceras.
+AGPL-3.0-or-later. Kör, ändra och hosta fritt. Ändringar du distribuerar (inkl. som nättjänst)
+ska hållas öppna. Du får sälja installation och hosting som tjänst. Se [LICENSE](LICENSE).
