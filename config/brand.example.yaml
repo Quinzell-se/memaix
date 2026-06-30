@@ -1,0 +1,9 @@
+# White-label-branding. Kopiera till brand.yaml. Allt användarvänt namn läses härifrån.
+# En kund kan köra Memaix helt under eget namn.
+
+name: "Memaix"                          # visas i OAuth-consent, loggar, e-postavsändare
+tagline: "Bring your own AI. Own your memory."
+support_email: "support@example.com"
+primary_color: "#4f46e5"
+logo_path: ""                          # valfri sökväg till logotyp
+# Inget annat i koden får hårdkoda produktnamnet — allt går via dessa fält.

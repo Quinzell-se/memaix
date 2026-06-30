@@ -1,0 +1,191 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Minimal Hydra login/consent-app för Memaix.
+
+Hanterar:
+  GET  /login    — visa inloggningsformulär
+  POST /login    — verifiera lösenord, godkänn eller neka hos Hydra
+  GET  /consent  — auto-godkänn (single-user, trusted client)
+
+Säkra standarder:
+  - Lösenord verifieras med PBKDF2-HMAC-SHA256 (200 000 iterationer)
+  - Hydra challenge valideras innan formuläret visas
+  - Inget session state lagras i appen — Hydra håller session
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+from urllib.parse import urlencode
+
+import requests
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+HYDRA_ADMIN = os.environ.get("HYDRA_ADMIN_URL", "http://hydra:4445")
+ALLOWED_USERS: set[str] = set(
+    os.environ.get("MEMAIX_ALLOWED_USERS", "alice").split(",")
+)
+# Format: salt_hex:pbkdf2_hex  (genereras av setup-script)
+_PASSWORD_HASH = os.environ.get("MEMAIX_LOGIN_PASSWORD_HASH", "")
+
+app = FastAPI(title="Memaix login")
+templates = Jinja2Templates(directory="/app/templates")
+
+
+def _verify_password(provided: str) -> bool:
+    if not _PASSWORD_HASH or ":" not in _PASSWORD_HASH:
+        return False
+    salt_hex, key_hex = _PASSWORD_HASH.split(":", 1)
+    salt = bytes.fromhex(salt_hex)
+    derived = hashlib.pbkdf2_hmac("sha256", provided.encode(), salt, 200_000)
+    return hmac.compare_digest(derived.hex(), key_hex)
+
+
+def _hydra_get(path: str, challenge_name: str, challenge: str) -> dict:
+    r = requests.get(
+        f"{HYDRA_ADMIN}{path}",
+        params={challenge_name: challenge},
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def _hydra_accept(path: str, challenge_name: str, challenge: str, body: dict) -> str:
+    r = requests.put(
+        f"{HYDRA_ADMIN}{path}",
+        params={challenge_name: challenge},
+        json=body,
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()["redirect_to"]
+
+
+def _hydra_reject(path: str, challenge_name: str, challenge: str, reason: str) -> str:
+    r = requests.put(
+        f"{HYDRA_ADMIN}{path}",
+        params={challenge_name: challenge},
+        json={"error": "access_denied", "error_description": reason},
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()["redirect_to"]
+
+
+# ------------------------------------------------------------------
+# Login
+# ------------------------------------------------------------------
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_get(request: Request, login_challenge: str = ""):
+    if not login_challenge:
+        return HTMLResponse("<p>Ogiltig förfrågan (login_challenge saknas).</p>", status_code=400)
+    try:
+        info = _hydra_get("/admin/oauth2/auth/requests/login", "login_challenge", login_challenge)
+    except Exception as exc:
+        return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
+
+    # Om Hydra redan minns sessionen — godkänn automatiskt.
+    if info.get("skip"):
+        redirect = _hydra_accept(
+            "/admin/oauth2/auth/requests/login/accept",
+            "login_challenge", login_challenge,
+            {"subject": info["subject"]},
+        )
+        return RedirectResponse(redirect, status_code=303)
+
+    return templates.TemplateResponse(
+        request, "login.html",
+        {"challenge": login_challenge, "error": ""},
+    )
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(
+    request: Request,
+    login_challenge: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+):
+    if username not in ALLOWED_USERS or not _verify_password(password):
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"challenge": login_challenge, "error": "Fel användarnamn eller lösenord."},
+            status_code=401,
+        )
+
+    try:
+        redirect = _hydra_accept(
+            "/admin/oauth2/auth/requests/login/accept",
+            "login_challenge", login_challenge,
+            {
+                "subject": username,
+                "remember": True,
+                "remember_for": 86400 * 30,  # 30 dagar
+            },
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
+
+    return RedirectResponse(redirect, status_code=303)
+
+
+# ------------------------------------------------------------------
+# Consent — auto-godkänn för ägare (single-user setup)
+# ------------------------------------------------------------------
+
+
+@app.get("/consent")
+async def consent_get(consent_challenge: str = ""):
+    if not consent_challenge:
+        return HTMLResponse("<p>Ogiltig förfrågan (consent_challenge saknas).</p>", status_code=400)
+
+    try:
+        info = _hydra_get(
+            "/admin/oauth2/auth/requests/consent",
+            "consent_challenge", consent_challenge,
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
+
+    requested_scope = info.get("requested_scope", [])
+
+    # Hydra v2.2 doesn't map the `resource` param to requested_access_token_audience
+    # automatically, so we parse it from request_url and grant it explicitly.
+    from urllib.parse import parse_qs, urlparse as _urlparse
+    _rurl = info.get("request_url", "")
+    _resource = parse_qs(_urlparse(_rurl).query).get("resource", [])
+    audience = list(set(_resource) | set(info.get("requested_access_token_audience") or []))
+
+    redirect = _hydra_accept(
+        "/admin/oauth2/auth/requests/consent/accept",
+        "consent_challenge", consent_challenge,
+        {
+            "grant_scope": requested_scope,
+            "grant_access_token_audience": audience,
+            "remember": True,
+            "remember_for": 86400 * 30,
+            "session": {
+                "id_token": {
+                    "email": f"{info.get('subject', 'jimmy')}@jimlov.se",
+                    "name": info.get("subject", "alice"),
+                }
+            },
+        },
+    )
+    return RedirectResponse(redirect, status_code=303)
+
+
+# ------------------------------------------------------------------
+# Health
+# ------------------------------------------------------------------
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "memaix-login"}

@@ -1,0 +1,36 @@
+# Memaix CI. GitHub Actions-format — kör även på Forgejo/Gitea Actions (samma YAML).
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: Docs-index-hygien
+        run: python3 scripts/check-docs-index.py
+      - name: Python-syntax
+        run: |
+          python3 -m py_compile scripts/*.py
+          python3 -m py_compile gateway/src/memaix_gateway/*.py
+      # TODO: kör testsviten (docs/TESTING.md) när gateway är implementerad.
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generera SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+      # TODO: lägg image-scanning (t.ex. trivy/grype) när images byggs.

@@ -1,0 +1,17 @@
+# Memaix-server-konfiguration (exempelfil).
+
+server:
+  bind: "0.0.0.0:8080"
+  public_url: "http://localhost:8080"
+
+# auth: kommenteras in när Hydra-infrastruktur finns.
+# auth:
+#   issuer: "https://hydra.example.com"
+#   resource_server_url: "https://mcp.example.com"
+
+# oauth_providers: behövs för account_link-flödet (Fas 5 med Hydra).
+# oauth_providers:
+#   google:
+#     client_id: "..."
+#     client_secret_ref: "env:GOOGLE_CLIENT_SECRET"
+#     scopes: ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly"]

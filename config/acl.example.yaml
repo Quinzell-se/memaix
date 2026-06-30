@@ -1,0 +1,31 @@
+users:
+  alice:
+    # OAuth subject från Hydra. Sätts till användarnamnet vi angav vid inloggning.
+    oauth_subjects:
+      - alice
+    grants:
+      acme: owner
+      project-a: owner
+      project-b: owner
+      personal: owner
+      shared: owner
+
+projects:
+  acme:
+    vault: /srv/vaults/acme
+    allow_send: true
+  project-a:
+    vault: /srv/vaults/project-a
+    allow_send: true
+  project-b:
+    vault: /srv/vaults/project-b
+    allow_send: false
+  personal:
+    vault: /srv/vaults/personal
+    allow_send: true
+  shared:
+    vault: /srv/vaults/shared
+    allow_send: false
+  memaix-src:
+    vault: /srv/vaults/memaix-src
+    allow_send: false

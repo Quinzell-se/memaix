@@ -1,0 +1,33 @@
+[project]
+name = "memaix-gateway"
+version = "0.1.0"
+description = "Memaix — self-hosted, AI-agnostic assistant gateway (MCP)"
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    "mcp",
+    "httpx",
+    "uvicorn>=0.29",
+    "pyyaml",
+    "imap-tools",
+    "caldav",
+    "requests",
+    "python-dateutil",
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-anyio",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

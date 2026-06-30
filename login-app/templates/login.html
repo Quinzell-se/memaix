@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memaix — Logga in</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2d3044;
+    border-radius: 12px;
+    padding: 2rem 2.5rem;
+    width: min(400px, 92vw);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: #f1f5f9;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 1.75rem;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-bottom: 0.4rem;
+    margin-top: 1rem;
+  }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 0.65rem 0.9rem;
+    background: #0f1117;
+    border: 1px solid #2d3044;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: #6366f1; }
+  .error {
+    margin-top: 1rem;
+    padding: 0.6rem 0.9rem;
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 0.85rem;
+  }
+  button[type="submit"] {
+    margin-top: 1.5rem;
+    width: 100%;
+    padding: 0.7rem;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: #4f46e5; }
+  .logo {
+    font-size: 1.6rem;
+    margin-bottom: 1.25rem;
+    color: #6366f1;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">⬡ memaix</div>
+  <h1>Logga in</h1>
+  <p class="subtitle">Autentisera dig för att fortsätta</p>
+  <form method="post" action="/login">
+    <input type="hidden" name="login_challenge" value="{{ challenge }}">
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    <label for="username">Användarnamn</label>
+    <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+    <label for="password">Lösenord</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" required>
+    <button type="submit">Logga in</button>
+  </form>
+</div>
+</body>
+</html>
