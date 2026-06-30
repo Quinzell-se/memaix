@@ -1,0 +1,48 @@
+{
+  "_locale": "en",
+  "page_title_board": "Memaix Board",
+  "page_title_login": "Memaix — Sign in",
+
+  "login_heading": "Sign in",
+  "login_subtitle": "Sign in with your Memaix credentials",
+  "login_label_username": "Username",
+  "login_label_password": "Password",
+  "login_btn": "Open board",
+  "login_btn_loading": "Signing in…",
+  "login_error_credentials": "Incorrect username or password.",
+  "login_error_server": "Could not reach the server.",
+  "login_error_session_expired": "Session expired — please sign in again.",
+
+  "board_btn_refresh": "Refresh",
+  "board_btn_logout": "Sign out",
+  "board_no_projects": "No projects.",
+  "board_no_description": "No description.",
+  "board_loading": "Loading…",
+  "board_load_error": "Could not load.",
+  "board_all_items": "All items",
+  "board_active_sprint": "Active sprint",
+  "board_col_empty": "Empty",
+  "board_move_error": "Could not move card",
+  "board_moved_to": "Moved to",
+  "board_no_activity": "No activity yet.",
+  "activity_heading": "Activity",
+
+  "time_just_now": "just now",
+
+  "modal_label_id": "ID",
+  "modal_label_version": "Version",
+  "modal_label_created": "Created",
+  "modal_label_updated": "Updated",
+  "modal_label_description": "Description",
+  "modal_label_value": "Value: ",
+  "modal_label_complexity": "Compl: ",
+  "modal_label_risk": "Risk: ",
+
+  "col_inbox": "Inbox",
+  "col_triaged": "Triaged",
+  "col_evaluated": "Evaluated",
+  "col_approved": "Approved",
+  "col_in_dev": "In Dev",
+  "col_done": "Done",
+  "col_rejected": "Rejected"
+}

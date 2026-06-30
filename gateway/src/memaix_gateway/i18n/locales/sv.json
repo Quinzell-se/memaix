@@ -1,0 +1,48 @@
+{
+  "_locale": "sv",
+  "page_title_board": "Memaix Board",
+  "page_title_login": "Memaix — Logga in",
+
+  "login_heading": "Logga in",
+  "login_subtitle": "Logga in med dina Memaix-uppgifter",
+  "login_label_username": "Användarnamn",
+  "login_label_password": "Lösenord",
+  "login_btn": "Öppna board",
+  "login_btn_loading": "Loggar in…",
+  "login_error_credentials": "Fel användarnamn eller lösenord.",
+  "login_error_server": "Kunde inte nå servern.",
+  "login_error_session_expired": "Session utgången — logga in igen.",
+
+  "board_btn_refresh": "Uppdatera",
+  "board_btn_logout": "Logga ut",
+  "board_no_projects": "Inga projekt.",
+  "board_no_description": "Ingen beskrivning.",
+  "board_loading": "Laddar…",
+  "board_load_error": "Kunde inte ladda.",
+  "board_all_items": "Alla items",
+  "board_active_sprint": "Aktiv sprint",
+  "board_col_empty": "Tom",
+  "board_move_error": "Kunde inte flytta kortet",
+  "board_moved_to": "Flyttat till",
+  "board_no_activity": "Ingen aktivitet ännu.",
+  "activity_heading": "Aktivitet",
+
+  "time_just_now": "just nu",
+
+  "modal_label_id": "ID",
+  "modal_label_version": "Version",
+  "modal_label_created": "Skapad",
+  "modal_label_updated": "Uppdaterad",
+  "modal_label_description": "Beskrivning",
+  "modal_label_value": "Värde: ",
+  "modal_label_complexity": "Komp: ",
+  "modal_label_risk": "Risk: ",
+
+  "col_inbox": "Inkorg",
+  "col_triaged": "Triagerad",
+  "col_evaluated": "Utvärderad",
+  "col_approved": "Godkänd",
+  "col_in_dev": "Under utveckling",
+  "col_done": "Klar",
+  "col_rejected": "Avvisad"
+}

@@ -1,6 +1,7 @@
 server:
   bind: "0.0.0.0:8080"
   public_url: "https://mcp.example.com"
+  locale: "en"  # UI language: en, sv, fr, de, es (falls back to Accept-Language header)
 
 auth:
   issuer: "https://mcp.example.com"

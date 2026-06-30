@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import time
 from pathlib import Path
@@ -14,10 +15,22 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 from ..acl import Acl
+from ..i18n import get_translator, locale_from_request
 from ..safety.audit import AuditLog
 from . import store as s
 
 _BOARD_HTML = Path(__file__).parent / "board.html"
+_BOARD_HTML_RAW: str | None = None
+
+
+def _board_html_with_locale(locale: str) -> str:
+    global _BOARD_HTML_RAW
+    if _BOARD_HTML_RAW is None:
+        _BOARD_HTML_RAW = _BOARD_HTML.read_text(encoding="utf-8")
+    from ..i18n import _load
+    strings = _load(locale)
+    inject = f'<script>window.I18N={json.dumps(strings, ensure_ascii=False)};</script>'
+    return _BOARD_HTML_RAW.replace("<!--MEMAIX_I18N-->", inject, 1)
 _ALLOWED_USERS: set[str] = set(
     os.environ.get("MEMAIX_ALLOWED_USERS", "alice").split(",")
 )
@@ -88,9 +101,21 @@ def _audit() -> AuditLog:
 # ------------------------------------------------------------------
 
 
+def _config_locale() -> str:
+    try:
+        from .. import config
+        return config.load().get("memaix", {}).get("locale", "en")
+    except Exception:
+        return "en"
+
+
 async def board_index(request: Request) -> HTMLResponse:
+    locale = locale_from_request(
+        request.headers.get("Accept-Language"),
+        _config_locale(),
+    )
     return HTMLResponse(
-        _BOARD_HTML.read_text(encoding="utf-8"),
+        _board_html_with_locale(locale),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 

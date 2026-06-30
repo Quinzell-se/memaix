@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="{{ locale }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Memaix — Logga in</title>
+<title>{{ t('page_title_login') }}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -88,19 +88,19 @@
 </head>
 <body>
 <div class="card">
-  <div class="logo">⬡ memaix</div>
-  <h1>Logga in</h1>
-  <p class="subtitle">Autentisera dig för att fortsätta</p>
+  <div class="logo">&#x2B21; memaix</div>
+  <h1>{{ t('login_heading') }}</h1>
+  <p class="subtitle">{{ t('login_subtitle') }}</p>
   <form method="post" action="/login">
     <input type="hidden" name="login_challenge" value="{{ challenge }}">
     {% if error %}
     <div class="error">{{ error }}</div>
     {% endif %}
-    <label for="username">Användarnamn</label>
+    <label for="username">{{ t('login_label_username') }}</label>
     <input type="text" id="username" name="username" autocomplete="username" autofocus required>
-    <label for="password">Lösenord</label>
+    <label for="password">{{ t('login_label_password') }}</label>
     <input type="password" id="password" name="password" autocomplete="current-password" required>
-    <button type="submit">Logga in</button>
+    <button type="submit">{{ t('login_btn') }}</button>
   </form>
 </div>
 </body>

@@ -1,0 +1,48 @@
+{
+  "_locale": "de",
+  "page_title_board": "Memaix Board",
+  "page_title_login": "Memaix — Anmelden",
+
+  "login_heading": "Anmelden",
+  "login_subtitle": "Melden Sie sich mit Ihren Memaix-Zugangsdaten an",
+  "login_label_username": "Benutzername",
+  "login_label_password": "Passwort",
+  "login_btn": "Board öffnen",
+  "login_btn_loading": "Anmelden…",
+  "login_error_credentials": "Falscher Benutzername oder falsches Passwort.",
+  "login_error_server": "Server nicht erreichbar.",
+  "login_error_session_expired": "Sitzung abgelaufen — bitte erneut anmelden.",
+
+  "board_btn_refresh": "Aktualisieren",
+  "board_btn_logout": "Abmelden",
+  "board_no_projects": "Keine Projekte.",
+  "board_no_description": "Keine Beschreibung.",
+  "board_loading": "Laden…",
+  "board_load_error": "Laden fehlgeschlagen.",
+  "board_all_items": "Alle Einträge",
+  "board_active_sprint": "Aktiver Sprint",
+  "board_col_empty": "Leer",
+  "board_move_error": "Karte konnte nicht verschoben werden",
+  "board_moved_to": "Verschoben nach",
+  "board_no_activity": "Noch keine Aktivität.",
+  "activity_heading": "Aktivität",
+
+  "time_just_now": "gerade eben",
+
+  "modal_label_id": "ID",
+  "modal_label_version": "Version",
+  "modal_label_created": "Erstellt",
+  "modal_label_updated": "Aktualisiert",
+  "modal_label_description": "Beschreibung",
+  "modal_label_value": "Wert: ",
+  "modal_label_complexity": "Kompl.: ",
+  "modal_label_risk": "Risiko: ",
+
+  "col_inbox": "Posteingang",
+  "col_triaged": "Triagiert",
+  "col_evaluated": "Bewertet",
+  "col_approved": "Genehmigt",
+  "col_in_dev": "In Entwicklung",
+  "col_done": "Erledigt",
+  "col_rejected": "Abgelehnt"
+}

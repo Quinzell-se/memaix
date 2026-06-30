@@ -1,0 +1,48 @@
+{
+  "_locale": "es",
+  "page_title_board": "Memaix Board",
+  "page_title_login": "Memaix — Iniciar sesión",
+
+  "login_heading": "Iniciar sesión",
+  "login_subtitle": "Inicie sesión con sus credenciales de Memaix",
+  "login_label_username": "Nombre de usuario",
+  "login_label_password": "Contraseña",
+  "login_btn": "Abrir tablero",
+  "login_btn_loading": "Iniciando sesión…",
+  "login_error_credentials": "Nombre de usuario o contraseña incorrectos.",
+  "login_error_server": "No se pudo conectar al servidor.",
+  "login_error_session_expired": "Sesión expirada — inicie sesión de nuevo.",
+
+  "board_btn_refresh": "Actualizar",
+  "board_btn_logout": "Cerrar sesión",
+  "board_no_projects": "Sin proyectos.",
+  "board_no_description": "Sin descripción.",
+  "board_loading": "Cargando…",
+  "board_load_error": "No se pudo cargar.",
+  "board_all_items": "Todos los elementos",
+  "board_active_sprint": "Sprint activo",
+  "board_col_empty": "Vacío",
+  "board_move_error": "No se pudo mover la tarjeta",
+  "board_moved_to": "Movido a",
+  "board_no_activity": "Sin actividad aún.",
+  "activity_heading": "Actividad",
+
+  "time_just_now": "ahora mismo",
+
+  "modal_label_id": "ID",
+  "modal_label_version": "Versión",
+  "modal_label_created": "Creado",
+  "modal_label_updated": "Actualizado",
+  "modal_label_description": "Descripción",
+  "modal_label_value": "Valor: ",
+  "modal_label_complexity": "Compl.: ",
+  "modal_label_risk": "Riesgo: ",
+
+  "col_inbox": "Bandeja de entrada",
+  "col_triaged": "Clasificado",
+  "col_evaluated": "Evaluado",
+  "col_approved": "Aprobado",
+  "col_in_dev": "En desarrollo",
+  "col_done": "Completado",
+  "col_rejected": "Rechazado"
+}

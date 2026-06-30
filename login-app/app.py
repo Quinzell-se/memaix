@@ -17,12 +17,30 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import sys
 from urllib.parse import urlencode
 
 import requests
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+sys.path.insert(0, "/app/i18n_pkg")
+try:
+    from memaix_gateway.i18n import get_translator, locale_from_request as _locale_from_req
+    _I18N_AVAILABLE = True
+except ImportError:
+    _I18N_AVAILABLE = False
+
+
+def _t_for_request(request: Request):
+    if not _I18N_AVAILABLE:
+        return lambda k: k, "en"
+    locale = _locale_from_req(
+        request.headers.get("Accept-Language"),
+        os.environ.get("MEMAIX_LOCALE", "en"),
+    )
+    return get_translator(locale), locale
 
 HYDRA_ADMIN = os.environ.get("HYDRA_ADMIN_URL", "http://hydra:4445")
 ALLOWED_USERS: set[str] = set(
@@ -99,9 +117,10 @@ async def login_get(request: Request, login_challenge: str = ""):
         )
         return RedirectResponse(redirect, status_code=303)
 
+    t, locale = _t_for_request(request)
     return templates.TemplateResponse(
         request, "login.html",
-        {"challenge": login_challenge, "error": ""},
+        {"challenge": login_challenge, "error": "", "t": t, "locale": locale},
     )
 
 
@@ -112,10 +131,11 @@ async def login_post(
     username: str = Form(...),
     password: str = Form(...),
 ):
+    t, locale = _t_for_request(request)
     if username not in ALLOWED_USERS or not _verify_password(password):
         return templates.TemplateResponse(
             request, "login.html",
-            {"challenge": login_challenge, "error": "Fel användarnamn eller lösenord."},
+            {"challenge": login_challenge, "error": t("login_error_credentials"), "t": t, "locale": locale},
             status_code=401,
         )
 

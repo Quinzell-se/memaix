@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Memaix Board</title>
+<!--MEMAIX_I18N-->
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -100,17 +101,17 @@ header select:focus{outline:none;border-color:var(--primary)}
 
 <div id="login-gate">
   <div class="login-card">
-    <h1>Memaix Board</h1>
-    <p>Logga in med dina Memaix-uppgifter</p>
+    <h1>Memaix</h1>
+    <p id="login-subtitle"></p>
     <div class="form-group">
-      <label>Användarnamn</label>
+      <label id="login-label-user"></label>
       <input id="login-user" type="text" placeholder="alice" autocomplete="username">
     </div>
     <div class="form-group">
-      <label>Lösenord</label>
+      <label id="login-label-pass"></label>
       <input id="login-pass" type="password" placeholder="..." autocomplete="current-password">
     </div>
-    <button class="btn" id="login-btn">Öppna board</button>
+    <button class="btn" id="login-btn"></button>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -118,18 +119,18 @@ header select:focus{outline:none;border-color:var(--primary)}
 <div id="board-shell" hidden>
   <header>
     <span class="logo">Memaix</span>
-    <select id="project-select"><option value="">Laddar...</option></select>
-    <select id="sprint-select"><option value="">Alla items</option></select>
-    <button class="icon-btn" id="refresh-btn" title="Uppdatera">&#x21BB;</button>
+    <select id="project-select"></select>
+    <select id="sprint-select"></select>
+    <button class="icon-btn" id="refresh-btn">&#x21BB;</button>
     <div class="spacer"></div>
     <span id="user-badge"></span>
-    <button class="icon-btn" id="logout-btn">Logga ut</button>
+    <button class="icon-btn" id="logout-btn"></button>
   </header>
   <div id="main-area">
     <div id="board-columns"></div>
     <div id="activity-panel">
-      <h3>Aktivitet</h3>
-      <div id="activity-list"><p class="no-activity">Laddar...</p></div>
+      <h3 id="activity-heading"></h3>
+      <div id="activity-list"></div>
     </div>
   </div>
 </div>
@@ -147,23 +148,37 @@ header select:focus{outline:none;border-color:var(--primary)}
 
 <script>
 'use strict';
+var I18N=window.I18N||{};
+function t(k){return I18N[k]||k;}
+
 var _user=null,_project=null,_sprint='',_activityTimer=null,_lastTs='',_dragId=null,_dragFrom=null;
 
 function gid(id){return document.getElementById(id);}
 
+(function initI18N(){
+  document.documentElement.lang=I18N._locale||'en';
+  document.title=t('page_title_board');
+  gid('login-subtitle').textContent=t('login_subtitle');
+  gid('login-label-user').textContent=t('login_label_username');
+  gid('login-label-pass').textContent=t('login_label_password');
+  gid('login-btn').textContent=t('login_btn');
+  gid('refresh-btn').title=t('board_btn_refresh');
+  gid('logout-btn').textContent=t('board_btn_logout');
+  gid('activity-heading').textContent=t('activity_heading');
+  gid('activity-list').appendChild(el('p','no-activity',t('board_loading')));
+})();
+
 function toast(msg,err){
-  var el=document.createElement('div');
-  el.className='toast';
-  el.textContent=msg;
-  if(err)el.style.background='#b91c1c';
-  document.body.appendChild(el);
-  setTimeout(function(){el.classList.add('fade');setTimeout(function(){el.remove();},350);},2500);
+  var e=document.createElement('div');e.className='toast';e.textContent=msg;
+  if(err)e.style.background='#b91c1c';
+  document.body.appendChild(e);
+  setTimeout(function(){e.classList.add('fade');setTimeout(function(){e.remove();},350);},2500);
 }
 
 function reltime(ts){
   if(!ts)return'';
   var d=(Date.now()-new Date(ts).getTime())/1000;
-  if(d<60)return'just nu';
+  if(d<60)return t('time_just_now');
   if(d<3600)return Math.round(d/60)+'m';
   if(d<86400)return Math.round(d/3600)+'h';
   return Math.round(d/86400)+'d';
@@ -173,7 +188,6 @@ function catCls(cat){
   return{feature:'cat-feature',bug:'cat-bug',chore:'cat-chore',improvement:'cat-improvement'}[cat]||'cat-other';
 }
 
-/* Safe DOM builder helpers */
 function el(tag,cls,txt){
   var e=document.createElement(tag);
   if(cls)e.className=cls;
@@ -183,31 +197,24 @@ function el(tag,cls,txt){
 function chip(txt,cls){return el('span','chip '+cls,txt);}
 function score(txt,cls){return el('span','score '+cls,txt);}
 
-/* Minimal markdown to DOM — never uses innerHTML */
 function mdNodes(src){
   var frag=document.createDocumentFragment();
   if(!src)return frag;
   src.split(/\n\n+/).forEach(function(block){
-    block=block.trim();
-    if(!block)return;
+    block=block.trim();if(!block)return;
     var hm=block.match(/^(#{1,4})\s+(.+)$/);
-    if(hm){var h=el('h'+Math.min(hm[1].length,4),'',hm[2]);frag.appendChild(h);return;}
+    if(hm){frag.appendChild(el('h'+Math.min(hm[1].length,4),'',hm[2]));return;}
     if(/^---+$/.test(block)){frag.appendChild(document.createElement('hr'));return;}
     var cm=block.match(/^```(?:[^\n]*)?\n?([\s\S]*?)```$/);
-    if(cm){var pre=el('pre');var code=el('code','',cm[1]);pre.appendChild(code);frag.appendChild(pre);return;}
+    if(cm){var pre=el('pre');pre.appendChild(el('code','',cm[1]));frag.appendChild(pre);return;}
     if(/^- /m.test(block)){
       var ul=el('ul');
-      block.split('\n').forEach(function(ln){
-        if(ln.startsWith('- ')){var li=el('li');inlineNodes(li,ln.slice(2));ul.appendChild(li);}
-      });
+      block.split('\n').forEach(function(ln){if(ln.startsWith('- ')){var li=el('li');inlineNodes(li,ln.slice(2));ul.appendChild(li);}});
       frag.appendChild(ul);return;
     }
     if(/^\d+\. /m.test(block)){
       var ol=el('ol');
-      block.split('\n').forEach(function(ln){
-        var lm=ln.match(/^\d+\.\s+(.+)$/);
-        if(lm){var li=el('li');inlineNodes(li,lm[1]);ol.appendChild(li);}
-      });
+      block.split('\n').forEach(function(ln){var lm=ln.match(/^\d+\.\s+(.+)$/);if(lm){var li=el('li');inlineNodes(li,lm[1]);ol.appendChild(li);}});
       frag.appendChild(ol);return;
     }
     var p=el('p');inlineNodes(p,block.replace(/\n/g,' '));frag.appendChild(p);
@@ -216,21 +223,18 @@ function mdNodes(src){
 }
 
 function inlineNodes(parent,txt){
-  var re=/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
-  var last=0,m;
+  var re=/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g,last=0,m;
   while((m=re.exec(txt))!==null){
     if(m.index>last)parent.appendChild(document.createTextNode(txt.slice(last,m.index)));
     var tok=m[0],e2;
     if(tok[0]==='`'){e2=el('code','',tok.slice(1,-1));}
     else if(tok.startsWith('**')){e2=el('strong','',tok.slice(2,-2));}
     else{e2=el('em','',tok.slice(1,-1));}
-    parent.appendChild(e2);
-    last=re.lastIndex;
+    parent.appendChild(e2);last=re.lastIndex;
   }
   if(last<txt.length)parent.appendChild(document.createTextNode(txt.slice(last)));
 }
 
-/* API */
 function api(url,opts,silentAuth){
   opts=opts||{};opts.credentials='include';
   return fetch(url,opts).then(function(r){
@@ -242,21 +246,20 @@ function api(url,opts,silentAuth){
 function handle401(){
   _user=null;stopActivity();
   gid('board-shell').hidden=true;gid('login-gate').style.display='flex';
-  gid('login-error').textContent='Session utgången — logga in igen.';
+  gid('login-error').textContent=t('login_error_session_expired');
 }
 
-/* LOGIN */
 function login(){
   var u=gid('login-user').value.trim(),p=gid('login-pass').value;
   gid('login-error').textContent='';
-  gid('login-btn').disabled=true;gid('login-btn').textContent='Loggar in...';
+  gid('login-btn').disabled=true;gid('login-btn').textContent=t('login_btn_loading');
   fetch('/board/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({username:u,password:p}),credentials:'include'})
   .then(function(r){
     if(r.ok)return r.json().then(function(d){_user=d.user;boot();});
-    gid('login-error').textContent='Fel användarnamn eller lösenord.';
-  }).catch(function(){gid('login-error').textContent='Kunde inte nå servern.';})
-  .finally(function(){gid('login-btn').disabled=false;gid('login-btn').textContent='Öppna board';});
+    gid('login-error').textContent=t('login_error_credentials');
+  }).catch(function(){gid('login-error').textContent=t('login_error_server');})
+  .finally(function(){gid('login-btn').disabled=false;gid('login-btn').textContent=t('login_btn');});
 }
 
 function logout(){
@@ -266,48 +269,35 @@ function logout(){
   });
 }
 
-/* BOOT */
 function boot(){
   gid('login-gate').style.display='none';gid('board-shell').hidden=false;
   gid('user-badge').textContent=_user||'';
   api('/board/api/projects').then(function(r){
     if(!r)return;
-    r.json().then(function(d){
-      _user=d.user;gid('user-badge').textContent=_user;
-      fillProjects(d.projects);
-    });
+    r.json().then(function(d){_user=d.user;gid('user-badge').textContent=_user;fillProjects(d.projects);});
   });
 }
 
 function fillProjects(projects){
-  var sel=gid('project-select');
-  sel.textContent='';
+  var sel=gid('project-select');sel.textContent='';
   if(!projects.length){
-    sel.appendChild(el('option','','Inga projekt'));
-    gid('board-columns').textContent='Inga projekt.';
+    sel.appendChild(el('option','',t('board_no_projects')));
+    gid('board-columns').textContent=t('board_no_projects');
     return;
   }
   var saved=localStorage.getItem('mb_proj');
-  projects.forEach(function(p){
-    var o=el('option','',p);o.value=p;
-    if(p===saved)o.selected=true;
-    sel.appendChild(o);
-  });
-  _project=sel.value;
-  loadSprints().then(loadBoard);
-  startActivity();
+  projects.forEach(function(p){var o=el('option','',p);o.value=p;if(p===saved)o.selected=true;sel.appendChild(o);});
+  _project=sel.value;loadSprints().then(loadBoard);startActivity();
 }
 
-/* SPRINTS */
 function loadSprints(){
   if(!_project)return Promise.resolve();
   return api('/board/api/sprints?project='+encodeURIComponent(_project)).then(function(r){
     if(!r)return;
     r.json().then(function(d){
-      var sel=gid('sprint-select');var cur=sel.value;
-      sel.textContent='';
-      sel.appendChild(el('option','','Alla items'));
-      if(d.active){var a=el('option','','Aktiv sprint');a.value='active';sel.appendChild(a);}
+      var sel=gid('sprint-select');var cur=sel.value;sel.textContent='';
+      sel.appendChild(el('option','',t('board_all_items')));
+      if(d.active){var a=el('option','',t('board_active_sprint'));a.value='active';sel.appendChild(a);}
       (d.sprints||[]).forEach(function(sp){
         var o=el('option','',sp.id+(sp.goal?' — '+sp.goal:'')+'  ('+sp.item_count+')');
         o.value=sp.id;if(sp.id===cur)o.selected=true;sel.appendChild(o);
@@ -317,14 +307,13 @@ function loadSprints(){
   });
 }
 
-/* BOARD */
 function loadBoard(){
   if(!_project)return Promise.resolve();
   var url='/board/api/board?project='+encodeURIComponent(_project);
   if(_sprint)url+='&sprint='+encodeURIComponent(_sprint);
   return api(url,null,true).then(function(r){
     if(!r)return;
-    if(!r.ok){r.json().then(function(e){toast(e.error||'Fel',true);});return;}
+    if(!r.ok){r.json().then(function(e){toast(e.error||t('board_load_error'),true);});return;}
     r.json().then(renderBoard);
   });
 }
@@ -342,15 +331,13 @@ function buildCol(col,isCol){
   div.dataset.status=col.key;
   var hdr=el('div','col-header');
   hdr.appendChild(el('span','col-label',col.label));
-  var cnt=el('span','col-count',col.cards.length);
-  hdr.appendChild(cnt);
+  hdr.appendChild(el('span','col-count',col.cards.length));
   hdr.addEventListener('click',function(){toggleCol(div,col.key);});
   div.appendChild(hdr);
   var body=el('div','col-body');body.dataset.status=col.key;
-  if(!col.cards.length){body.appendChild(el('div','empty-col','Tom'));}
+  if(!col.cards.length){body.appendChild(el('div','empty-col',t('board_col_empty')));}
   else{col.cards.forEach(function(c){body.appendChild(buildCard(c));});}
-  div.appendChild(body);
-  return div;
+  div.appendChild(body);return div;
 }
 
 function toggleCol(div,key){
@@ -369,15 +356,13 @@ function buildCard(card){
   if(card.value!=null)meta.appendChild(score('V'+card.value,'score-v'));
   if(card.complexity!=null)meta.appendChild(score('C'+card.complexity,'score-c'));
   if(card.risk!=null)meta.appendChild(score('R'+card.risk,'score-r'));
-  if(card.sprint){var sb=el('span','sprint-badge',card.sprint);meta.appendChild(sb);}
-  if(card.estimate!=null){var eb=el('span','est-badge',card.estimate+'p');meta.appendChild(eb);}
-  div.appendChild(meta);
-  div.appendChild(el('div','card-id',card.id));
+  if(card.sprint)meta.appendChild(el('span','sprint-badge',card.sprint));
+  if(card.estimate!=null)meta.appendChild(el('span','est-badge',card.estimate+'p'));
+  div.appendChild(meta);div.appendChild(el('div','card-id',card.id));
   div.addEventListener('click',function(){openModal(card.id);});
   return div;
 }
 
-/* DRAG AND DROP */
 function initDnD(){
   document.querySelectorAll('.card').forEach(function(card){
     card.addEventListener('dragstart',function(e){
@@ -391,8 +376,7 @@ function initDnD(){
     body.addEventListener('dragleave',function(){body.classList.remove('drag-over');});
     body.addEventListener('drop',function(e){
       e.preventDefault();body.classList.remove('drag-over');
-      var to=body.dataset.status;
-      if(!_dragId||to===_dragFrom)return;
+      var to=body.dataset.status;if(!_dragId||to===_dragFrom)return;
       doMove(_dragId,_dragFrom,to,body);
     });
   });
@@ -404,23 +388,20 @@ function doMove(id,from,to,targetBody){
   if(!cardEl)return;
   cardEl.dataset.status=to;_dragFrom=to;
   var empt=targetBody.querySelector('.empty-col');if(empt)empt.remove();
-  targetBody.appendChild(cardEl);
-  updateCount(from);updateCount(to);
-  if(srcBody&&!srcBody.querySelector('.card'))srcBody.appendChild(el('div','empty-col','Tom'));
-
+  targetBody.appendChild(cardEl);updateCount(from);updateCount(to);
+  if(srcBody&&!srcBody.querySelector('.card'))srcBody.appendChild(el('div','empty-col',t('board_col_empty')));
   api('/board/api/item/'+encodeURIComponent(id),{
     method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({project:_project,status:to})
   }).then(function(r){
     if(!r||!r.ok){
-      toast('Kunde inte flytta kortet',true);
+      toast(t('board_move_error'),true);
       cardEl.dataset.status=from;
       var orig=document.querySelector('.col-body[data-status="'+from+'"]');
       if(orig){var e2=orig.querySelector('.empty-col');if(e2)e2.remove();orig.appendChild(cardEl);}
-      updateCount(from);updateCount(to);
-      return;
+      updateCount(from);updateCount(to);return;
     }
-    toast('Flyttat till '+to);
+    toast(t('board_moved_to')+' '+to);
   });
 }
 
@@ -430,49 +411,46 @@ function updateCount(status){
   if(badge)badge.textContent=b.querySelectorAll('.card').length;
 }
 
-/* MODAL */
 function openModal(id){
-  gid('modal-title').textContent='...';
-  gid('modal-meta').textContent='';
-  gid('modal-body').textContent='';
-  gid('modal-body').appendChild(el('div','modal-loading','Laddar...'));
+  gid('modal-title').textContent='…';
+  gid('modal-meta').textContent='';gid('modal-body').textContent='';
+  gid('modal-body').appendChild(el('div','modal-loading',t('board_loading')));
   gid('modal-overlay').style.display='flex';
   api('/board/api/item/'+encodeURIComponent(id)+'?project='+encodeURIComponent(_project)).then(function(r){
-    if(!r||!r.ok){gid('modal-body').textContent='';gid('modal-body').appendChild(el('div','modal-loading','Kunde inte ladda.'));return;}
+    if(!r||!r.ok){gid('modal-body').textContent='';gid('modal-body').appendChild(el('div','modal-loading',t('board_load_error')));return;}
     r.json().then(function(item){renderModal(id,item);});
   });
 }
 
 function renderModal(id,item){
+  var loc=I18N._locale||'en';
   gid('modal-title').textContent=item.title||id;
   var meta=gid('modal-meta');meta.textContent='';
   if(item.category)meta.appendChild(chip(item.category,catCls(item.category)));
   if(item.status){var st=el('span','chip',item.status);st.style.cssText='background:#e2e8f0;color:#334155';meta.appendChild(st);}
-  if(item.value!=null)meta.appendChild(score('Värde: '+item.value,'score-v'));
-  if(item.complexity!=null)meta.appendChild(score('Komp: '+item.complexity,'score-c'));
-  if(item.risk!=null)meta.appendChild(score('Risk: '+item.risk,'score-r'));
+  if(item.value!=null)meta.appendChild(score(t('modal_label_value')+item.value,'score-v'));
+  if(item.complexity!=null)meta.appendChild(score(t('modal_label_complexity')+item.complexity,'score-c'));
+  if(item.risk!=null)meta.appendChild(score(t('modal_label_risk')+item.risk,'score-r'));
   if(item.sprint)meta.appendChild(el('span','sprint-badge',item.sprint));
   if(item.estimate!=null)meta.appendChild(el('span','est-badge',item.estimate+'p'));
-
   var body=gid('modal-body');body.textContent='';
   var r1=el('div','meta-row');
-  var idS=el('span');idS.appendChild(el('strong','','ID '));idS.appendChild(document.createTextNode(id));r1.appendChild(idS);
-  var vS=el('span');vS.appendChild(el('strong','','Version '));vS.appendChild(document.createTextNode(item.version!=null?item.version:'–'));r1.appendChild(vS);
+  var idS=el('span');idS.appendChild(el('strong','',t('modal_label_id')+' '));idS.appendChild(document.createTextNode(id));r1.appendChild(idS);
+  var vS=el('span');vS.appendChild(el('strong','',t('modal_label_version')+' '));vS.appendChild(document.createTextNode(item.version!=null?item.version:'–'));r1.appendChild(vS);
   body.appendChild(r1);
   var r2=el('div','meta-row');
-  var cS=el('span');cS.appendChild(el('strong','','Skapad '));cS.appendChild(document.createTextNode(item.created_at?new Date(item.created_at).toLocaleString('sv'):'–'));r2.appendChild(cS);
-  var uS=el('span');uS.appendChild(el('strong','','Uppdaterad '));uS.appendChild(document.createTextNode(item.updated_at?new Date(item.updated_at).toLocaleString('sv'):'–'));r2.appendChild(uS);
+  var cS=el('span');cS.appendChild(el('strong','',t('modal_label_created')+' '));cS.appendChild(document.createTextNode(item.created_at?new Date(item.created_at).toLocaleString(loc):'–'));r2.appendChild(cS);
+  var uS=el('span');uS.appendChild(el('strong','',t('modal_label_updated')+' '));uS.appendChild(document.createTextNode(item.updated_at?new Date(item.updated_at).toLocaleString(loc):'–'));r2.appendChild(uS);
   body.appendChild(r2);
-  body.appendChild(el('h3','','Beskrivning'));
+  body.appendChild(el('h3','',t('modal_label_description')));
   var mdDiv=el('div','md-content');
   if(item.body&&item.body.trim()){mdDiv.appendChild(mdNodes(item.body));}
-  else{var em=el('em');em.style.color='#94a3b8';em.textContent='Ingen beskrivning.';mdDiv.appendChild(em);}
+  else{var em=el('em');em.style.color='#94a3b8';em.textContent=t('board_no_description');mdDiv.appendChild(em);}
   body.appendChild(mdDiv);
 }
 
 function closeModal(){gid('modal-overlay').style.display='none';}
 
-/* ACTIVITY */
 function startActivity(){stopActivity();pollActivity();_activityTimer=setInterval(pollActivity,5000);}
 function stopActivity(){if(_activityTimer)clearInterval(_activityTimer);_activityTimer=null;}
 
@@ -489,7 +467,7 @@ function pollActivity(){
         prependActivity(d.events);
       }else if(_lastTs===''){
         gid('activity-list').textContent='';
-        gid('activity-list').appendChild(el('p','no-activity','Ingen aktivitet ännu.'));
+        gid('activity-list').appendChild(el('p','no-activity',t('board_no_activity')));
       }
     });
   });
@@ -502,14 +480,13 @@ function prependActivity(events){
   events.slice().reverse().forEach(function(e){
     var div=el('div','act-event');
     var row=el('div','act-row');
-    var icon=el('span','act-icon',e.ok?'v':'x');
-    icon.style.color=e.ok?'#22c55e':'#ef4444';
+    var icon=el('span','act-icon',e.ok?'v':'x');icon.style.color=e.ok?'#22c55e':'#ef4444';
     row.appendChild(icon);
     var bd=el('div','act-body');
     bd.appendChild(el('span','act-who',e.user||''));
     bd.appendChild(document.createTextNode(' · '));
     var tsp=el('span');tsp.style.color='var(--muted)';tsp.textContent=e.tool||'';bd.appendChild(tsp);
-    var ts=el('span','act-time',' '+reltime(e.ts));bd.appendChild(ts);
+    bd.appendChild(el('span','act-time',' '+reltime(e.ts)));
     if(e.project){var proj=el('div');proj.style.cssText='font-size:.7rem;color:var(--primary)';proj.textContent=e.project;bd.appendChild(proj);}
     if(e.detail){var det=el('div');det.style.cssText='font-size:.72rem;color:var(--muted)';det.textContent=e.detail;bd.appendChild(det);}
     row.appendChild(bd);div.appendChild(row);frag.appendChild(div);
@@ -518,7 +495,6 @@ function prependActivity(events){
   while(list.children.length>50)list.removeChild(list.lastChild);
 }
 
-/* EVENTS */
 gid('login-btn').addEventListener('click',login);
 gid('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')login();});
 gid('login-user').addEventListener('keydown',function(e){if(e.key==='Enter')gid('login-pass').focus();});
@@ -529,12 +505,10 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()
 gid('refresh-btn').addEventListener('click',function(){loadBoard();pollActivity();});
 gid('project-select').addEventListener('change',function(){
   _project=gid('project-select').value;_sprint='';_lastTs='';
-  localStorage.setItem('mb_proj',_project);
-  loadSprints().then(loadBoard);
+  localStorage.setItem('mb_proj',_project);loadSprints().then(loadBoard);
 });
 gid('sprint-select').addEventListener('change',function(){_sprint=gid('sprint-select').value;loadBoard();});
 
-/* AUTO-LOGIN if cookie still valid */
 fetch('/board/api/projects',{credentials:'include'}).then(function(r){
   if(r.ok)r.json().then(function(d){_user=d.user;gid('login-gate').style.display='none';gid('board-shell').hidden=false;gid('user-badge').textContent=_user;fillProjects(d.projects);});
 }).catch(function(){});
