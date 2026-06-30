@@ -157,10 +157,17 @@ async def consent_get(consent_challenge: str = ""):
 
     # Hydra v2.2 doesn't map the `resource` param to requested_access_token_audience
     # automatically, so we parse it from request_url and grant it explicitly.
+    # Include both trailing-slash variants so the JWT aud matches regardless of
+    # whether claude.ai compares against the connector URL (no slash) or the
+    # RFC 8707 resource indicator it sends (with slash).
     from urllib.parse import parse_qs, urlparse as _urlparse
     _rurl = info.get("request_url", "")
     _resource = parse_qs(_urlparse(_rurl).query).get("resource", [])
-    audience = list(set(_resource) | set(info.get("requested_access_token_audience") or []))
+    _resource_both = []
+    for r in _resource:
+        _resource_both.append(r)
+        _resource_both.append(r.rstrip("/") if r.endswith("/") else r + "/")
+    audience = list(set(_resource_both) | set(info.get("requested_access_token_audience") or []))
 
     redirect = _hydra_accept(
         "/admin/oauth2/auth/requests/consent/accept",

@@ -39,6 +39,8 @@ class Acl:
         for uid, u in self.users.items():
             if u.get("oauth_sub") == oauth_sub:
                 return uid
+            if oauth_sub in u.get("oauth_subjects", []):
+                return uid
         return None
 
     def grants(self, user_id: str) -> dict:
