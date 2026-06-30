@@ -89,7 +89,10 @@ def _audit() -> AuditLog:
 
 
 async def board_index(request: Request) -> HTMLResponse:
-    return HTMLResponse(_BOARD_HTML.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        _BOARD_HTML.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 async def board_login(request: Request) -> JSONResponse:
