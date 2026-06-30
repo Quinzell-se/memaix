@@ -26,6 +26,8 @@ from .tools import backlog as t_backlog
 from .tools import email as t_email
 from .tools import calendar as t_cal
 from .tools import account as t_account
+from .tools import onboarding as t_onboarding
+from .tools import pm as t_pm
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None
@@ -125,6 +127,30 @@ def whoami() -> dict:
     shared_vault = acl.resource("shared", "vault")
     vault_path = Path(shared_vault) if shared_vault else None
     return t_whoami.whoami(acl, user, vault=vault_path)
+
+
+@mcp.prompt()
+def onboarding_interview() -> str:
+    """Run the new-user onboarding interview and store the resulting profile."""
+    user = _user()
+    cfg = config.load()
+    shared_vault = _get_acl().resource("shared", "vault")
+    vault = Path(shared_vault) if shared_vault else None
+    return t_onboarding.build_interview_prompt(user, vault, cfg)
+
+
+@mcp.tool()
+def onboarding_complete(profile_content: str) -> dict:
+    """Store the compiled onboarding profile and mark onboarding done."""
+    user = _user()
+    _rl(user, "shared")
+    shared_vault = _get_acl().resource("shared", "vault")
+    if not shared_vault:
+        raise RuntimeError("shared vault not configured")
+    return _audited(
+        user, "shared", "onboarding_complete",
+        t_onboarding.complete_onboarding, user, Path(shared_vault), profile_content,
+    )
 
 
 @mcp.tool()
@@ -310,6 +336,113 @@ def backlog_set_status(project: str, id: str, status: str, expected_version: int
 
 
 # ------------------------------------------------------------------
+# PM tools
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def pm_set_methodology(
+    project: str,
+    methodology: str,
+    sprint_length_days: int = 14,
+    capacity: dict | None = None,
+) -> dict:
+    """Set project methodology and sprint capacity (owner only)."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "pm_set_methodology",
+        t_pm.pm_set_methodology,
+        _get_acl(), user, project, methodology, sprint_length_days, capacity,
+    )
+
+
+@mcp.tool()
+def pm_status_report(project: str, note: str = "status") -> dict:
+    """Generate a status report snapshot from backlog, RAID and memory notes."""
+    user = _user()
+    _rl(user, project)
+    return _audited(user, project, "pm_status_report", t_pm.pm_status_report, _get_acl(), user, project, note)
+
+
+@mcp.tool()
+def pm_plan_sprint(
+    project: str,
+    sprint_id: str,
+    item_ids: list[str],
+    goal: str = "",
+) -> dict:
+    """Commit backlog items into a named sprint and stamp each item (owner only)."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "pm_plan_sprint",
+        t_pm.pm_plan_sprint,
+        _get_acl(), user, project, sprint_id, item_ids, goal,
+    )
+
+
+@mcp.tool()
+def pm_sprint_status(project: str, sprint_id: str) -> dict:
+    """Burndown summary for a sprint: done vs remaining points."""
+    user = _user()
+    _rl(user, project)
+    return _audited(user, project, "pm_sprint_status", t_pm.pm_sprint_status, _get_acl(), user, project, sprint_id)
+
+
+@mcp.tool()
+def pm_raid_add(
+    project: str,
+    raid_type: str,
+    summary: str,
+    owner: str = "",
+    severity: str = "medium",
+    mitigation: str = "",
+) -> dict:
+    """Append a RAID entry (Risk/Assumption/Issue/Dependency) to the project log."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "pm_raid_add",
+        t_pm.pm_raid_add,
+        _get_acl(), user, project, raid_type, summary, owner, severity, mitigation,
+    )
+
+
+@mcp.tool()
+def pm_raid_list(project: str, raid_type: str = "") -> dict:
+    """List RAID entries, optionally filtered by type."""
+    user = _user()
+    _rl(user, project)
+    return _audited(user, project, "pm_raid_list", t_pm.pm_raid_list, _get_acl(), user, project, raid_type)
+
+
+@mcp.prompt()
+def pm_sprint_planning(project: str) -> str:
+    """Guide the AI through sprint planning for a project."""
+    return (
+        f"You are planning a sprint for project '{project}'. "
+        "1) Call backlog_list to see approved/evaluated items. "
+        "2) Propose a sprint_id (e.g. SPRINT-01), a goal, and item_ids "
+        "whose estimates fit the playbook capacity. "
+        "3) Confirm with the user, then call pm_plan_sprint. "
+        "If any item lacks an estimate, ask the user before committing."
+    )
+
+
+@mcp.prompt()
+def pm_weekly_review(project: str) -> str:
+    """Guide the AI through a weekly PM review."""
+    return (
+        f"Run a weekly PM review for '{project}': "
+        "call pm_sprint_status on the active sprint, "
+        "then pm_raid_list for open risks/issues, "
+        "then pm_status_report to persist a snapshot. "
+        "Summarize blockers and burndown for the user."
+    )
+
+
+# ------------------------------------------------------------------
 # Email tools
 # ------------------------------------------------------------------
 
@@ -453,6 +586,29 @@ def build_http_app():
 
     async def health_handler(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "memaix"})
+
+    async def protected_resource_handler(request: Request) -> JSONResponse:
+        """RFC 9728 protected resource metadata.
+
+        FastMCP auto-generates this from AuthSettings.resource_server_url, but
+        Pydantic's AnyHttpUrl always adds a trailing slash.  That creates a
+        mismatch when claude.ai validates the JWT aud claim against the
+        connector URL (typically typed without a trailing slash).  We override
+        it here so the resource value is canonical without a trailing slash,
+        which matches both forms.
+        """
+        cfg = config.load()
+        auth_cfg = cfg.get("memaix", {}).get("auth", {})
+        issuer = auth_cfg.get("issuer", "https://mcp.example.com/").rstrip("/")
+        resource = auth_cfg.get("resource_server_url", issuer + "/").rstrip("/")
+        return JSONResponse(
+            {
+                "resource": resource,
+                "authorization_servers": [issuer + "/"],
+                "bearer_methods_supported": ["header"],
+            },
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     async def as_metadata_handler(request: Request) -> JSONResponse:
         """Serve OAuth AS metadata with registration_endpoint injected.
@@ -615,6 +771,19 @@ def build_http_app():
         )
         mcp._token_verifier = verifier
 
+    # FastMCP's DNS rebinding protection defaults to allowed_hosts=[] when binding
+    # to 0.0.0.0 (as opposed to localhost), which causes 421 for every real hostname.
+    # Explicitly allow the public host extracted from resource_server_url.
+    from mcp.server.transport_security import TransportSecuritySettings
+    from urllib.parse import urlparse as _urlparse2
+    _pub_host = _urlparse2(
+        auth_cfg.get("resource_server_url", auth_cfg.get("issuer", ""))
+    ).netloc or "mcp.example.com"
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[_pub_host],
+    )
+
     # Mount at root so claude.ai finds the endpoint at the connector URL directly.
     mcp.settings.streamable_http_path = "/"
 
@@ -627,11 +796,19 @@ def build_http_app():
     ]
 
     mcp._custom_starlette_routes = custom_routes
-    app = mcp.streamable_http_app()
+    starlette_app = mcp.streamable_http_app()
+
+    # FastMCP appends custom_starlette_routes AFTER its built-in routes, so the
+    # auto-generated /.well-known/oauth-protected-resource route wins.  Prepend
+    # our handler into the Starlette router routes list so it matches first.
+    from starlette.routing import Route as _Route
+    starlette_app.router.routes.insert(
+        0, _Route("/.well-known/oauth-protected-resource", protected_resource_handler)
+    )
 
     # Wrap with CORS so claude.ai browser requests aren't blocked.
     app = CORSMiddleware(
-        app=app,
+        app=starlette_app,
         allow_origins=["https://claude.ai", "https://api.claude.ai"],
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "mcp-session-id"],
