@@ -5,18 +5,14 @@
 
 Läs detta först, sedan **`AGENTS.md`** (hårda guardrails för den byggande AI:n — bindande). Allt
 material (plan, specar, utvecklingsinstruktioner, vault-utkast) ligger i git-repot
-`your-monorepo` på branchen `claude/cowork-assistant-setup-hhd5ij`. Inget viktigt ligger
-utanför repot.
+`Quinzell-se/memaix`. Inget viktigt ligger utanför repot.
 
 ## 1. Hämta hem allt
 ```bash
 # Om repot inte redan finns lokalt:
-git clone <url-till-your-monorepo> jimlov-se && cd jimlov-se
-git fetch origin claude/cowork-assistant-setup-hhd5ij
-git checkout claude/cowork-assistant-setup-hhd5ij
-# (eller 'main' om PR #4 redan är mergad)
+git clone git@github.com:Quinzell-se/memaix.git && cd memaix
 ```
-Allt produktmaterial ligger under **`memaix/`**. Alice & Bobs egen driftplan ligger under
+Allt produktmaterial ligger i roten av repot. Alice & Bobs egen driftplan ligger under
 **`docs/ai-assistent-plattform.md`** + seed-innehåll i **`docs/vault-utkast/`**.
 
 ## 2. Två spår (samma kod)
@@ -70,8 +66,6 @@ annorlunda, gäller detta:
 - Efter bygge: `doctor` (`DOCTOR.md`) — grönt innan "klart".
 
 ## Noteringar
-- PR: **#4** i `your-monorepo`.
-- En äldre scratchpad-byggbrief (`qronk-mcp-gateway-brief.md`) är **ersatt** av `memaix/docs/BUILD.md`
+- Historik migrerad från `your-monorepo` med `git subtree split` (2026-06-30).
+- En äldre scratchpad-byggbrief (`qronk-mcp-gateway-brief.md`) är **ersatt** av `docs/BUILD.md`
   + detta dokument. Använd repot som sanningskälla.
-- Vid extraktion till eget publikt Memaix-repo: kopiera `memaix/`, klistra in full AGPL-text i
-  `LICENSE`, sätt rättighetsinnehavare.
