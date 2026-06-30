@@ -658,22 +658,6 @@ def calendar_update(project: str, id: str, **fields) -> dict:
         return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
-@mcp.tool()
-def calendar_delete(project: str, id: str) -> dict:
-    """Delete a calendar event (always returns requires_confirmation=True)."""
-    user = _user()
-    _rl(user, project)
-    try:
-        dav = _resolve_calendar_dav(project, user)
-        return _audited(
-            user, project, "calendar_delete",
-            t_cal.calendar_delete,
-            _get_acl(), user, project, id, _dav=dav,
-        )
-    except CalendarAuthRequired as e:
-        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
-
-
 def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data: dict) -> str | None:
     """Use the stored refresh_token to mint a new access_token. Updates store on success."""
     import requests as req_lib
