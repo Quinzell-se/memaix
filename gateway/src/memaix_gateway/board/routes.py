@@ -104,7 +104,7 @@ def _audit() -> AuditLog:
 def _config_locale() -> str:
     try:
         from .. import config
-        return config.load().get("memaix", {}).get("locale", "en")
+        return config.load().get("memaix", {}).get("server", {}).get("locale", "en")
     except Exception:
         return "en"
 
