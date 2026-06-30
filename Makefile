@@ -1,6 +1,6 @@
 # Memaix — bekvämlighetskommandon
 
-.PHONY: install up down seed logs
+.PHONY: init install install-no-nextcloud trial go-remote up down seed logs doctor docs-check
 
 init:                  ## Front-dörren: ≤3 frågor → genererar all config + hemligheter, seedar demo
 	python3 scripts/bootstrap.py --init
@@ -29,6 +29,9 @@ seed:                  ## Bara seed-vaults (om de saknas)
 
 logs:                  ## Följ gateway-loggar
 	docker compose logs -f gateway
+
+doctor:                ## Hälsokontroll — verifiera att stacken är grön
+	python3 scripts/bootstrap.py --doctor
 
 docs-check:            ## Flagga om något docs/*.md saknas i INDEX.md
 	python3 scripts/check-docs-index.py

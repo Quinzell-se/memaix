@@ -31,6 +31,7 @@ Läs i den ordning som passar din roll.
 ## 🚀 Ska du installera och driva?
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
    · [QUICK-INSTALL.md](QUICK-INSTALL.md) — **ett kommando i terminalen** (curl … | sh).
+   · [EXPOSE.md](EXPOSE.md) — alla sätt att exponera Memaix: Cloudflare Tunnel, Caddy, Tailscale, ngrok, underkatalog.
    · [SETUP-SIMPLIFICATION.md](SETUP-SIMPLIFICATION.md) — tre nivåer; börja smått (trial → remote).
    · [IMPORT.md](IMPORT.md) — kallstart & import (största adoptionshindret).
 2. [WIZARD.md](WIZARD.md) — den guidade uppsättningen, steg för steg.
