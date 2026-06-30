@@ -26,10 +26,10 @@ from ..acl import Acl
 class CalendarAuthRequired(Exception):
     """Raised when the user has no linked calendar account for this project."""
 
-    def __init__(self, provider: str, link_url: str) -> None:
-        self.provider = provider
+    def __init__(self, link_url: str, options: list[dict] | None = None) -> None:
         self.link_url = link_url
-        super().__init__(f"auth_required: link your {provider} account at {link_url}")
+        self.options = options or []
+        super().__init__(f"auth_required: configure calendar via calendar_setup")
 
 
 # ------------------------------------------------------------------
@@ -135,6 +135,132 @@ class _PerUserGoogleAdapter:
 
     def delete_event(self, id: str) -> None:
         self._delete(f"/calendars/primary/events/{id}")
+
+
+# ------------------------------------------------------------------
+# iCal secret-URL adapter (read-only)
+# ------------------------------------------------------------------
+
+
+class _ICalAdapter:
+    """Fetches a secret iCal URL and returns events in the time range."""
+
+    def __init__(self, ical_url: str) -> None:
+        self._url = ical_url
+
+    def _fetch(self) -> list[dict]:
+        import requests
+        import vobject
+        from datetime import timezone, date
+
+        r = requests.get(self._url, timeout=10)
+        r.raise_for_status()
+        cal = vobject.readOne(r.text)
+        events = []
+        for component in cal.components():
+            if component.name != "VEVENT":
+                continue
+            dtstart = component.dtstart.value
+            dtend = getattr(component, "dtend", None)
+            dtend = dtend.value if dtend else dtstart
+
+            # Normalize date → datetime
+            if isinstance(dtstart, date) and not isinstance(dtstart, datetime):
+                dtstart = datetime(dtstart.year, dtstart.month, dtstart.day, tzinfo=timezone.utc)
+            if isinstance(dtend, date) and not isinstance(dtend, datetime):
+                dtend = datetime(dtend.year, dtend.month, dtend.day, tzinfo=timezone.utc)
+
+            events.append({
+                "id": str(getattr(component, "uid", "")).strip() or f"ical-{len(events)}",
+                "title": str(getattr(component, "summary", "")).strip(),
+                "start": dtstart.isoformat() if isinstance(dtstart, datetime) else str(dtstart),
+                "end": dtend.isoformat() if isinstance(dtend, datetime) else str(dtend),
+                "location": str(getattr(component, "location", "")).strip(),
+                "description": str(getattr(component, "description", "")).strip(),
+                "_dtstart": dtstart,
+                "_dtend": dtend,
+            })
+        return events
+
+    def _in_range(self, event: dict, start: datetime, end: datetime) -> bool:
+        from datetime import timezone
+        def _tz(dt: datetime) -> datetime:
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        ev_start = _tz(event["_dtstart"]) if isinstance(event["_dtstart"], datetime) else _tz(start)
+        ev_end = _tz(event["_dtend"]) if isinstance(event["_dtend"], datetime) else _tz(end)
+        s = _tz(start)
+        e = _tz(end)
+        return ev_start < e and ev_end > s
+
+    def list_events(self, start: datetime, end: datetime) -> list[dict]:
+        raw = self._fetch()
+        filtered = [e for e in raw if self._in_range(e, start, end)]
+        # Strip internal keys before returning
+        return [{k: v for k, v in e.items() if not k.startswith("_")} for e in filtered]
+
+    find_events = list_events
+
+    def create_event(self, *args, **kwargs):
+        raise NotImplementedError("iCal feed is read-only — use calendar_setup mode=oauth for write access")
+
+    def update_event(self, *args, **kwargs):
+        raise NotImplementedError("iCal feed is read-only — use calendar_setup mode=oauth for write access")
+
+    def delete_event(self, *args, **kwargs):
+        raise NotImplementedError("iCal feed is read-only — use calendar_setup mode=oauth for write access")
+
+
+# ------------------------------------------------------------------
+# Google FreeBusy adapter (read-only, no event titles)
+# ------------------------------------------------------------------
+
+
+class _FreeBusyAdapter:
+    """Queries Google FreeBusy API — returns only busy blocks, no event details."""
+
+    _ENDPOINT = "https://www.googleapis.com/calendar/v3/freeBusy"
+
+    def __init__(self, calendar_id: str, api_key: str) -> None:
+        self._calendar_id = calendar_id
+        self._api_key = api_key
+
+    def list_events(self, start: datetime, end: datetime) -> list[dict]:
+        import requests
+        from datetime import timezone
+
+        def _iso(dt: datetime) -> str:
+            if not dt.tzinfo:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
+
+        r = requests.post(
+            self._ENDPOINT,
+            params={"key": self._api_key},
+            json={
+                "timeMin": _iso(start),
+                "timeMax": _iso(end),
+                "items": [{"id": self._calendar_id}],
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json()
+        busy = data.get("calendars", {}).get(self._calendar_id, {}).get("busy", [])
+        return [
+            {"id": f"busy-{i}", "title": "Busy", "start": b["start"], "end": b["end"], "location": "", "description": ""}
+            for i, b in enumerate(busy)
+        ]
+
+    find_events = list_events
+
+    def create_event(self, *args, **kwargs):
+        raise NotImplementedError("FreeBusy mode is read-only — use calendar_setup mode=oauth for write access")
+
+    def update_event(self, *args, **kwargs):
+        raise NotImplementedError("FreeBusy mode is read-only — use calendar_setup mode=oauth for write access")
+
+    def delete_event(self, *args, **kwargs):
+        raise NotImplementedError("FreeBusy mode is read-only — use calendar_setup mode=oauth for write access")
 
 
 # ------------------------------------------------------------------

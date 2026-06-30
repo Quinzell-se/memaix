@@ -28,7 +28,7 @@ from .tools import calendar as t_cal
 from .tools import account as t_account
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
-from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter
+from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None
@@ -443,6 +443,86 @@ def pm_weekly_review(project: str) -> str:
     )
 
 
+@mcp.tool()
+def calendar_setup(
+    project: str,
+    mode: str,
+    ical_url: str | None = None,
+    calendar_id: str | None = None,
+) -> dict:
+    """Configure your personal calendar access mode for a project.
+
+    mode='oauth'       — link via Google OAuth (full read+write). Returns a link_url to open.
+    mode='ical_secret' — supply your Google Calendar secret iCal URL (read-only).
+    mode='free_busy'   — supply your Google calendar_id (read-only, no event titles).
+    mode='none'        — remove calendar configuration for this project.
+    """
+    user = _user()
+    _rl(user, project)
+    _get_acl().enforce(user, project, "collaborator")
+    store = _get_token_store()
+    cfg = config.load()
+
+    if mode == "oauth":
+        public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "")
+        result = t_account.account_link(_get_acl(), user, "google", public_url)
+        return {"ok": True, "mode": "oauth", "next": f"Öppna {result['link_url']} i din webbläsare"}
+
+    if mode == "ical_secret":
+        if not ical_url:
+            return {"ok": False, "error": "ical_url krävs för mode=ical_secret"}
+        # Store under synthetic provider — account key is a stable placeholder
+        store.store(user, "ical_secret", "ical_secret", {"ical_url": ical_url})
+        return {"ok": True, "mode": "ical_secret", "stored": True}
+
+    if mode == "free_busy":
+        if not calendar_id:
+            return {"ok": False, "error": "calendar_id krävs för mode=free_busy"}
+        store.store(user, "free_busy", "free_busy", {"calendar_id": calendar_id})
+        return {"ok": True, "mode": "free_busy", "calendar_id": calendar_id,
+                "note": "Kräver att google_api_key finns i memaix.yaml och att din kalender är publik"}
+
+    if mode == "none":
+        for provider, account in [("ical_secret", "ical_secret"), ("free_busy", "free_busy")]:
+            store.delete(user, provider, account)
+        return {"ok": True, "mode": "none", "note": "Kalender-koppling borttagen (OAuth-token behåller du via account_unlink)"}
+
+    return {"ok": False, "error": f"Okänt mode: {mode!r}. Välj oauth, ical_secret, free_busy eller none"}
+
+
+@mcp.tool()
+def calendar_status(project: str) -> dict:
+    """Show which calendar access mode is active for the calling user in this project."""
+    user = _user()
+    _rl(user, project)
+    _get_acl().enforce(user, project, "reader")
+    store = _get_token_store()
+    all_accounts = store.list_accounts(user)
+
+    google = [a for a in all_accounts if a["provider"] == "google"]
+    ical = [a for a in all_accounts if a["provider"] == "ical_secret"]
+    fb = [a for a in all_accounts if a["provider"] == "free_busy"]
+
+    active = "none"
+    details: dict = {}
+    if google:
+        active = "oauth"
+        details = {"account": google[0]["account"], "status": google[0]["status"]}
+    elif ical:
+        active = "ical_secret"
+        details = {"status": ical[0]["status"]}
+    elif fb:
+        active = "free_busy"
+        token_data = store.load_one(user, "free_busy", "free_busy") or {}
+        details = {"calendar_id": token_data.get("calendar_id", ""), "status": fb[0]["status"]}
+
+    return {
+        "active_mode": active,
+        "details": details,
+        "available_modes": ["oauth", "ical_secret", "free_busy"],
+    }
+
+
 # ------------------------------------------------------------------
 # Email tools
 # ------------------------------------------------------------------
@@ -517,7 +597,7 @@ def calendar_list(project: str, start: str, end: str) -> list | dict:
         dav = _resolve_calendar_dav(project, user)
         return _audited(user, project, "calendar_list", t_cal.calendar_list, _get_acl(), user, project, start, end, _dav=dav)
     except CalendarAuthRequired as e:
-        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
@@ -535,7 +615,7 @@ def calendar_find_free(
             _get_acl(), user, project, duration_min, within_start, within_end, _dav=dav,
         )
     except CalendarAuthRequired as e:
-        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
@@ -559,7 +639,7 @@ def calendar_create(
             _get_acl(), user, project, title, start, end, attendees, location, description, _dav=dav,
         )
     except CalendarAuthRequired as e:
-        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
@@ -575,7 +655,7 @@ def calendar_update(project: str, id: str, **fields) -> dict:
             _get_acl(), user, project, id, _dav=dav, **fields,
         )
     except CalendarAuthRequired as e:
-        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
@@ -591,7 +671,7 @@ def calendar_delete(project: str, id: str) -> dict:
             _get_acl(), user, project, id, _dav=dav,
         )
     except CalendarAuthRequired as e:
-        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+        return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data: dict) -> str | None:
@@ -627,43 +707,86 @@ def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data:
 def _resolve_calendar_dav(project: str, user: str):
     """Return a calendar adapter for the project/user.
 
-    Returns None → use static CalDAV config from acl.yaml.
-    Returns _PerUserGoogleAdapter → per-user Google Calendar.
-    Raises CalendarAuthRequired → user must link account first.
+    Checks TokenStore for the user's configured mode in priority order:
+      1. OAuth (Google Calendar REST) — provider='google'
+      2. iCal secret URL — provider='ical_secret'
+      3. FreeBusy (read-only) — provider='free_busy'
+      None → fall back to static CalDAV config from acl.yaml.
+    Raises CalendarAuthRequired if project requires per_user but nothing is configured.
     """
     acl = _get_acl()
     cal_cfg = acl.resource(project, "calendar")
-    if not isinstance(cal_cfg, dict) or cal_cfg.get("auth") != "per_user":
-        return None
-
-    provider = cal_cfg.get("type", "google")
     cfg = config.load()
     store = _get_token_store()
-    accounts = store.list_accounts(user)
-    linked = [a for a in accounts if a["provider"] == provider]
+    require_per_user = isinstance(cal_cfg, dict) and cal_cfg.get("auth") == "per_user"
+    public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "")
+    all_accounts = store.list_accounts(user)
 
-    def _link_url() -> str:
-        public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "")
-        return t_account.account_link(acl, user, provider, public_url)["link_url"]
+    # 1. OAuth (Google)
+    google_accounts = [a for a in all_accounts if a["provider"] == "google"]
+    if google_accounts:
+        account_email = google_accounts[0]["account"]
+        token_data = store.load_one(user, "google", account_email)
+        if token_data:
+            import time
+            access_token = token_data.get("access_token")
+            expires_at = token_data.get("expires_at") or (
+                token_data.get("created_at", 0) + token_data.get("expires_in", 3600)
+            )
+            if not access_token or (
+                isinstance(expires_at, (int, float)) and expires_at - 60 < time.time()
+            ):
+                access_token = _refresh_google_token(cfg, store, user, account_email, token_data)
+                if not access_token:
+                    store.mark_needs_relink(user, "google", account_email)
+            if access_token:
+                return _PerUserGoogleAdapter(access_token)
 
-    if not linked:
-        raise CalendarAuthRequired(provider, _link_url())
+    # 2. iCal secret URL
+    ical_accounts = [a for a in all_accounts if a["provider"] == "ical_secret"]
+    if ical_accounts:
+        token_data = store.load_one(user, "ical_secret", ical_accounts[0]["account"])
+        if token_data and token_data.get("ical_url"):
+            return _ICalAdapter(token_data["ical_url"])
 
-    account_email = linked[0]["account"]
-    token_data = store.load_one(user, provider, account_email)
-    if not token_data:
-        raise CalendarAuthRequired(provider, _link_url())
+    # 3. FreeBusy
+    fb_accounts = [a for a in all_accounts if a["provider"] == "free_busy"]
+    if fb_accounts:
+        token_data = store.load_one(user, "free_busy", fb_accounts[0]["account"])
+        api_key = cfg.get("memaix", {}).get("google_api_key", "")
+        if token_data and token_data.get("calendar_id") and api_key:
+            return _FreeBusyAdapter(token_data["calendar_id"], api_key)
 
-    import time
-    access_token = token_data.get("access_token")
-    expires_at = token_data.get("expires_at") or (token_data.get("created_at", 0) + token_data.get("expires_in", 3600))
-    if not access_token or (isinstance(expires_at, (int, float)) and expires_at - 60 < time.time()):
-        access_token = _refresh_google_token(cfg, store, user, account_email, token_data)
-        if not access_token:
-            store.mark_needs_relink(user, provider, account_email)
-            raise CalendarAuthRequired(provider, _link_url())
+    if not require_per_user:
+        return None  # use static CalDAV from acl.yaml
 
-    return _PerUserGoogleAdapter(access_token)
+    # Nothing configured — raise with all three setup options
+    oauth_link = ""
+    if public_url:
+        try:
+            oauth_link = t_account.account_link(acl, user, "google", public_url)["link_url"]
+        except Exception:
+            pass
+    raise CalendarAuthRequired(
+        link_url=oauth_link,
+        options=[
+            {
+                "mode": "oauth",
+                "label": "Google Calendar (full access, read+write)",
+                "action": f"Öppna {oauth_link} och logga in med Google",
+            },
+            {
+                "mode": "ical_secret",
+                "label": "iCal secret URL (read-only, alla providers)",
+                "action": "calendar_setup(mode='ical_secret', ical_url='din-hemliga-ical-url')",
+            },
+            {
+                "mode": "free_busy",
+                "label": "FreeBusy (visar bara ledig/upptagen, kräver publik kalender)",
+                "action": "calendar_setup(mode='free_busy', calendar_id='din@gmail.com')",
+            },
+        ],
+    )
 
 
 def build_http_app():

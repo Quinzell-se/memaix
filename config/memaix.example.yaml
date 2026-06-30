@@ -7,6 +7,8 @@ auth:
   resource_server_url: "https://mcp.example.com"
 
 # OAuth providers — needed for account_link (per-user calendar/email/files)
+# google_api_key: "AIzaSy..."  # For FreeBusy mode (no OAuth, just a GCP API key)
+
 # oauth_providers:
 #   google:
 #     client_id: "YOUR_GOOGLE_CLIENT_ID"
