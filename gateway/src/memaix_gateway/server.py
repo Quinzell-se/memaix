@@ -952,9 +952,67 @@ def build_http_app():
         store = _get_token_store()
         store.store(user_id, provider, account_email, token_data)
 
-        return JSONResponse(
-            {"status": "linked", "provider": provider, "account": account_email}
-        )
+        provider_label = {"google": "Google", "microsoft": "Microsoft"}.get(provider, provider.title())
+        board_url = public_url.rstrip("/") + "/board"
+        html = f"""<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Konto kopplat — Memaix</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117; color: #e2e8f0;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }}
+    .card {{
+      background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px;
+      padding: 2.5rem 3rem; max-width: 420px; width: 90%; text-align: center;
+    }}
+    .icon {{
+      width: 56px; height: 56px; border-radius: 50%;
+      background: #1a3a2a; border: 2px solid #38a169;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.5rem;
+      font-size: 1.6rem;
+    }}
+    h1 {{ font-size: 1.25rem; font-weight: 600; margin-bottom: .5rem; color: #f7fafc; }}
+    .provider {{ color: #68d391; font-weight: 600; }}
+    .account {{
+      margin: 1.25rem auto 0;
+      background: #0f1117; border: 1px solid #2d3748; border-radius: 8px;
+      padding: .6rem 1rem; font-size: .85rem; color: #a0aec0;
+      word-break: break-all;
+    }}
+    .account span {{ color: #e2e8f0; }}
+    .actions {{ margin-top: 2rem; display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }}
+    a.btn {{
+      display: inline-block; padding: .55rem 1.25rem; border-radius: 8px;
+      font-size: .875rem; font-weight: 500; text-decoration: none; cursor: pointer;
+    }}
+    a.btn-primary {{ background: #2b6cb0; color: #fff; }}
+    a.btn-primary:hover {{ background: #2c5282; }}
+    a.btn-ghost {{ border: 1px solid #2d3748; color: #a0aec0; }}
+    a.btn-ghost:hover {{ background: #2d3748; color: #e2e8f0; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✓</div>
+    <h1><span class="provider">{provider_label}</span> kopplat</h1>
+    <p style="color:#a0aec0;font-size:.9rem;margin-top:.4rem">Ditt konto är länkat och redo att användas.</p>
+    <div class="account">Inloggad som <span>{account_email or "okänt konto"}</span></div>
+    <div class="actions">
+      <a class="btn btn-primary" href="{board_url}">Tillbaka till board</a>
+      <a class="btn btn-ghost" href="javascript:window.close()">Stäng fliken</a>
+    </div>
+  </div>
+</body>
+</html>"""
+        from starlette.responses import HTMLResponse as _HTMLResponse
+        return _HTMLResponse(html)
 
     # ------------------------------------------------------------------
 
