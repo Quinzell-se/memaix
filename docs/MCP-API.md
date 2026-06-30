@@ -86,11 +86,31 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 > Statusflöde: `inbox → triaged → evaluated → approved/rejected → in-dev → done`.
 > Poäng 1–5: `value` (nytta), `complexity` (komplexitet), `risk` (säkerhet/risk).
 
+## Konto  (länka externa OAuth-konton)
+
+| Verktyg | Parametrar | Returnerar | Roll |
+|---|---|---|---|
+| `account_link` | `provider` | `{url}` — redirect-länk för OAuth-flöde | alla |
+| `account_list` | — | `[{provider, account, linked_at}]` | alla |
+| `account_unlink` | `provider, account` | `{ok}` | alla |
+
+> Stödda providers konfigureras per instans i `memaix.yaml` (google, microsoft m.fl.).
+
+## Onboarding
+
+| Typ | Namn | Beskrivning | Roll |
+|---|---|---|---|
+| prompt | `onboarding_interview` | Föreslaget prompt-flöde för ny-användarintervju | alla |
+| verktyg | `onboarding_complete` | `profile_content` → lagrar profil + sätter klar-flagga | alla |
+
+> `whoami` returnerar `needs_onboarding: true` + `onboarding_action` när användaren saknar profil.
+> AI:n initierar intervjun utan att användaren behöver be om det.
+
 ## Övrigt
 
 | Verktyg | Parametrar | Returnerar | Roll |
 |---|---|---|---|
-| `whoami` | — | `{user, projects:[{project, role}]}` | alla |
+| `whoami` | — | `{user_id, projects:{name:{role}}, needs_onboarding, profile_status, onboarding_action?}` | alla |
 
 ## PM-modulen (tillägg)
 `pm_*`-verktyg (sprintplanering, WBS, milstolpar, schemaläggning, RAID, statusrapport) har full

@@ -5,3 +5,11 @@ server:
 auth:
   issuer: "https://mcp.example.com"
   resource_server_url: "https://mcp.example.com"
+
+onboarding:
+  enabled: true
+  intro: "Hej! Jag behöver lära känna dig för att hjälpa dig bättre."
+  outro: "Tack! Sammanställ en kondenserad profil och anropa onboarding_complete."
+  # questions:  # Uncomment to override defaults
+  #   - "Vad heter du och vad är din roll?"
+  #   - "Vilka projekt jobbar du med?"

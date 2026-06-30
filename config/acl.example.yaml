@@ -26,3 +26,6 @@ projects:
   shared:
     vault: /srv/vaults/shared
     allow_send: false
+  memaix-src:
+    vault: /srv/vaults/memaix-src
+    allow_send: false

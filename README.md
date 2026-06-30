@@ -45,9 +45,9 @@ följer med.
 
 **Ett kommando i Linux-terminalen** (enda förkunskap: Docker):
 ```bash
-curl -fsSL https://get.memaix.example/install.sh | sh
+git clone <ditt-memaix-repo> memaix && cd memaix && make init
 ```
-Skriptet kollar Docker, hämtar koden och kör wizarden. Säkerhetsmedveten? Ladda ner och läs först —
+Säkerhetsmedveten? Läs `install.sh` och `scripts/bootstrap.py` direkt —
 se **[docs/QUICK-INSTALL.md](docs/QUICK-INSTALL.md)**.
 
 Eller manuellt:
