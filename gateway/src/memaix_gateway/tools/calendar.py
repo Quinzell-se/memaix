@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""calendar_* tools — CalDAV with injected client for testability.
+"""calendar_* tools — CalDAV or Google Calendar REST with injected client for testability.
 
 The _dav keyword argument accepts a duck-typed object.  When None,
 a real caldav.DAVClient connection is created from project config.
@@ -21,6 +21,120 @@ from datetime import datetime, timedelta
 
 from .. import config
 from ..acl import Acl
+
+
+class CalendarAuthRequired(Exception):
+    """Raised when the user has no linked calendar account for this project."""
+
+    def __init__(self, provider: str, link_url: str) -> None:
+        self.provider = provider
+        self.link_url = link_url
+        super().__init__(f"auth_required: link your {provider} account at {link_url}")
+
+
+# ------------------------------------------------------------------
+# Per-user Google Calendar REST adapter
+# ------------------------------------------------------------------
+
+
+class _PerUserGoogleAdapter:
+    """Google Calendar REST API v3 using a per-user OAuth access token."""
+
+    _BASE = "https://www.googleapis.com/calendar/v3"
+
+    def __init__(self, access_token: str) -> None:
+        self._token = access_token
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+    def _get(self, path: str, **params) -> dict:
+        import requests
+        r = requests.get(f"{self._BASE}{path}", headers=self._headers(), params=params, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    def _post(self, path: str, body: dict) -> dict:
+        import requests
+        r = requests.post(f"{self._BASE}{path}", headers=self._headers(), json=body, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    def _patch(self, path: str, body: dict) -> dict:
+        import requests
+        r = requests.patch(f"{self._BASE}{path}", headers=self._headers(), json=body, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    def _delete(self, path: str) -> None:
+        import requests
+        r = requests.delete(f"{self._BASE}{path}", headers=self._headers(), timeout=10)
+        r.raise_for_status()
+
+    @staticmethod
+    def _to_dict(item: dict) -> dict:
+        start = item.get("start", {})
+        end = item.get("end", {})
+        return {
+            "id": item.get("id", ""),
+            "title": item.get("summary", ""),
+            "start": start.get("dateTime") or start.get("date", ""),
+            "end": end.get("dateTime") or end.get("date", ""),
+            "location": item.get("location", ""),
+            "description": item.get("description", ""),
+        }
+
+    def list_events(self, start: datetime, end: datetime) -> list[dict]:
+        data = self._get(
+            "/calendars/primary/events",
+            timeMin=start.isoformat() if start.tzinfo else start.isoformat() + "Z",
+            timeMax=end.isoformat() if end.tzinfo else end.isoformat() + "Z",
+            singleEvents="true",
+            orderBy="startTime",
+        )
+        return [self._to_dict(e) for e in data.get("items", [])]
+
+    find_events = list_events
+
+    def create_event(
+        self,
+        uid: str,
+        title: str,
+        start: datetime,
+        end: datetime,
+        attendees: list[str] | None = None,
+        location: str | None = None,
+        description: str | None = None,
+    ) -> dict:
+        body: dict = {
+            "summary": title,
+            "start": {"dateTime": start.isoformat(), "timeZone": "UTC"},
+            "end": {"dateTime": end.isoformat(), "timeZone": "UTC"},
+        }
+        if location:
+            body["location"] = location
+        if description:
+            body["description"] = description
+        if attendees:
+            body["attendees"] = [{"email": a} for a in attendees]
+        return self._to_dict(self._post("/calendars/primary/events", body))
+
+    def update_event(self, id: str, **fields) -> dict:
+        body: dict = {}
+        if "title" in fields:
+            body["summary"] = fields["title"]
+        if "location" in fields:
+            body["location"] = fields["location"]
+        if "description" in fields:
+            body["description"] = fields["description"]
+        if "start" in fields:
+            body["start"] = {"dateTime": fields["start"], "timeZone": "UTC"}
+        if "end" in fields:
+            body["end"] = {"dateTime": fields["end"], "timeZone": "UTC"}
+        return self._to_dict(self._patch(f"/calendars/primary/events/{id}", body))
+
+    def delete_event(self, id: str) -> None:
+        self._delete(f"/calendars/primary/events/{id}")
 
 
 # ------------------------------------------------------------------

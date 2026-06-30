@@ -6,6 +6,23 @@ auth:
   issuer: "https://mcp.example.com"
   resource_server_url: "https://mcp.example.com"
 
+# OAuth providers — needed for account_link (per-user calendar/email/files)
+# oauth_providers:
+#   google:
+#     client_id: "YOUR_GOOGLE_CLIENT_ID"
+#     client_secret_ref: "env:GOOGLE_CLIENT_SECRET"
+#     scopes:
+#       - "https://www.googleapis.com/auth/calendar"
+#       - "https://www.googleapis.com/auth/gmail.readonly"
+#       - "https://www.googleapis.com/auth/gmail.compose"
+#   microsoft:
+#     client_id: "YOUR_AZURE_APP_CLIENT_ID"
+#     client_secret_ref: "env:MICROSOFT_CLIENT_SECRET"
+#     scopes:
+#       - "Calendars.ReadWrite"
+#       - "Mail.Read"
+#       - "offline_access"
+
 onboarding:
   enabled: true
   intro: "Hej! Jag behöver lära känna dig för att hjälpa dig bättre."

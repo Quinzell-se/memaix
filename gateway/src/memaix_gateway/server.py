@@ -28,6 +28,7 @@ from .tools import calendar as t_cal
 from .tools import account as t_account
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
+from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None
@@ -508,25 +509,33 @@ def email_send(project: str, to: str, subject: str, body: str, cc: str | None = 
 
 
 @mcp.tool()
-def calendar_list(project: str, start: str, end: str) -> list:
+def calendar_list(project: str, start: str, end: str) -> list | dict:
     """List calendar events within a time range (ISO 8601)."""
     user = _user()
     _rl(user, project)
-    return _audited(user, project, "calendar_list", t_cal.calendar_list, _get_acl(), user, project, start, end)
+    try:
+        dav = _resolve_calendar_dav(project, user)
+        return _audited(user, project, "calendar_list", t_cal.calendar_list, _get_acl(), user, project, start, end, _dav=dav)
+    except CalendarAuthRequired as e:
+        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
 
 
 @mcp.tool()
 def calendar_find_free(
     project: str, duration_min: int, within_start: str, within_end: str
-) -> list:
+) -> list | dict:
     """Find free time slots of at least duration_min minutes."""
     user = _user()
     _rl(user, project)
-    return _audited(
-        user, project, "calendar_find_free",
-        t_cal.calendar_find_free,
-        _get_acl(), user, project, duration_min, within_start, within_end,
-    )
+    try:
+        dav = _resolve_calendar_dav(project, user)
+        return _audited(
+            user, project, "calendar_find_free",
+            t_cal.calendar_find_free,
+            _get_acl(), user, project, duration_min, within_start, within_end, _dav=dav,
+        )
+    except CalendarAuthRequired as e:
+        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
 
 
 @mcp.tool()
@@ -542,11 +551,15 @@ def calendar_create(
     """Create a calendar event."""
     user = _user()
     _rl(user, project)
-    return _audited(
-        user, project, "calendar_create",
-        t_cal.calendar_create,
-        _get_acl(), user, project, title, start, end, attendees, location, description,
-    )
+    try:
+        dav = _resolve_calendar_dav(project, user)
+        return _audited(
+            user, project, "calendar_create",
+            t_cal.calendar_create,
+            _get_acl(), user, project, title, start, end, attendees, location, description, _dav=dav,
+        )
+    except CalendarAuthRequired as e:
+        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
 
 
 @mcp.tool()
@@ -554,11 +567,15 @@ def calendar_update(project: str, id: str, **fields) -> dict:
     """Update fields on an existing calendar event."""
     user = _user()
     _rl(user, project)
-    return _audited(
-        user, project, "calendar_update",
-        t_cal.calendar_update,
-        _get_acl(), user, project, id, **fields,
-    )
+    try:
+        dav = _resolve_calendar_dav(project, user)
+        return _audited(
+            user, project, "calendar_update",
+            t_cal.calendar_update,
+            _get_acl(), user, project, id, _dav=dav, **fields,
+        )
+    except CalendarAuthRequired as e:
+        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
 
 
 @mcp.tool()
@@ -566,11 +583,87 @@ def calendar_delete(project: str, id: str) -> dict:
     """Delete a calendar event (always returns requires_confirmation=True)."""
     user = _user()
     _rl(user, project)
-    return _audited(
-        user, project, "calendar_delete",
-        t_cal.calendar_delete,
-        _get_acl(), user, project, id,
-    )
+    try:
+        dav = _resolve_calendar_dav(project, user)
+        return _audited(
+            user, project, "calendar_delete",
+            t_cal.calendar_delete,
+            _get_acl(), user, project, id, _dav=dav,
+        )
+    except CalendarAuthRequired as e:
+        return {"auth_required": True, "provider": e.provider, "link_url": e.link_url}
+
+
+def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data: dict) -> str | None:
+    """Use the stored refresh_token to mint a new access_token. Updates store on success."""
+    import requests as req_lib
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        return None
+    provider_cfg = cfg.get("memaix", {}).get("oauth_providers", {}).get("google", {})
+    client_id = provider_cfg.get("client_id", "")
+    client_secret = config.secret(provider_cfg.get("client_secret_ref", "")) or ""
+    try:
+        resp = req_lib.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        new_data = resp.json()
+        # Google doesn't re-issue refresh_token on refresh — preserve the original
+        new_data.setdefault("refresh_token", refresh_token)
+        store.store(user, "google", account, new_data)
+        return new_data.get("access_token")
+    except Exception:
+        return None
+
+
+def _resolve_calendar_dav(project: str, user: str):
+    """Return a calendar adapter for the project/user.
+
+    Returns None → use static CalDAV config from acl.yaml.
+    Returns _PerUserGoogleAdapter → per-user Google Calendar.
+    Raises CalendarAuthRequired → user must link account first.
+    """
+    acl = _get_acl()
+    cal_cfg = acl.resource(project, "calendar")
+    if not isinstance(cal_cfg, dict) or cal_cfg.get("auth") != "per_user":
+        return None
+
+    provider = cal_cfg.get("type", "google")
+    cfg = config.load()
+    store = _get_token_store()
+    accounts = store.list_accounts(user)
+    linked = [a for a in accounts if a["provider"] == provider]
+
+    def _link_url() -> str:
+        public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "")
+        return t_account.account_link(acl, user, provider, public_url)["link_url"]
+
+    if not linked:
+        raise CalendarAuthRequired(provider, _link_url())
+
+    account_email = linked[0]["account"]
+    token_data = store.load_one(user, provider, account_email)
+    if not token_data:
+        raise CalendarAuthRequired(provider, _link_url())
+
+    import time
+    access_token = token_data.get("access_token")
+    expires_at = token_data.get("expires_at") or (token_data.get("created_at", 0) + token_data.get("expires_in", 3600))
+    if not access_token or (isinstance(expires_at, (int, float)) and expires_at - 60 < time.time()):
+        access_token = _refresh_google_token(cfg, store, user, account_email, token_data)
+        if not access_token:
+            store.mark_needs_relink(user, provider, account_email)
+            raise CalendarAuthRequired(provider, _link_url())
+
+    return _PerUserGoogleAdapter(access_token)
 
 
 def build_http_app():

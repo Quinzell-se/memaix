@@ -14,6 +14,10 @@ projects:
   acme:
     vault: /srv/vaults/acme
     allow_send: true
+    # Per-user Google Calendar — each user links their own account via account_link("google")
+    # calendar:
+    #   type: google
+    #   auth: per_user
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true
