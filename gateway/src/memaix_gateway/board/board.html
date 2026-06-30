@@ -76,7 +76,7 @@ header select:focus{outline:none;border-color:var(--primary)}
 .modal{background:var(--surface);border-radius:14px;width:600px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .modal-header{padding:1.25rem 1.5rem 0;display:flex;align-items:flex-start;gap:.75rem}
 .modal-title{font-size:1.1rem;font-weight:700;flex:1;line-height:1.3}
-.modal-close{background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);flex-shrink:0;padding:.2rem}
+.modal-close{background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);flex-shrink:0;padding:.75rem;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px}.modal-close:hover{background:var(--bg)}
 .modal-meta{display:flex;flex-wrap:wrap;gap:.4rem;padding:.75rem 1.5rem;border-bottom:1px solid var(--border)}
 .modal-body{overflow-y:auto;padding:1rem 1.5rem;flex:1}
 .modal-body h3{font-size:.9rem;font-weight:700;color:var(--muted);margin:.75rem 0 .4rem}
@@ -524,7 +524,7 @@ gid('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')logi
 gid('login-user').addEventListener('keydown',function(e){if(e.key==='Enter')gid('login-pass').focus();});
 gid('logout-btn').addEventListener('click',logout);
 gid('modal-close').addEventListener('click',closeModal);
-gid('modal-overlay').addEventListener('click',function(e){if(e.target===gid('modal-overlay'))closeModal();});
+gid('modal-overlay').addEventListener('click',function(e){if(!e.target.closest('.modal'))closeModal();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
 gid('refresh-btn').addEventListener('click',function(){loadBoard();pollActivity();});
 gid('project-select').addEventListener('change',function(){
