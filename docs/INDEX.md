@@ -21,6 +21,7 @@ Läs i den ordning som passar din roll.
    · [PM-DATA-MODEL.md](PM-DATA-MODEL.md) — konkret SQLite-schema (resurser, uppgifter, scenarier, plan).
 5. [SAFETY.md](SAFETY.md) — drift-säkerhet: rate limit, circuit breaker, concurrency, context, retention.
    · [THREAT-MODEL.md](THREAT-MODEL.md) — AI-hot: prompt injection & exfiltrering (största säkerhetsluckan).
+   · [MEMORY-RETRIEVAL.md](MEMORY-RETRIEVAL.md) — persistent minne: semantiskt retrieval-lager (embeddings) över vaulten, säkert (MEX-008).
    · [TESTING.md](TESTING.md) — teststrategi: motor-korrekthet, RBAC, idempotens, injection, eval.
 6. [REVIEW-RESPONSE.md](REVIEW-RESPONSE.md) — v2-justeringar efter oberoende granskning.
 7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
@@ -86,6 +87,7 @@ Läs i den ordning som passar din roll.
 | Styrkor/svagheter/möjligheter/hot? | SWOT |
 | Vad krävs för storföretag? | ENTERPRISE |
 | Skydd mot skenande AI / concurrency? | SAFETY |
+| Persistent/semantiskt minne (retrieval)? | MEMORY-RETRIEVAL |
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
 | Vad har vi missat (kritiskt)? | OPEN-GAPS |
