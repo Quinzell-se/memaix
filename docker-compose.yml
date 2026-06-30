@@ -64,7 +64,7 @@ services:
     command: serve all --dev
     environment:
       DSN: postgres://hydra:${HYDRA_DB_PASSWORD}@postgres:5432/hydra?sslmode=disable
-      URLS_SELF_ISSUER: ${HYDRA_PUBLIC_URL:-https://mcp.example.com}
+      URLS_SELF_ISSUER: ${HYDRA_PUBLIC_URL:-https://mcp.example.com/}
       URLS_CONSENT: ${HYDRA_CONSENT_URL:-https://mcp.example.com/consent}
       URLS_LOGIN: ${HYDRA_LOGIN_URL:-https://mcp.example.com/login}
       SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET}

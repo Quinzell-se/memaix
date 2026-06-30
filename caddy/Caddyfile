@@ -4,9 +4,15 @@
 {
     auto_https off
     admin off
+    debug
 }
 
 :80 {
+    log {
+        output stderr
+        level DEBUG
+    }
+
     # DCR via gateway (injects audience before forwarding to Hydra)
     handle /oauth2/register {
         reverse_proxy gateway:8080

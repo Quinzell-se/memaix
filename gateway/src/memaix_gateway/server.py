@@ -1003,12 +1003,15 @@ def build_http_app():
     # Mount at root so claude.ai finds the endpoint at the connector URL directly.
     mcp.settings.streamable_http_path = "/"
 
+    from .board.routes import board_routes
+
     custom_routes = [
         Route("/health", health_handler),
         Route("/.well-known/oauth-authorization-server", as_metadata_handler),
         Route("/oauth2/register", dcr_handler, methods=["POST"]),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
+        *board_routes,
     ]
 
     mcp._custom_starlette_routes = custom_routes
