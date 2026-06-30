@@ -107,7 +107,7 @@ async def board_login(request: Request) -> JSONResponse:
     resp = JSONResponse({"ok": True, "user": username})
     resp.set_cookie(
         _COOKIE_NAME, _make_cookie(username),
-        httponly=True, samesite="lax", max_age=86400 * _COOKIE_TTL_DAYS,
+        httponly=True, samesite="lax", secure=True, max_age=86400 * _COOKIE_TTL_DAYS,
     )
     return resp
 

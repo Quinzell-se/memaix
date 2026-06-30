@@ -231,10 +231,10 @@ function inlineNodes(parent,txt){
 }
 
 /* API */
-function api(url,opts){
+function api(url,opts,silentAuth){
   opts=opts||{};opts.credentials='include';
   return fetch(url,opts).then(function(r){
-    if(r.status===401){handle401();return null;}
+    if(r.status===401){if(!silentAuth)handle401();return null;}
     return r;
   });
 }
@@ -322,7 +322,7 @@ function loadBoard(){
   if(!_project)return Promise.resolve();
   var url='/board/api/board?project='+encodeURIComponent(_project);
   if(_sprint)url+='&sprint='+encodeURIComponent(_sprint);
-  return api(url).then(function(r){
+  return api(url,null,true).then(function(r){
     if(!r)return;
     if(!r.ok){r.json().then(function(e){toast(e.error||'Fel',true);});return;}
     r.json().then(renderBoard);
@@ -481,7 +481,7 @@ function pollActivity(){
   if(_project)params.push('project='+encodeURIComponent(_project));
   if(_lastTs)params.push('since='+encodeURIComponent(_lastTs));
   if(params.length)url+='?'+params.join('&');
-  api(url).then(function(r){
+  api(url,null,true).then(function(r){
     if(!r||!r.ok)return;
     r.json().then(function(d){
       if(d.events&&d.events.length){
