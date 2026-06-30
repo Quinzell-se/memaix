@@ -199,7 +199,7 @@ async def consent_get(consent_challenge: str = ""):
             "remember_for": 86400 * 30,
             "session": {
                 "id_token": {
-                    "email": f"{info.get('subject', 'jimmy')}@jimlov.se",
+                    "email": f"{info.get('subject', 'alice')}@personal.example.com",
                     "name": info.get("subject", "alice"),
                 }
             },

@@ -100,7 +100,7 @@ Memaix systemmejl-volym är **liten** (onboarding, auth-länkar, larm) → ofta 
 Det betyder **ören på SES** eller gratis på MailerSend/Mailgun. Kostnaden är ingen tröskel.
 
 ### Kan vi klara oss med Purelymail ett tag? Ja — för dogfooding.
-- **Tidig fas (du + Bob + några testanvändare):** ja, skicka systemmejl via instansens SMTP
+- **Tidig fas (Alice + Bob + några testanvändare):** ja, skicka systemmejl via instansens SMTP
   (Purelymail). Enstaka onboarding-/auth-mejl per dag är inte "massutskick" och bryter inte ToS.
 - **Förbehåll:** transaktionsmejl bär login-/säkerhetslänkar — hamnar de i skräpkorgen bryts
   onboardingen. Dedikerade leverantörer har bättre deliverability. Och **automatisera inte volym**

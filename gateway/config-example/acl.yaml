@@ -4,7 +4,7 @@
 users:
   alice:
     # oauth_subjects: lista av OAuth-subjects (sub-claim) som mappar till denna användare.
-    # Behövs inte i stdio-läge (MEMAIX_USER=jimmy räcker).
+    # Behövs inte i stdio-läge (MEMAIX_USER=alice räcker).
     oauth_subjects: []
     grants:
       demo: owner

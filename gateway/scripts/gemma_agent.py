@@ -4,13 +4,13 @@
 Kör utan Hydra/OAuth — identitet via MEMAIX_USER (stdio-läge).
 
 Miljövariabler:
-  MEMAIX_USER        Inloggad användare (standard: jimmy)
+  MEMAIX_USER        Inloggad användare (standard: alice)
   MEMAIX_CONFIG_DIR  Sökväg till config/{acl,memaix,brand}.yaml
   OLLAMA_URL         Ollama-endpoint (standard: https://ollama.example.com)
   MEMAIX_MODEL       Modellnamn (standard: gemma4:e2b)
 
 Exempel:
-  MEMAIX_USER=jimmy MEMAIX_CONFIG_DIR=config-example \
+  MEMAIX_USER=alice MEMAIX_CONFIG_DIR=config-example \
   OLLAMA_URL=https://ollama.example.com \
   python scripts/gemma_agent.py
 """

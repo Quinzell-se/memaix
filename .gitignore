@@ -1,3 +1,6 @@
+# Internal-only docs — not for public repo
+docs/BUSINESS-CASE.md
+
 # Secrets & local config — never commit
 .env
 config/*.yaml

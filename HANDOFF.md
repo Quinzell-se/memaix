@@ -12,12 +12,12 @@ material (plan, specar, utvecklingsinstruktioner, vault-utkast) ligger i git-rep
 # Om repot inte redan finns lokalt:
 git clone git@github.com:Quinzell-se/memaix.git && cd memaix
 ```
-Allt produktmaterial ligger i roten av repot. Alice & Bobs egen driftplan ligger under
+Allt produktmaterial ligger i roten av repot. Alice & Bob egen driftplan ligger under
 **`docs/ai-assistent-plattform.md`** + seed-innehåll i **`docs/vault-utkast/`**.
 
 ## 2. Två spår (samma kod)
 1. **Bygg produkten Memaix** — gatewayen, generaliserad. Specar i `memaix/`.
-2. **Kör en instans för oss** — samma gateway, konfigurerad för Alices/Bobs projekt, seedad med
+2. **Kör en instans för oss** — samma gateway, konfigurerad för Alice's/Bob's projekt, seedad med
    `docs/vault-utkast/`.
 
 ## 3. Läs i ordning
@@ -52,11 +52,11 @@ annorlunda, gäller detta:
 5. **RBAC skarpt + onboarding + per-användar-OAuth** (`PER-USER-OAUTH.md`).
 
 ## 6. Vår egen instans (deployment-config)
-- **Projekt:** `acme`, `project-a`, `project-b`, `jimlov`, `shared`.
-- **Personer:** `jimmy` (owner överallt), `bob` (owner project-a, collaborator acme + shared),
+- **Projekt:** `acme`, `project-a`, `project-b`, `personal`, `shared`.
+- **Personer:** `alice` (owner överallt), `bob` (owner project-a, collaborator acme + shared),
   `carol` (collaborator endast acme).
-- **Backends:** acme-mejl = Purelymail (`jimmy@acme.com`); kalender/filer = Nextcloud;
-  `jimlov` = Google (alice@personal.example.com). Övriga enligt behov.
+- **Backends:** acme-mejl = Purelymail (`alice@acme.com`); kalender/filer = Nextcloud;
+  `personal` = Google (alice@personal.example.com). Övriga enligt behov.
 - **Tunnel:** cloudflared → `mcp.acme.com` (samma mönster som vault.example.com).
 - **Seed:** kopiera `docs/vault-utkast/` → instansens vaults; git-initiera per projekt.
 - **Hemligheter:** i `.env`/secret store på qronkclawd — aldrig i repot.
