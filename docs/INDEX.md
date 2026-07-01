@@ -32,6 +32,7 @@ Läs i den ordning som passar din roll.
    · [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) — funktion #2: enhetlig semantisk sökning/RAG med källhänvisning (design + byggspec).
    · [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) — funktion #3: utkorg med bekräftelse för utgående åtgärder (design + byggspec).
    · [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) — funktion #4: stående instruktioner & automationsregler (design + byggspec).
+   · [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) — funktion #5: ångra & åtgärdstidslinje (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -101,5 +102,6 @@ Läs i den ordning som passar din roll.
 | Semantisk sökning/RAG — design & byggspec? | FEATURE-SEMANTIC-SEARCH |
 | Utkorg/bekräftelse för utgående — design & byggspec? | FEATURE-APPROVAL-OUTBOX |
 | Automationsregler/stående instruktioner — design & byggspec? | FEATURE-AUTOMATION-RULES |
+| Ångra/åtgärdstidslinje — design & byggspec? | FEATURE-UNDO-TIMELINE |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
