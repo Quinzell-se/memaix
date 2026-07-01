@@ -30,6 +30,7 @@ Läs i den ordning som passar din roll.
    · [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) — kodgranskning av gatewayen: buggar, säkerhetsfynd, 10 förslag.
    · [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) — funktion #1: proaktiv brief & notiser (design + byggspec).
    · [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) — funktion #2: enhetlig semantisk sökning/RAG med källhänvisning (design + byggspec).
+   · [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) — funktion #3: utkorg med bekräftelse för utgående åtgärder (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -97,5 +98,6 @@ Läs i den ordning som passar din roll.
 | Kod-buggar/säkerhetsfynd & förbättringsförslag? | DEVELOPMENT-PROPOSALS |
 | Proaktiv brief/notiser — design & byggspec? | FEATURE-PROACTIVE-BRIEF |
 | Semantisk sökning/RAG — design & byggspec? | FEATURE-SEMANTIC-SEARCH |
+| Utkorg/bekräftelse för utgående — design & byggspec? | FEATURE-APPROVAL-OUTBOX |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
