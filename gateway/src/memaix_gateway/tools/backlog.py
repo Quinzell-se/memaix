@@ -15,7 +15,6 @@ ID format: uuid4().hex[:8]  (8 lowercase hex chars, e.g. "a1b2c3d4")
 
 from __future__ import annotations
 
-import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -24,6 +23,7 @@ from pathlib import Path
 import yaml
 
 from ..acl import Acl
+from .. import frontmatter as fm
 from ..paths import validate_id
 
 # ------------------------------------------------------------------
@@ -66,20 +66,18 @@ def _backlog_dir(acl: Acl, project: str) -> Path:
 def _parse_item(path: Path) -> dict:
     """Read and parse a backlog markdown file.  Returns merged dict (meta + description)."""
     text = path.read_text()
-    m = re.match(r"^---\n(.*?)\n---\n?(.*)", text, re.DOTALL)
-    if not m:
+    meta, body = fm.split(text)
+    if not meta:
         raise ValueError(f"missing or malformed frontmatter in {path.name}")
-    meta: dict = yaml.safe_load(m.group(1)) or {}
-    meta["description"] = m.group(2).strip()
+    meta["description"] = body
     return meta
 
 
 def _write_item(path: Path, meta: dict) -> None:
-    """Serialise a backlog item back to markdown with YAML frontmatter."""
+    """Serialise a backlog item back to markdown with YAML frontmatter (atomic)."""
     # Pop description before serialising frontmatter
     description = meta.pop("description", "")
-    front = yaml.dump(meta, allow_unicode=True, sort_keys=False).strip()
-    path.write_text(f"---\n{front}\n---\n{description}\n")
+    fm.write_atomic(path, fm.join(meta, description))
     meta["description"] = description  # restore in-place
 
 

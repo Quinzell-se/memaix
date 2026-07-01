@@ -111,6 +111,26 @@ def test_validate_state_consumed_once(acl):
     assert second is None
 
 
+def test_sqlite_state_backend_roundtrip(acl, tmp_path, monkeypatch):
+    """With MEMAIX_STATE_DB set, pending states persist in SQLite (multi-worker)."""
+    import memaix_gateway.tools.account as account_mod
+    monkeypatch.setenv("MEMAIX_STATE_DB", str(tmp_path / "state.db"))
+    monkeypatch.setattr(account_mod, "_sqlite_store", None)
+
+    from urllib.parse import urlparse, parse_qs
+    result = account_link(acl, "alice", "google", "http://localhost:8080")
+    state = parse_qs(urlparse(result["link_url"]).query)["state"][0]
+
+    # Not held in the in-memory dict — it lives in SQLite.
+    assert state not in account_mod._pending_states
+    # A fresh store instance (simulating another worker) can validate it.
+    monkeypatch.setattr(account_mod, "_sqlite_store", None)
+    pending = validate_state(state)
+    assert pending is not None and pending["user_id"] == "alice"
+    # Consumed once.
+    assert validate_state(state) is None
+
+
 # ---------------------------------------------------------------------------
 # account_list
 # ---------------------------------------------------------------------------

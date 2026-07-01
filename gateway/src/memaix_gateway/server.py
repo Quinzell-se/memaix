@@ -53,7 +53,23 @@ def _get_token_store():
         from cryptography.fernet import Fernet
         key_ref = os.environ.get("TOKEN_MASTER_KEY")
         if not key_ref:
-            # Development fallback — warn and generate a temporary key.
+            # In HTTP (server) mode an ephemeral key silently discards every
+            # linked account on restart and differs per worker — refuse to start
+            # unless the operator explicitly opts in. stdio/dev keeps the warn.
+            import sys
+            http_mode = (
+                os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
+            )
+            allow_ephemeral = os.environ.get("MEMAIX_ALLOW_EPHEMERAL_KEY", "").lower() in (
+                "1", "true", "yes",
+            )
+            if http_mode and not allow_ephemeral:
+                raise RuntimeError(
+                    "TOKEN_MASTER_KEY is required in HTTP mode. Generate one with "
+                    "`python -c \"from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())\"` and set it in .env, "
+                    "or set MEMAIX_ALLOW_EPHEMERAL_KEY=1 to accept per-restart key loss."
+                )
             import warnings
             warnings.warn(
                 "TOKEN_MASTER_KEY not set — using ephemeral key (tokens lost on restart)",
@@ -113,6 +129,26 @@ def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
         raise
+
+
+def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kwargs):
+    """Single entry point for a project-scoped tool call.
+
+    Resolves the caller's identity, applies rate limiting, optionally enforces
+    an ACL role, and audit-logs the outcome — the four steps every tool must
+    perform.  ``fn`` is invoked as ``fn(acl, user, project, *tail, **kwargs)``,
+    which is the shared signature of the tools.* functions.
+
+    Most tools leave ``need`` as None because the underlying tools.* function
+    performs its own ``acl.enforce``; pass ``need`` only for tools that gate
+    at this layer.
+    """
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    if need is not None:
+        acl.enforce(user, project, need)
+    return _audited(user, project, tool, fn, acl, user, project, *tail, **kwargs)
 
 
 mcp = FastMCP("memaix")
@@ -185,33 +221,25 @@ def account_unlink(provider: str, account: str) -> dict:
 @mcp.tool()
 def files_list(project: str, path: str = "/") -> list:
     """List files and directories in a project vault path."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "files_list", t_files.list_files, _get_acl(), user, project, path)
+    return _tool_call("files_list", project, t_files.list_files, path)
 
 
 @mcp.tool()
 def files_read(project: str, path: str) -> str:
     """Read a file from a project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "files_read", t_files.read_file, _get_acl(), user, project, path)
+    return _tool_call("files_read", project, t_files.read_file, path)
 
 
 @mcp.tool()
 def files_write(project: str, path: str, content: str) -> str:
     """Write a file to a project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "files_write", t_files.write_file, _get_acl(), user, project, path, content)
+    return _tool_call("files_write", project, t_files.write_file, path, content)
 
 
 @mcp.tool()
 def files_search(project: str, query: str, path: str = "/") -> list:
     """Search file contents in a project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "files_search", t_files.search_files, _get_acl(), user, project, query, path)
+    return _tool_call("files_search", project, t_files.search_files, query, path)
 
 
 # ------------------------------------------------------------------
@@ -222,49 +250,37 @@ def files_search(project: str, query: str, path: str = "/") -> list:
 @mcp.tool()
 def memory_read(project: str, note: str) -> dict:
     """Read a memory note from a project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_read", t_memory.memory_read, _get_acl(), user, project, note)
+    return _tool_call("memory_read", project, t_memory.memory_read, note)
 
 
 @mcp.tool()
 def memory_search(project: str, query: str) -> list:
     """Full-text search across memory notes in a project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_search", t_memory.memory_search, _get_acl(), user, project, query)
+    return _tool_call("memory_search", project, t_memory.memory_search, query)
 
 
 @mcp.tool()
 def memory_write(project: str, note: str, content: str) -> dict:
     """Write (overwrite) a memory note."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_write", t_memory.memory_write, _get_acl(), user, project, note, content)
+    return _tool_call("memory_write", project, t_memory.memory_write, note, content)
 
 
 @mcp.tool()
 def memory_append(project: str, note: str, text: str) -> dict:
     """Append text to a memory note (creates if absent)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_append", t_memory.memory_append, _get_acl(), user, project, note, text)
+    return _tool_call("memory_append", project, t_memory.memory_append, note, text)
 
 
 @mcp.tool()
 def memory_history(project: str, note: str | None = None, limit: int = 20) -> list:
     """Git log for a note or the whole vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_history", t_memory.memory_history, _get_acl(), user, project, note, limit)
+    return _tool_call("memory_history", project, t_memory.memory_history, note, limit)
 
 
 @mcp.tool()
 def memory_revert(project: str, commit: str) -> dict:
     """Revert a git commit in the project vault."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "memory_revert", t_memory.memory_revert, _get_acl(), user, project, commit)
+    return _tool_call("memory_revert", project, t_memory.memory_revert, commit)
 
 
 # ------------------------------------------------------------------
@@ -275,25 +291,19 @@ def memory_revert(project: str, commit: str) -> dict:
 @mcp.tool()
 def backlog_add(project: str, title: str, description: str, category: str | None = None) -> dict:
     """Create a new backlog item (status: inbox)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "backlog_add", t_backlog.backlog_add, _get_acl(), user, project, title, description, category)
+    return _tool_call("backlog_add", project, t_backlog.backlog_add, title, description, category)
 
 
 @mcp.tool()
 def backlog_list(project: str, status: str | None = None, category: str | None = None) -> list:
     """List backlog items, optionally filtered by status or category."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "backlog_list", t_backlog.backlog_list, _get_acl(), user, project, status, category)
+    return _tool_call("backlog_list", project, t_backlog.backlog_list, status, category)
 
 
 @mcp.tool()
 def backlog_get(project: str, id: str) -> dict:
     """Fetch a single backlog item by id."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "backlog_get", t_backlog.backlog_get, _get_acl(), user, project, id)
+    return _tool_call("backlog_get", project, t_backlog.backlog_get, id)
 
 
 @mcp.tool()
@@ -306,36 +316,27 @@ def backlog_score(
     risk: int | None = None,
 ) -> dict:
     """Update scoring fields on a backlog item (optimistic locking)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "backlog_score",
-        t_backlog.backlog_score,
-        _get_acl(), user, project, id, expected_version, value, complexity, risk,
+    return _tool_call(
+        "backlog_score", project, t_backlog.backlog_score,
+        id, expected_version, value, complexity, risk,
     )
 
 
 @mcp.tool()
 def backlog_comment(project: str, id: str, text: str, expected_version: int) -> dict:
     """Append a comment to a backlog item (optimistic locking)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "backlog_comment",
-        t_backlog.backlog_comment,
-        _get_acl(), user, project, id, text, expected_version,
+    return _tool_call(
+        "backlog_comment", project, t_backlog.backlog_comment,
+        id, text, expected_version,
     )
 
 
 @mcp.tool()
 def backlog_set_status(project: str, id: str, status: str, expected_version: int) -> dict:
     """Transition a backlog item to a new status (owner only, optimistic locking)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "backlog_set_status",
-        t_backlog.backlog_set_status,
-        _get_acl(), user, project, id, status, expected_version,
+    return _tool_call(
+        "backlog_set_status", project, t_backlog.backlog_set_status,
+        id, status, expected_version,
     )
 
 
@@ -352,21 +353,16 @@ def pm_set_methodology(
     capacity: dict | None = None,
 ) -> dict:
     """Set project methodology and sprint capacity (owner only)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "pm_set_methodology",
-        t_pm.pm_set_methodology,
-        _get_acl(), user, project, methodology, sprint_length_days, capacity,
+    return _tool_call(
+        "pm_set_methodology", project, t_pm.pm_set_methodology,
+        methodology, sprint_length_days, capacity,
     )
 
 
 @mcp.tool()
 def pm_status_report(project: str, note: str = "status") -> dict:
     """Generate a status report snapshot from backlog, RAID and memory notes."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "pm_status_report", t_pm.pm_status_report, _get_acl(), user, project, note)
+    return _tool_call("pm_status_report", project, t_pm.pm_status_report, note)
 
 
 @mcp.tool()
@@ -377,21 +373,16 @@ def pm_plan_sprint(
     goal: str = "",
 ) -> dict:
     """Commit backlog items into a named sprint and stamp each item (owner only)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "pm_plan_sprint",
-        t_pm.pm_plan_sprint,
-        _get_acl(), user, project, sprint_id, item_ids, goal,
+    return _tool_call(
+        "pm_plan_sprint", project, t_pm.pm_plan_sprint,
+        sprint_id, item_ids, goal,
     )
 
 
 @mcp.tool()
 def pm_sprint_status(project: str, sprint_id: str) -> dict:
     """Burndown summary for a sprint: done vs remaining points."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "pm_sprint_status", t_pm.pm_sprint_status, _get_acl(), user, project, sprint_id)
+    return _tool_call("pm_sprint_status", project, t_pm.pm_sprint_status, sprint_id)
 
 
 @mcp.tool()
@@ -404,21 +395,16 @@ def pm_raid_add(
     mitigation: str = "",
 ) -> dict:
     """Append a RAID entry (Risk/Assumption/Issue/Dependency) to the project log."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "pm_raid_add",
-        t_pm.pm_raid_add,
-        _get_acl(), user, project, raid_type, summary, owner, severity, mitigation,
+    return _tool_call(
+        "pm_raid_add", project, t_pm.pm_raid_add,
+        raid_type, summary, owner, severity, mitigation,
     )
 
 
 @mcp.tool()
 def pm_raid_list(project: str, raid_type: str = "") -> dict:
     """List RAID entries, optionally filtered by type."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "pm_raid_list", t_pm.pm_raid_list, _get_acl(), user, project, raid_type)
+    return _tool_call("pm_raid_list", project, t_pm.pm_raid_list, raid_type)
 
 
 @mcp.prompt()
@@ -534,25 +520,19 @@ def calendar_status(project: str) -> dict:
 @mcp.tool()
 def email_list(project: str, folder: str = "INBOX", limit: int = 20) -> list:
     """List recent messages in a mailbox folder."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "email_list", t_email.email_list, _get_acl(), user, project, folder, limit)
+    return _tool_call("email_list", project, t_email.email_list, folder, limit)
 
 
 @mcp.tool()
 def email_read(project: str, id: str) -> dict:
     """Read a message by UID."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "email_read", t_email.email_read, _get_acl(), user, project, id)
+    return _tool_call("email_read", project, t_email.email_read, id)
 
 
 @mcp.tool()
 def email_search(project: str, query: str, limit: int = 20) -> list:
     """Search messages by body content."""
-    user = _user()
-    _rl(user, project)
-    return _audited(user, project, "email_search", t_email.email_search, _get_acl(), user, project, query, limit)
+    return _tool_call("email_search", project, t_email.email_search, query, limit)
 
 
 @mcp.tool()
@@ -565,24 +545,18 @@ def email_create_draft(
     in_reply_to: str | None = None,
 ) -> dict:
     """Save a draft to the mailbox Drafts folder."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "email_create_draft",
-        t_email.email_create_draft,
-        _get_acl(), user, project, to, subject, body, cc, in_reply_to,
+    return _tool_call(
+        "email_create_draft", project, t_email.email_create_draft,
+        to, subject, body, cc, in_reply_to,
     )
 
 
 @mcp.tool()
 def email_send(project: str, to: str, subject: str, body: str, cc: str | None = None) -> dict:
     """Send an email (requires owner + allow_send feature flag)."""
-    user = _user()
-    _rl(user, project)
-    return _audited(
-        user, project, "email_send",
-        t_email.email_send,
-        _get_acl(), user, project, to, subject, body, cc,
+    return _tool_call(
+        "email_send", project, t_email.email_send,
+        to, subject, body, cc,
     )
 
 

@@ -8,7 +8,11 @@ import time
 import pytest
 
 from memaix_gateway.safety.audit import AuditLog
-from memaix_gateway.safety.rate_limit import RateLimiter
+from memaix_gateway.safety.rate_limit import (
+    RateLimiter,
+    SQLiteRateLimiter,
+    make_rate_limiter,
+)
 
 
 # ------------------------------------------------------------------
@@ -69,6 +73,55 @@ def test_different_users_independent(limiter):
 def test_check_returns_bool(limiter):
     result = limiter.check("some_key", limit=10, window_s=30)
     assert isinstance(result, bool)
+
+
+# ------------------------------------------------------------------
+# SQLiteRateLimiter — same behaviour, persistent/shared backend
+# ------------------------------------------------------------------
+
+
+@pytest.fixture()
+def sqlite_limiter(tmp_path):
+    return SQLiteRateLimiter(tmp_path / "rl.db")
+
+
+def test_sqlite_limiter_enforces_limit(sqlite_limiter):
+    for _ in range(60):
+        assert sqlite_limiter.check_user("alice") is True
+    assert sqlite_limiter.check_user("alice") is False
+
+
+def test_sqlite_limiter_independent_keys(sqlite_limiter):
+    for _ in range(60):
+        sqlite_limiter.check_user("a")
+    assert sqlite_limiter.check_user("b") is True
+
+
+def test_sqlite_limiter_window_expiry(sqlite_limiter):
+    key = "user:exp"
+    for _ in range(60):
+        sqlite_limiter.check(key, limit=60, window_s=60)
+    assert sqlite_limiter.check(key, limit=60, window_s=60) is False
+    sqlite_limiter._inject_timestamps(key, [time.time() - 61.0] * 60)
+    assert sqlite_limiter.check(key, limit=60, window_s=60) is True
+
+
+def test_sqlite_limiter_shares_state_across_instances(tmp_path):
+    """A second instance on the same DB sees the first's counts (multi-worker)."""
+    db = tmp_path / "shared.db"
+    a = SQLiteRateLimiter(db)
+    b = SQLiteRateLimiter(db)
+    for _ in range(60):
+        a.check_user("dave")
+    assert b.check_user("dave") is False
+
+
+def test_make_rate_limiter_backends(tmp_path, monkeypatch):
+    monkeypatch.delenv("MEMAIX_RATELIMIT_BACKEND", raising=False)
+    assert isinstance(make_rate_limiter(), RateLimiter)
+    monkeypatch.setenv("MEMAIX_RATELIMIT_BACKEND", "sqlite")
+    monkeypatch.setenv("MEMAIX_RATELIMIT_DB", str(tmp_path / "made.db"))
+    assert isinstance(make_rate_limiter(), SQLiteRateLimiter)
 
 
 # ------------------------------------------------------------------

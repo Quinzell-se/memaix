@@ -11,14 +11,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - name: Installera gateway + dev-beroenden
+        run: pip install -e "gateway[dev]"
       - name: Docs-index-hygien
         run: python3 scripts/check-docs-index.py
-      - name: Python-syntax
+      - name: Python-syntax (scripts + hela paketet)
         run: |
           python3 -m py_compile scripts/*.py
-          python3 -m py_compile gateway/src/memaix_gateway/*.py
-      # TODO: kör testsviten (docs/TESTING.md) när gateway är implementerad.
+          python3 -m compileall -q gateway/src/memaix_gateway
+      - name: Testsvit
+        working-directory: gateway
+        run: python -m pytest -q
+      # TODO: lägg till ruff/mypy/bandit som separata gate-steg.
 
   sbom:
     runs-on: ubuntu-latest
