@@ -33,6 +33,7 @@ Läs i den ordning som passar din roll.
    · [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) — funktion #3: utkorg med bekräftelse för utgående åtgärder (design + byggspec).
    · [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) — funktion #4: stående instruktioner & automationsregler (design + byggspec).
    · [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) — funktion #5: ångra & åtgärdstidslinje (design + byggspec).
+   · [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) — funktion #6: upptäckbarhet, guide & förmåge-register (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -103,5 +104,6 @@ Läs i den ordning som passar din roll.
 | Utkorg/bekräftelse för utgående — design & byggspec? | FEATURE-APPROVAL-OUTBOX |
 | Automationsregler/stående instruktioner — design & byggspec? | FEATURE-AUTOMATION-RULES |
 | Ångra/åtgärdstidslinje — design & byggspec? | FEATURE-UNDO-TIMELINE |
+| Hur guidas användaren / vad kan man göra? | FEATURE-DISCOVERABILITY |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
