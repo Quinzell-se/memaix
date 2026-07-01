@@ -43,7 +43,7 @@ Grunden att bygga tryggt på.
 ## Fas 1 — Förtroende-grund 🔨
 Gör det säkert att låta agenten göra mer — *innan* den blir proaktiv.
 - ✅ **#3 Utkorg** — [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) (backend+MCP+board-API klart; board.html-panel kvarstår)
-- 📋 **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md)
+- ✅ **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) (v1: memory_write/append, calendar_create, backlog_add, board_move; fältnivå-undo för backlog_set_status/score/comment/calendar_update kräver pre-image-fångst och är kvar)
 - ✅ **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (L1–L3 kvarstår)
 - ✅ **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
 

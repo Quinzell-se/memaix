@@ -128,5 +128,9 @@
 
   "cap.outbox.review.title": "Review the outbox",
   "cap.outbox.review.summary": "See queued outgoing actions (emails, calendar changes) and approve or reject them before they go out.",
-  "cap.outbox.review.examples": ["What's waiting for my approval?", "Approve the queued email"]
+  "cap.outbox.review.examples": ["What's waiting for my approval?", "Approve the queued email"],
+
+  "cap.undo.timeline.title": "Undo a recent action",
+  "cap.undo.timeline.summary": "See a timeline of recent actions and undo the ones that support it.",
+  "cap.undo.timeline.examples": ["What did you just do?", "Undo my last note edit"]
 }

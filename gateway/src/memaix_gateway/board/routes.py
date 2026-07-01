@@ -102,6 +102,12 @@ def _outbox():
     return ActionQueue.for_path(db_path)
 
 
+def _timeline():
+    from ..timeline.store import ActionsStore
+    db_path = Path(os.environ.get("MEMAIX_ACTIONS_DB", "/tmp/memaix-actions.db"))
+    return ActionsStore.for_path(db_path)
+
+
 # Same role map as server.py's _OUTBOX_APPROVAL_ROLE — approving/rejecting a
 # queued action requires the role the underlying tool itself enforces.
 _OUTBOX_APPROVAL_ROLE = {
@@ -345,6 +351,16 @@ async def api_item_patch(request: Request) -> JSONResponse:
         _audit().log(user, project, "board_move", True, f"{item_id}: {old} → {new_status}")
     except Exception:
         pass
+
+    if old != "?" and old != new_status:
+        try:
+            _timeline().record(
+                user, project, "board_move",
+                f"Flyttade {item_id}: {old} → {new_status}",
+                {"tool": "board_move", "args": {"item_id": item_id, "status": old}},
+            )
+        except Exception:
+            pass  # best-effort — must never break the actual move
 
     return JSONResponse({"ok": True, "item": card})
 

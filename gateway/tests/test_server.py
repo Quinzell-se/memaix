@@ -15,6 +15,7 @@ from memaix_gateway import server
 from memaix_gateway.acl import AccessDenied, Acl
 from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
+from memaix_gateway.timeline.store import ActionsStore
 
 
 @pytest.fixture()
@@ -32,6 +33,7 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_acl", acl)
     monkeypatch.setattr(server, "_audit", AuditLog.for_path(tmp_path / "audit.db"))
     monkeypatch.setattr(server, "_outbox_queue", ActionQueue.for_path(tmp_path / "outbox.db"))
+    monkeypatch.setattr(server, "_timeline_store", ActionsStore.for_path(tmp_path / "actions.db"))
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
     return vault, acl
@@ -191,3 +193,70 @@ def test_outbox_approve_records_failure_on_exception(wired, monkeypatch):
     result = server.outbox_approve(aid)
     assert result["ok"] is False
     assert server.outbox_get(aid)["status"] == "failed"
+
+
+# ------------------------------------------------------------------
+# Timeline tools (FEATURE-UNDO-TIMELINE.md)
+# ------------------------------------------------------------------
+
+
+def test_memory_write_via_server_is_recorded_and_undoable(wired):
+    server.memory_write("proj", "notes/x.md", "hello")
+    entries = server.timeline_list("proj")
+    assert len(entries) == 1
+    assert entries[0]["tool"] == "memory_write"
+    assert entries[0]["reversible"] is True
+
+    hist_before = server.memory_history("proj", "notes/x.md")
+    result = server.timeline_undo(entries[0]["id"])
+    assert result["ok"] is True
+    hist_after = server.memory_history("proj", "notes/x.md")
+    assert len(hist_after) > len(hist_before)  # memory_revert added a new commit
+
+    all_entries = server.timeline_list("proj")
+    assert any(e.get("undo_of") == entries[0]["id"] for e in all_entries)
+
+
+def test_backlog_add_via_server_is_recorded_and_undoable(wired):
+    r = server.backlog_add("proj", "New idea", "desc")
+    entries = server.timeline_list("proj")
+    add_entry = next(e for e in entries if e["tool"] == "backlog_add")
+    assert add_entry["reversible"] is True
+
+    result = server.timeline_undo(add_entry["id"])
+    assert result["ok"] is True
+    item = server.backlog_get("proj", r["id"])
+    assert item["status"] == "rejected"
+
+
+def test_timeline_undo_second_call_refuses(wired):
+    server.memory_write("proj", "notes/x.md", "hello")
+    aid = server.timeline_list("proj")[0]["id"]
+    assert server.timeline_undo(aid)["ok"] is True
+    second = server.timeline_undo(aid)
+    assert second["ok"] is False
+
+
+def test_failed_tool_call_is_not_recorded_in_timeline(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "bob")  # reader — can't write memory
+    with pytest.raises(Exception):
+        server.memory_write("proj", "notes/x.md", "hello")
+    monkeypatch.setenv("MEMAIX_USER", "alice")
+    assert server.timeline_list("proj") == []
+
+
+def test_timeline_list_filters_invisible_projects(wired):
+    server.memory_write("proj", "notes/x.md", "hello")
+    # Alice can't see a project she has no grant on.
+    other_entries = server.timeline_list("no-such-project")
+    assert other_entries == []
+
+
+def test_queued_outbox_action_is_not_recorded_in_timeline(wired):
+    """A tool result of {'pending': True, ...} means nothing happened yet —
+    it must not show up in the timeline until it's actually approved/executed."""
+    server._maybe_record_timeline(
+        "alice", "proj", "calendar_create", ("Standup",), {},
+        {"pending": True, "action_id": "x"},
+    )
+    assert server.timeline_list("proj") == []

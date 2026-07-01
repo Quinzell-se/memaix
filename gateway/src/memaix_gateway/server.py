@@ -38,6 +38,7 @@ _acl: Acl | None = None
 _audit: AuditLog | None = None
 _token_store: "TokenStore | None" = None  # type: ignore[name-defined]
 _outbox_queue: "ActionQueue | None" = None  # type: ignore[name-defined]
+_timeline_store: "ActionsStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -103,6 +104,15 @@ def _get_outbox():
     return _outbox_queue
 
 
+def _get_timeline():
+    global _timeline_store
+    if _timeline_store is None:
+        from .timeline.store import ActionsStore
+        db_path = Path(os.environ.get("MEMAIX_ACTIONS_DB", "/tmp/memaix-actions.db"))
+        _timeline_store = ActionsStore.for_path(db_path)
+    return _timeline_store
+
+
 def _user() -> str:
     # HTTP mode: resolve identity from the OAuth token injected by MCP SDK middleware.
     try:
@@ -132,14 +142,39 @@ def _rl(user: str, project: str) -> None:
 
 
 def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
-    """Call fn(*args, **kwargs), log result to audit, re-raise on error."""
+    """Call fn(*args, **kwargs), log result to audit, re-raise on error.
+
+    Every tool call funnels through here (whether via _tool_call or the
+    older direct-_audited pattern used by calendar_*), which makes this the
+    single choke point for the undo/timeline recording hook below — args is
+    always (acl, user, project, *tail) by convention (see FEATURE-UNDO-TIMELINE.md).
+    """
     try:
         result = fn(*args, **kwargs)
         _get_audit().log(user, project, tool, True)
+        _maybe_record_timeline(user, project, tool, args[3:], kwargs, result)
         return result
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
         raise
+
+
+def _maybe_record_timeline(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort undo-log recording — must never break the tool call itself."""
+    from .timeline.inverse import TOOL_HANDLERS
+
+    handler = TOOL_HANDLERS.get(tool)
+    if handler is None:
+        return
+    if isinstance(result, dict) and result.get("pending"):
+        return  # queued for outbox approval — nothing actually happened yet
+    try:
+        summary_fn, inverse_fn = handler
+        summary = summary_fn(tail, kwargs, result)
+        inverse = inverse_fn(tail, kwargs, result)
+        _get_timeline().record(user, project, tool, summary, inverse)
+    except Exception:
+        logger.warning("timeline recording failed for tool %r", tool, exc_info=True)
 
 
 def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kwargs):
@@ -328,6 +363,32 @@ def outbox_reject(action_id: str, reason: str = "") -> dict:
 
     _get_audit().log(user, action["project"], f"outbox_reject:{action['tool']}", True, reason)
     return {"ok": True, "action_id": action_id, "status": "rejected"}
+
+
+# ------------------------------------------------------------------
+# Timeline tools — undo a recorded action (FEATURE-UNDO-TIMELINE.md)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def timeline_list(project: str | None = None, limit: int = 50) -> list:
+    """List recent actions (newest first) for your visible projects, with
+    an `reversible` flag showing which ones can be undone via timeline_undo."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return _get_timeline().list(projects, limit)
+
+
+@mcp.tool()
+def timeline_undo(action_id: str) -> dict:
+    """Undo a recorded action (requires the same role the original action did)."""
+    user = _user()
+    acl = _get_acl()
+    from .timeline.undo import undo
+    return undo(_get_timeline(), acl, user, action_id)
 
 
 @mcp.tool()

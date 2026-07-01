@@ -232,4 +232,16 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource="vault",
             tags=("utkorg", "godkänn", "outbox", "approve"),
         ),
+        # ------------------------------------------------------------------
+        # undo (FEATURE-UNDO-TIMELINE.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="undo.timeline", area="undo",
+            title_key="cap.undo.timeline.title",
+            summary_key="cap.undo.timeline.summary",
+            tools=("timeline_list", "timeline_undo"),
+            example_prompts_key="cap.undo.timeline.examples",
+            needs_role="reader", needs_resource="vault",
+            tags=("ångra", "historik", "undo", "timeline"),
+        ),
     )

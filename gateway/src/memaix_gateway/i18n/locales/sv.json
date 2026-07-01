@@ -128,5 +128,9 @@
 
   "cap.outbox.review.title": "Granska utkorgen",
   "cap.outbox.review.summary": "Se köade utgående åtgärder (mejl, kalenderändringar) och godkänn eller avvisa dem innan de går ut.",
-  "cap.outbox.review.examples": ["Vad väntar på mitt godkännande?", "Godkänn det köade mejlet"]
+  "cap.outbox.review.examples": ["Vad väntar på mitt godkännande?", "Godkänn det köade mejlet"],
+
+  "cap.undo.timeline.title": "Ångra en nyligen utförd åtgärd",
+  "cap.undo.timeline.summary": "Se en tidslinje över senaste åtgärder och ångra de som stödjer det.",
+  "cap.undo.timeline.examples": ["Vad gjorde du precis?", "Ångra min senaste ändring i noten"]
 }
