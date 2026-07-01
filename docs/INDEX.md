@@ -29,6 +29,7 @@ Läs i den ordning som passar din roll.
 8. [OPEN-GAPS.md](OPEN-GAPS.md) — kritisk självgranskning: säkerhet/UX/programmatiska luckor.
    · [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) — kodgranskning av gatewayen: buggar, säkerhetsfynd, 10 förslag.
    · [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) — funktion #1: proaktiv brief & notiser (design + byggspec).
+   · [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) — funktion #2: enhetlig semantisk sökning/RAG med källhänvisning (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -95,5 +96,6 @@ Läs i den ordning som passar din roll.
 | Vad har vi missat (kritiskt)? | OPEN-GAPS |
 | Kod-buggar/säkerhetsfynd & förbättringsförslag? | DEVELOPMENT-PROPOSALS |
 | Proaktiv brief/notiser — design & byggspec? | FEATURE-PROACTIVE-BRIEF |
+| Semantisk sökning/RAG — design & byggspec? | FEATURE-SEMANTIC-SEARCH |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
