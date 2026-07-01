@@ -34,6 +34,10 @@ Läs i den ordning som passar din roll.
    · [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) — funktion #4: stående instruktioner & automationsregler (design + byggspec).
    · [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) — funktion #5: ångra & åtgärdstidslinje (design + byggspec).
    · [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) — funktion #6: upptäckbarhet, guide & förmåge-register (design + byggspec).
+   · [FEATURE-CONNECTOR-FRAMEWORK.md](FEATURE-CONNECTOR-FRAMEWORK.md) — funktion #7: pluggbara backend-adaptrar (design + byggspec).
+   · [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md) — funktion #8: Nextcloud som förstklassig backend (design + byggspec).
+   · [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md) — funktion #9: PM-planeringsmotor & agent (byggspec).
+   · [ROADMAP.md](ROADMAP.md) — implementeringsroadmap: bygg-ordning, faser, beroenden.
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -105,5 +109,9 @@ Läs i den ordning som passar din roll.
 | Automationsregler/stående instruktioner — design & byggspec? | FEATURE-AUTOMATION-RULES |
 | Ångra/åtgärdstidslinje — design & byggspec? | FEATURE-UNDO-TIMELINE |
 | Hur guidas användaren / vad kan man göra? | FEATURE-DISCOVERABILITY |
+| I vilken ordning byggs allt? | ROADMAP |
+| Pluggbara integrationer / backend-adaptrar? | FEATURE-CONNECTOR-FRAMEWORK |
+| Nextcloud som förstklassig backend? | FEATURE-NEXTCLOUD-BACKEND |
+| Avancerad PM-motor (kritisk linje, what-if)? | FEATURE-PM-ENGINE |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
