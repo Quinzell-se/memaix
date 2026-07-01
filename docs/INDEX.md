@@ -28,6 +28,12 @@ Läs i den ordning som passar din roll.
    · [MEMAIX-PLUGIN.md](MEMAIX-PLUGIN.md) — konkret plugin-innehåll + automation (hooks/server/cron).
 8. [OPEN-GAPS.md](OPEN-GAPS.md) — kritisk självgranskning: säkerhet/UX/programmatiska luckor.
    · [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) — kodgranskning av gatewayen: buggar, säkerhetsfynd, 10 förslag.
+   · [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) — funktion #1: proaktiv brief & notiser (design + byggspec).
+   · [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) — funktion #2: enhetlig semantisk sökning/RAG med källhänvisning (design + byggspec).
+   · [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) — funktion #3: utkorg med bekräftelse för utgående åtgärder (design + byggspec).
+   · [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) — funktion #4: stående instruktioner & automationsregler (design + byggspec).
+   · [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) — funktion #5: ångra & åtgärdstidslinje (design + byggspec).
+   · [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) — funktion #6: upptäckbarhet, guide & förmåge-register (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -93,5 +99,11 @@ Läs i den ordning som passar din roll.
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
 | Vad har vi missat (kritiskt)? | OPEN-GAPS |
 | Kod-buggar/säkerhetsfynd & förbättringsförslag? | DEVELOPMENT-PROPOSALS |
+| Proaktiv brief/notiser — design & byggspec? | FEATURE-PROACTIVE-BRIEF |
+| Semantisk sökning/RAG — design & byggspec? | FEATURE-SEMANTIC-SEARCH |
+| Utkorg/bekräftelse för utgående — design & byggspec? | FEATURE-APPROVAL-OUTBOX |
+| Automationsregler/stående instruktioner — design & byggspec? | FEATURE-AUTOMATION-RULES |
+| Ångra/åtgärdstidslinje — design & byggspec? | FEATURE-UNDO-TIMELINE |
+| Hur guidas användaren / vad kan man göra? | FEATURE-DISCOVERABILITY |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |
