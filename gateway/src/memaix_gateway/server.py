@@ -39,6 +39,9 @@ _audit: AuditLog | None = None
 _token_store: "TokenStore | None" = None  # type: ignore[name-defined]
 _outbox_queue: "ActionQueue | None" = None  # type: ignore[name-defined]
 _timeline_store: "ActionsStore | None" = None  # type: ignore[name-defined]
+_search_store: "EmbeddingStore | None" = None  # type: ignore[name-defined]
+_search_embedder = None
+_search_embedder_loaded = False
 
 
 def _get_acl() -> Acl:
@@ -153,6 +156,7 @@ def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
         result = fn(*args, **kwargs)
         _get_audit().log(user, project, tool, True)
         _maybe_record_timeline(user, project, tool, args[3:], kwargs, result)
+        _maybe_index_for_search(user, project, tool, args[3:], kwargs, result)
         return result
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
@@ -175,6 +179,83 @@ def _maybe_record_timeline(user: str, project: str, tool: str, tail: tuple, kwar
         _get_timeline().record(user, project, tool, summary, inverse)
     except Exception:
         logger.warning("timeline recording failed for tool %r", tool, exc_info=True)
+
+
+def _index_memory_write(acl, user, project, tail, kwargs, result):
+    note, content = tail[0], tail[1]
+    return ("memory", note, note, content)
+
+
+def _index_memory_append(acl, user, project, tail, kwargs, result):
+    # Re-read the full note so the index holds current content, not just the
+    # newly appended fragment (replace_chunks would otherwise drop the rest).
+    note = tail[0]
+    try:
+        full_content = t_memory.memory_read(acl, user, project, note)["content"]
+    except Exception:
+        full_content = tail[1]
+    return ("memory", note, note, full_content)
+
+
+def _index_backlog_add(acl, user, project, tail, kwargs, result):
+    if not isinstance(result, dict) or not result.get("id"):
+        return None
+    title, description = tail[0], tail[1]
+    return ("backlog", result["id"], title, f"{title}\n{description or ''}")
+
+
+def _index_files_write(acl, user, project, tail, kwargs, result):
+    path, content = tail[0], tail[1]
+    return ("file", path, path, content)
+
+
+# Search-index coverage is intentionally scoped to the writes named in
+# FEATURE-SEMANTIC-SEARCH.md's acceptance criteria (memory_write/append,
+# backlog_add, files_write) — field-level backlog edits (score/comment/
+# set_status) don't change the searchable text meaningfully enough to
+# justify a full item re-read on every call; reindex via search_reindex.
+SEARCH_INDEX_HANDLERS = {
+    "memory_write": _index_memory_write,
+    "memory_append": _index_memory_append,
+    "backlog_add": _index_backlog_add,
+    "files_write": _index_files_write,
+}
+
+
+def _get_search_store():
+    global _search_store
+    if _search_store is None:
+        from .search.store import EmbeddingStore
+        db_path = Path(os.environ.get("MEMAIX_INDEX_DB", "/tmp/memaix-index.db"))
+        _search_store = EmbeddingStore.for_path(db_path)
+    return _search_store
+
+
+def _get_search_embedder():
+    global _search_embedder, _search_embedder_loaded
+    if not _search_embedder_loaded:
+        from .search.embedder import make_embedder
+        search_cfg = config.load().get("memaix", {}).get("search", {})
+        _search_embedder = make_embedder(search_cfg)
+        _search_embedder_loaded = True
+    return _search_embedder
+
+
+def _maybe_index_for_search(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort search-index update — must never break the tool call itself."""
+    handler = SEARCH_INDEX_HANDLERS.get(tool)
+    if handler is None:
+        return
+    try:
+        acl = _get_acl()
+        built = handler(acl, user, project, tail, kwargs, result)
+        if built is None:
+            return
+        source_type, ref, title, text = built
+        from .search.index import index_upsert
+        index_upsert(_get_search_store(), _get_search_embedder(), project, source_type, ref, title, text)
+    except Exception:
+        logger.warning("search indexing failed for tool %r", tool, exc_info=True)
 
 
 def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kwargs):
@@ -389,6 +470,52 @@ def timeline_undo(action_id: str) -> dict:
     acl = _get_acl()
     from .timeline.undo import undo
     return undo(_get_timeline(), acl, user, action_id)
+
+
+# ------------------------------------------------------------------
+# Search tools — unified retrieval with source citations (FEATURE-SEMANTIC-SEARCH.md)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def search_all(query: str, projects: list[str] | None = None, limit: int = 8) -> dict:
+    """Search memory notes, files and backlog items (plus your mail where
+    readable) across your projects. Returns ranked results with source
+    citations {project, source_type, ref, title, snippet, score} — cite the
+    project/source_type/ref when you answer from these results."""
+    user = _user()
+    acl = _get_acl()
+    cfg = config.load()
+    from .search.query import search_all as _search_all
+    from .tools.email import email_search as _email_search_fn
+    return _search_all(
+        acl, user, cfg, _get_search_store(), _get_search_embedder(),
+        query, projects, limit, _email_search=_email_search_fn,
+    )
+
+
+@mcp.tool()
+def search_reindex(project: str) -> dict:
+    """Rebuild the search index for a project from its current vault content (owner only)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    acl.enforce(user, project, "owner")
+    from .search.index import reindex_project
+    return reindex_project(_get_search_store(), _get_search_embedder(), acl, project)
+
+
+@mcp.tool()
+def search_status() -> dict:
+    """Show whether semantic search is active and how many chunks are
+    indexed per project you can see."""
+    user = _user()
+    acl = _get_acl()
+    visible = acl.visible_projects(user)
+    return {
+        "semantic_enabled": _get_search_embedder() is not None,
+        "chunks_by_project": _get_search_store().count_by_project(visible),
+    }
 
 
 @mcp.tool()

@@ -15,12 +15,18 @@ dependencies = [
     "python-dateutil",
     "cryptography>=42",
     "pyjwt>=2.8",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-anyio",
+]
+# Optional local semantic embedder (FEATURE-SEMANTIC-SEARCH.md). Without it,
+# search_all() degrades gracefully to lexical (FTS5) search only.
+search = [
+    "sentence-transformers>=2.7",
 ]
 
 [build-system]

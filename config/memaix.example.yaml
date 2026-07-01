@@ -36,6 +36,16 @@ auth:
 #   default_mode: "auto"   # 'auto' (default) | 'review' — global fallback when a
 #                          # project doesn't set its own acl.yaml `outbox:` mode.
 
+# search:
+#   embedder: "local"      # 'local' | 'none' (default) — 'none' means search_all()
+#                          # still works via lexical (FTS5) search, just without
+#                          # semantic ranking. 'local' requires the optional
+#                          # sentence-transformers dependency:
+#                          #   pip install "memaix-gateway[search]"
+#   model: "intfloat/multilingual-e5-small"
+#   max_candidates: 500    # cap on vectors compared per query (cosine is done
+#                          # in Python — raise only if your vault is huge)
+
 onboarding:
   enabled: true
   intro: "Hej! Jag behöver lära känna dig för att hjälpa dig bättre."

@@ -244,4 +244,16 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource="vault",
             tags=("ångra", "historik", "undo", "timeline"),
         ),
+        # ------------------------------------------------------------------
+        # search (FEATURE-SEMANTIC-SEARCH.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="search.ask", area="search",
+            title_key="cap.search.ask.title",
+            summary_key="cap.search.ask.summary",
+            tools=("search_all", "search_reindex", "search_status"),
+            example_prompts_key="cap.search.ask.examples",
+            needs_role="reader", needs_resource="vault",
+            tags=("sök", "fråga", "search", "rag"),
+        ),
     )

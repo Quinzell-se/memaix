@@ -53,8 +53,8 @@ identitet krävs för per-user mail/kalender.
 **DoD:** utgående åtgärder kan gate:as och godkännas; skrivande åtgärder kan ångras;
 varje MCP-verktyg är täckt av registret; flera Google-konton kan samexistera.
 
-## Fas 2 — Minne & intelligens 📋
-- 📋 **#2 Semantisk sökning / RAG** — [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md)
+## Fas 2 — Minne & intelligens ✅
+- ✅ **#2 Semantisk sökning / RAG** — [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) (hybrid FTS5+vektor, hooks för memory/backlog/files, live mail-fusion; `local`-embedder är valfri extra — `none` ger FTS5-only)
 
 **Varför nu:** retrieval-lagret återanvänds av brief, PM-agent och upptäckbarhet —
 störst hävstång. Bara `frontmatter` (klart) som beroende.

@@ -15,6 +15,8 @@ from memaix_gateway import server
 from memaix_gateway.acl import AccessDenied, Acl
 from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
+from memaix_gateway.search.embedder import FakeEmbedder
+from memaix_gateway.search.store import EmbeddingStore
 from memaix_gateway.timeline.store import ActionsStore
 
 
@@ -34,6 +36,9 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_audit", AuditLog.for_path(tmp_path / "audit.db"))
     monkeypatch.setattr(server, "_outbox_queue", ActionQueue.for_path(tmp_path / "outbox.db"))
     monkeypatch.setattr(server, "_timeline_store", ActionsStore.for_path(tmp_path / "actions.db"))
+    monkeypatch.setattr(server, "_search_store", EmbeddingStore.for_path(tmp_path / "index.db"))
+    monkeypatch.setattr(server, "_search_embedder", None)
+    monkeypatch.setattr(server, "_search_embedder_loaded", True)  # skip config.load(); no embedder by default
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
     return vault, acl
@@ -260,3 +265,74 @@ def test_queued_outbox_action_is_not_recorded_in_timeline(wired):
         {"pending": True, "action_id": "x"},
     )
     assert server.timeline_list("proj") == []
+
+
+# ------------------------------------------------------------------
+# Search tools (FEATURE-SEMANTIC-SEARCH.md)
+# ------------------------------------------------------------------
+
+
+def test_memory_write_is_indexed_and_searchable(wired):
+    server.memory_write("proj", "notes/invoice.md", "the invoice is overdue")
+    result = server.search_all("invoice")
+    assert result["semantic"] is False  # no embedder configured in this fixture
+    refs = [r["ref"] for r in result["results"]]
+    assert "notes/invoice.md" in refs
+
+
+def test_backlog_add_is_indexed_and_searchable(wired):
+    r = server.backlog_add("proj", "Fix invoice bug", "customers see wrong totals")
+    result = server.search_all("invoice")
+    hits = [x for x in result["results"] if x["source_type"] == "backlog"]
+    assert any(h["ref"] == r["id"] for h in hits)
+
+
+def test_files_write_is_indexed_and_searchable(wired):
+    server.files_write("proj", "/docs/charter.txt", "project charter and scope")
+    result = server.search_all("charter")
+    refs = [r["ref"] for r in result["results"]]
+    assert "/docs/charter.txt" in refs
+
+
+def test_search_all_hides_files_from_reader(wired, monkeypatch):
+    server.files_write("proj", "/secret.txt", "confidential budget numbers")
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    result = server.search_all("confidential")
+    assert result["results"] == []
+
+
+def test_search_reindex_requires_owner(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    with pytest.raises(AccessDenied):
+        server.search_reindex("proj")
+
+
+def test_search_reindex_rebuilds_index(wired):
+    server.memory_write("proj", "notes/a.md", "quarterly roadmap")
+    result = server.search_reindex("proj")
+    assert result["sources"] >= 1
+    assert server.search_all("roadmap")["results"]
+
+
+def test_search_status_reports_embedder_and_counts(wired):
+    server.memory_write("proj", "notes/a.md", "content")
+    status = server.search_status()
+    assert status["semantic_enabled"] is False
+    assert status["chunks_by_project"]["proj"] >= 1
+
+
+def test_failed_write_is_not_indexed(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "bob")  # reader — can't write
+    with pytest.raises(Exception):
+        server.memory_write("proj", "notes/x.md", "hello")
+    monkeypatch.setenv("MEMAIX_USER", "alice")
+    assert server.search_all("hello")["results"] == []
+
+
+def test_indexing_hook_failure_does_not_break_the_write(wired, monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("index db is on fire")
+
+    monkeypatch.setattr(server, "_get_search_store", boom)
+    result = server.memory_write("proj", "notes/x.md", "hello")
+    assert result["path"] == "notes/x.md"  # the actual write still succeeded

@@ -132,5 +132,9 @@
 
   "cap.undo.timeline.title": "Ångra en nyligen utförd åtgärd",
   "cap.undo.timeline.summary": "Se en tidslinje över senaste åtgärder och ångra de som stödjer det.",
-  "cap.undo.timeline.examples": ["Vad gjorde du precis?", "Ångra min senaste ändring i noten"]
+  "cap.undo.timeline.examples": ["Vad gjorde du precis?", "Ångra min senaste ändring i noten"],
+
+  "cap.search.ask.title": "Fråga över allt på en gång",
+  "cap.search.ask.summary": "Sök i minne, filer, backlog och mejl samtidigt — med källhänvisningar du kan lita på.",
+  "cap.search.ask.examples": ["Vad lovade vi kunden om deadline?", "Hitta allt om budgeten"]
 }

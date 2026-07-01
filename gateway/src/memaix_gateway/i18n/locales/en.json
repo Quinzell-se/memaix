@@ -132,5 +132,9 @@
 
   "cap.undo.timeline.title": "Undo a recent action",
   "cap.undo.timeline.summary": "See a timeline of recent actions and undo the ones that support it.",
-  "cap.undo.timeline.examples": ["What did you just do?", "Undo my last note edit"]
+  "cap.undo.timeline.examples": ["What did you just do?", "Undo my last note edit"],
+
+  "cap.search.ask.title": "Ask across everything",
+  "cap.search.ask.summary": "Search memory, files, backlog and mail at once — with source citations you can trust.",
+  "cap.search.ask.examples": ["What did we promise the client about the deadline?", "Find anything about the budget"]
 }
