@@ -18,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import config
 from .acl import Acl
+from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
 from .tools import files as t_files
@@ -152,6 +153,19 @@ def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kw
 
 
 mcp = FastMCP("memaix")
+
+# Populate the capability registry (docs/FEATURE-DISCOVERABILITY.md) once at
+# import time so onboarding/help/board surfaces always reflect the tools
+# actually registered below.
+_register_default_capabilities()
+
+
+def all_tool_names() -> set[str]:
+    """Return every MCP tool name registered on `mcp` — used by the anti-drift
+    capability-coverage test (tests/test_capabilities_coverage.py) so a tool
+    can never be added without being made discoverable or explicitly marked
+    internal."""
+    return {t.name for t in mcp._tool_manager.list_tools()}
 
 
 # ------------------------------------------------------------------

@@ -44,5 +44,85 @@
   "col_approved": "Godkänd",
   "col_in_dev": "Under utveckling",
   "col_done": "Klar",
-  "col_rejected": "Avvisad"
+  "col_rejected": "Avvisad",
+
+  "cap.memory.remember.title": "Kom ihåg saker åt dig",
+  "cap.memory.remember.summary": "Sparar anteckningar, beslut och fakta i projektminnet så inget glöms bort.",
+  "cap.memory.remember.examples": ["Kom ihåg att kunden vill ha veckovisa uppdateringar", "Spara dagens standup-anteckningar"],
+
+  "cap.memory.recall.title": "Minns vad du berättat",
+  "cap.memory.recall.summary": "Sök och läs tillbaka allt som sparats i projektminnet.",
+  "cap.memory.recall.examples": ["Vad bestämde vi om deadline?", "Hitta mina anteckningar från kickoff-mötet"],
+
+  "cap.memory.undo.title": "Ångra en minnesändring",
+  "cap.memory.undo.summary": "Återställ en minnesnot till en tidigare version.",
+  "cap.memory.undo.examples": ["Ångra min senaste ändring i noten"],
+
+  "cap.mail.triage.title": "Hålla koll på inkorgen",
+  "cap.mail.triage.summary": "Lista, sök och läs projektets brevlåda.",
+  "cap.mail.triage.examples": ["Visa olästa mejl från den här veckan", "Hitta mejlet om avtalet"],
+
+  "cap.mail.draft.title": "Förbereda mejlutkast",
+  "cap.mail.draft.summary": "Skriver ett utkast som du kan granska innan det skickas.",
+  "cap.mail.draft.examples": ["Skriv ett svarsutkast till kundens mejl"],
+
+  "cap.mail.send.title": "Skicka mejl åt dig",
+  "cap.mail.send.summary": "Skickar ett mejl efter ditt godkännande (endast ägare).",
+  "cap.mail.send.examples": ["Skicka det godkända utkastet till kunden"],
+
+  "cap.calendar.view.title": "Kolla din kalender",
+  "cap.calendar.view.summary": "Lista händelser och hitta lediga tider.",
+  "cap.calendar.view.examples": ["Vad har jag i kalendern imorgon?", "Hitta en ledig timme den här veckan"],
+
+  "cap.calendar.manage.title": "Hantera kalenderhändelser",
+  "cap.calendar.manage.summary": "Skapa eller ändra kalenderhändelser.",
+  "cap.calendar.manage.examples": ["Boka ett möte med teamet på torsdag"],
+
+  "cap.calendar.connect.title": "Koppla din kalender",
+  "cap.calendar.connect.summary": "Välj hur Memaix får åtkomst till din kalender (Google OAuth, iCal eller ledig/upptagen).",
+  "cap.calendar.connect.examples": ["Koppla min Google-kalender"],
+
+  "cap.files.manage.title": "Jobba med projektfiler",
+  "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
+  "cap.files.manage.examples": ["Lista filerna i avtalsmappen", "Sök filer efter 'budget'"],
+
+  "cap.backlog.capture.title": "Fånga nya idéer",
+  "cap.backlog.capture.summary": "Lägg till ett nytt item i projektets backlog.",
+  "cap.backlog.capture.examples": ["Lägg till ett backlog-item för den nya funktionsönskan"],
+
+  "cap.backlog.review.title": "Granska backloggen",
+  "cap.backlog.review.summary": "Lista och inspektera backlog-items.",
+  "cap.backlog.review.examples": ["Visa backloggen", "Vad ligger fortfarande i triage?"],
+
+  "cap.backlog.score.title": "Poängsätta och diskutera items",
+  "cap.backlog.score.summary": "Lägg till värde-/komplexitet-/riskpoäng eller kommentarer på ett backlog-item.",
+  "cap.backlog.score.examples": ["Poängsätt det här som högt värde, låg komplexitet"],
+
+  "cap.backlog.decide.title": "Besluta status",
+  "cap.backlog.decide.summary": "Flytta ett backlog-item till en ny status (endast ägare).",
+  "cap.backlog.decide.examples": ["Godkänn det här backlog-itemet"],
+
+  "cap.pm.methodology.title": "Sätta projektmetodik",
+  "cap.pm.methodology.summary": "Konfigurera metodik och sprintkapacitet (endast ägare).",
+  "cap.pm.methodology.examples": ["Sätt det här projektet till Scrum med 2-veckors sprintar"],
+
+  "cap.pm.sprint_plan.title": "Planera en sprint",
+  "cap.pm.sprint_plan.summary": "Committa backlog-items i en sprint (endast ägare).",
+  "cap.pm.sprint_plan.examples": ["Planera nästa sprint från den godkända backloggen"],
+
+  "cap.pm.sprint_status.title": "Kolla sprintläget",
+  "cap.pm.sprint_status.summary": "Se burndown och kvarvarande poäng för en sprint.",
+  "cap.pm.sprint_status.examples": ["Hur går den aktuella sprinten?"],
+
+  "cap.pm.raid_add.title": "Logga en risk eller ett problem",
+  "cap.pm.raid_add.summary": "Lägg till en Risk/Antagande/Problem/Beroende-post i projektloggen.",
+  "cap.pm.raid_add.examples": ["Logga en risk om leverantörsförseningen"],
+
+  "cap.pm.raid_view.title": "Granska risker och problem",
+  "cap.pm.raid_view.summary": "Lista öppna RAID-poster.",
+  "cap.pm.raid_view.examples": ["Vilka risker är öppna just nu?"],
+
+  "cap.pm.report.title": "Skapa en statusrapport",
+  "cap.pm.report.summary": "Skapar en statussammanställning från backlog, RAID och anteckningar.",
+  "cap.pm.report.examples": ["Ge mig en statusrapport för det här projektet"]
 }

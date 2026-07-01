@@ -44,5 +44,85 @@
   "col_approved": "Approved",
   "col_in_dev": "In Dev",
   "col_done": "Done",
-  "col_rejected": "Rejected"
+  "col_rejected": "Rejected",
+
+  "cap.memory.remember.title": "Remember things for you",
+  "cap.memory.remember.summary": "Save notes, decisions and facts to project memory so nothing gets lost.",
+  "cap.memory.remember.examples": ["Remember that the client wants weekly updates", "Save today's standup notes"],
+
+  "cap.memory.recall.title": "Recall what you told me",
+  "cap.memory.recall.summary": "Search and read back anything saved in project memory.",
+  "cap.memory.recall.examples": ["What did we decide about the deadline?", "Find my notes about the kickoff meeting"],
+
+  "cap.memory.undo.title": "Undo a memory change",
+  "cap.memory.undo.summary": "Revert a memory note to a previous version.",
+  "cap.memory.undo.examples": ["Undo my last note edit"],
+
+  "cap.mail.triage.title": "Keep track of your inbox",
+  "cap.mail.triage.summary": "List, search and read your project mailbox.",
+  "cap.mail.triage.examples": ["Show me unread mail from this week", "Find the email about the contract"],
+
+  "cap.mail.draft.title": "Prepare email drafts",
+  "cap.mail.draft.summary": "Write a draft for you to review before sending.",
+  "cap.mail.draft.examples": ["Draft a reply to that client email"],
+
+  "cap.mail.send.title": "Send email on your behalf",
+  "cap.mail.send.summary": "Send an email once you approve it (owner only).",
+  "cap.mail.send.examples": ["Send the approved draft to the client"],
+
+  "cap.calendar.view.title": "Check your calendar",
+  "cap.calendar.view.summary": "List events and find free time slots.",
+  "cap.calendar.view.examples": ["What's on my calendar tomorrow?", "Find a free hour this week"],
+
+  "cap.calendar.manage.title": "Manage calendar events",
+  "cap.calendar.manage.summary": "Create or update calendar events.",
+  "cap.calendar.manage.examples": ["Book a meeting with the team on Thursday"],
+
+  "cap.calendar.connect.title": "Connect your calendar",
+  "cap.calendar.connect.summary": "Choose how Memaix accesses your calendar (Google OAuth, iCal, or free/busy).",
+  "cap.calendar.connect.examples": ["Connect my Google calendar"],
+
+  "cap.files.manage.title": "Work with project files",
+  "cap.files.manage.summary": "List, read, search and write files in the project vault.",
+  "cap.files.manage.examples": ["List the files in the contracts folder", "Search files for 'budget'"],
+
+  "cap.backlog.capture.title": "Capture new ideas",
+  "cap.backlog.capture.summary": "Add a new item to the project backlog.",
+  "cap.backlog.capture.examples": ["Add a backlog item for the new feature request"],
+
+  "cap.backlog.review.title": "Review the backlog",
+  "cap.backlog.review.summary": "List and inspect backlog items.",
+  "cap.backlog.review.examples": ["Show me the backlog", "What's still in triage?"],
+
+  "cap.backlog.score.title": "Score and discuss items",
+  "cap.backlog.score.summary": "Add value/complexity/risk scores or comments to a backlog item.",
+  "cap.backlog.score.examples": ["Score this item as high value, low complexity"],
+
+  "cap.backlog.decide.title": "Decide item status",
+  "cap.backlog.decide.summary": "Move a backlog item to a new status (owner only).",
+  "cap.backlog.decide.examples": ["Approve this backlog item"],
+
+  "cap.pm.methodology.title": "Set project methodology",
+  "cap.pm.methodology.summary": "Configure methodology and sprint capacity (owner only).",
+  "cap.pm.methodology.examples": ["Set this project to Scrum with 2-week sprints"],
+
+  "cap.pm.sprint_plan.title": "Plan a sprint",
+  "cap.pm.sprint_plan.summary": "Commit backlog items into a sprint (owner only).",
+  "cap.pm.sprint_plan.examples": ["Plan the next sprint from the approved backlog"],
+
+  "cap.pm.sprint_status.title": "Check sprint progress",
+  "cap.pm.sprint_status.summary": "See burndown and remaining points for a sprint.",
+  "cap.pm.sprint_status.examples": ["How's the current sprint going?"],
+
+  "cap.pm.raid_add.title": "Log a risk or issue",
+  "cap.pm.raid_add.summary": "Add a Risk/Assumption/Issue/Dependency entry to the project log.",
+  "cap.pm.raid_add.examples": ["Log a risk about the vendor delay"],
+
+  "cap.pm.raid_view.title": "Review risks and issues",
+  "cap.pm.raid_view.summary": "List open RAID entries.",
+  "cap.pm.raid_view.examples": ["What risks are open right now?"],
+
+  "cap.pm.report.title": "Generate a status report",
+  "cap.pm.report.summary": "Create a status snapshot from backlog, RAID and notes.",
+  "cap.pm.report.examples": ["Give me a status report for this project"]
 }
