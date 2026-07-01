@@ -8,9 +8,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 from ..acl import Acl
+from .. import frontmatter as fm
 from ..paths import validate_id
 from . import backlog as t_backlog
 from . import memory as t_memory
@@ -31,8 +30,7 @@ def _vault(acl: Acl, project: str) -> Path:
 
 
 def _write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    fm.write_atomic(path, text)
 
 
 def _read(path: Path) -> str | None:
@@ -42,15 +40,11 @@ def _read(path: Path) -> str | None:
 
 
 def _split_fm(text: str) -> tuple[dict, str]:
-    m = re.match(r"^---\n(.*?)\n---\n?(.*)", text, re.DOTALL)
-    if not m:
-        return {}, text or ""
-    return yaml.safe_load(m.group(1)) or {}, m.group(2).strip()
+    return fm.split(text)
 
 
 def _join_fm(meta: dict, body: str) -> str:
-    front = yaml.dump(meta, allow_unicode=True, sort_keys=False).strip()
-    return f"---\n{front}\n---\n{body}\n"
+    return fm.join(meta, body)
 
 
 def _now_iso() -> str:
@@ -88,16 +82,12 @@ def _stamp_backlog_field(vault: Path, item_id: str, **fields) -> bool:
     path = vault / "backlog" / f"{item_id}.md"
     if not path.exists():
         return False
-    text = path.read_text(encoding="utf-8")
-    m = re.match(r"^---\n(.*?)\n---\n?(.*)", text, re.DOTALL)
-    if not m:
+    meta, body = fm.split(path.read_text(encoding="utf-8"))
+    if not meta:
         return False
-    meta: dict = yaml.safe_load(m.group(1)) or {}
-    body = m.group(2).strip()
     meta.update(fields)
     meta["updated_at"] = _now_iso()
-    front = yaml.dump(meta, allow_unicode=True, sort_keys=False).strip()
-    path.write_text(f"---\n{front}\n---\n{body}\n", encoding="utf-8")
+    fm.write_atomic(path, fm.join(meta, body))
     return True
 
 
@@ -119,8 +109,8 @@ def _parse_raid(text: str) -> list[dict]:
             "id": m.group(1), "type": m.group(2), "status": m.group(3),
             "created": "", "owner": "", "severity": "", "summary": "", "mitigation": "",
         }
-        for fm in field_re.finditer(b):
-            e[fm.group(1).lower()] = fm.group(2).strip()
+        for fmatch in field_re.finditer(b):
+            e[fmatch.group(1).lower()] = fmatch.group(2).strip()
         entries.append(e)
     return entries
 
@@ -289,9 +279,7 @@ def pm_plan_sprint(
         if not item_path.exists():
             errors.append(f"{item_id}: not found")
             continue
-        text = item_path.read_text(encoding="utf-8")
-        m = re.match(r"^---\n(.*?)\n---\n?(.*)", text, re.DOTALL)
-        meta = yaml.safe_load(m.group(1)) if m else {}
+        meta, _ = fm.split(item_path.read_text(encoding="utf-8"))
         estimate = meta.get("estimate")
         if estimate is None:
             warnings.append(f"{item_id}: no estimate, counted as 0")

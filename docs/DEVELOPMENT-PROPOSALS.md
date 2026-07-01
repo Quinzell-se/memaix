@@ -18,14 +18,14 @@ kvarstående är arkitektur-/processförslag.
 |---|---------|-----|--------|
 | 1 | Centraliserad sökvägsvalidering | Säkerhet | ✅ åtgärdat |
 | 2 | Aktivera JWT `aud`-verifiering + lås DCR | Säkerhet | ✅ åtgärdat (aud) |
-| 3 | CI som riktigt skyddsnät (kör testerna) | Process | 📋 föreslaget |
+| 3 | CI som riktigt skyddsnät (kör testerna) | Process | ✅ åtgärdat |
 | 4 | Fleranvändar-auth + ACL på board:en | Säkerhet | ✅ authz åtgärdat |
-| 5 | Enhetlig behörighets-/audit-dekorator | Arkitektur | 📋 föreslaget |
-| 6 | Delat tillstånd till backend (Redis/SQLite) | Arkitektur | 📋 föreslaget |
+| 5 | Enhetlig behörighets-/audit-hjälpare | Arkitektur | ✅ åtgärdat |
+| 6 | Delat tillstånd till backend (SQLite) | Arkitektur | ✅ åtgärdat |
 | 7 | Robust OAuth-konto-identitet | Bugg | 📋 föreslaget |
 | 8 | Härda alla externa I/O-anrop | Säkerhet | ✅ IMAP/git åtgärdat |
 | 9 | Strukturerad loggning + observability | Drift | ✅ logger åtgärdat |
-| 10 | Robust datamodell för backlog/PM | Arkitektur | 📋 föreslaget |
+| 10 | Robust datamodell för backlog/PM | Arkitektur | ✅ åtgärdat |
 
 ---
 
@@ -58,8 +58,11 @@ varianterna, precis som DCR-proxyn redan injicerar). Nästa steg: kräv
 testkörningen är en `TODO`. Därför hade två tester tystnat sönder utan att
 någon märkte det.
 
-**Åtgärd.** Kör `pytest` i CI, lägg till `ruff`/`mypy` och en `bandit`-scan.
-Fixa ruttna tester. Utan detta ruttnar allt annat tyst.
+**Åtgärd (gjort).** `checks`-jobbet installerar nu `gateway[dev]` och kör
+`pytest` som hård gate, kompilerar hela paketet (`compileall`) och behåller
+docs-index-checken. `pyjwt` — som importerades av `auth/token.py` men saknades
+i beroendena — är tillagt i `pyproject.toml`. Kvar: `ruff`/`mypy`/`bandit` som
+separata steg.
 
 ## 4. Riktig fleranvändar-auth + ACL på board:en
 
@@ -79,9 +82,12 @@ Hydra-sessionen istället för egen delad-lösenord-cookie.
 verktyg. Det är lätt att glömma ett steg (t.ex. gör `calendar_*` `enforce` i
 två lager, andra i ett).
 
-**Åtgärd.** En dekorator `@tool(need="collaborator")` som gör identitet +
-rate-limit + ACL + audit centralt. Tar bort duplicering och gör steg-glömska
-omöjlig.
+**Åtgärd (gjort).** `server.py` har nu en `_tool_call(tool, project, fn, *tail,
+need=None)`-hjälpare som centralt gör identitet + rate-limit + valfri ACL-enforce
++ audit och anropar `fn(acl, user, project, *tail)`. Alla files/memory/backlog/
+pm/email-verktyg går genom den, vilket tog bort ~3 rader boilerplate per verktyg
+och gör steg-glömska omöjlig. Verktygssignaturerna (och därmed FastMCP-schemana)
+är oförändrade. Nya smoke-tester i `test_server.py` täcker vägen.
 
 ## 6. Flytta delat tillstånd till en backend
 
@@ -89,9 +95,13 @@ omöjlig.
 `TOKEN_MASTER_KEY`-fallbacken är alla process-lokala — de går sönder så fort du
 kör fler än en uvicorn-worker.
 
-**Åtgärd.** Redis (eller SQLite med lås) för rate-limiter och pending states;
-gör `TOKEN_MASTER_KEY` obligatorisk i icke-dev-läge. Då blir gatewayen
-horisontellt skalbar och tål omstart.
+**Åtgärd (gjort).** `SQLiteRateLimiter` (samma gränssnitt som den in-memory-
+baserade) väljs via `MEMAIX_RATELIMIT_BACKEND=sqlite` + `MEMAIX_RATELIMIT_DB`.
+OAuth-pending-states persisteras i SQLite när `MEMAIX_STATE_DB` är satt, så
+callbacken kan hanteras av en annan worker. `TOKEN_MASTER_KEY` är nu obligatorisk
+i HTTP-läge (annars vägrar gatewayen starta) om inte `MEMAIX_ALLOW_EPHEMERAL_KEY=1`
+sätts explicit. Default-beteendet (in-memory) är oförändrat. Nästa steg för riktig
+hög skala: en Redis-backend bakom samma gränssnitt.
 
 ## 7. Robust OAuth-konto-identitet
 
@@ -131,6 +141,8 @@ request, `/metrics`-endpoint, och en check att `config.secret()`-värden och
 `board/store.py`, `pm.py`) med olika felhantering. Skrivningar är inte atomiska,
 och board-PATCH saknar optimistisk låsning.
 
-**Åtgärd.** Gemensam schema-validerad läsare/skrivare (pydantic-modell),
-atomiska skrivningar (temp + `os.replace`), och samma optimistiska låsning på
-board-PATCH som i MCP-verktygen.
+**Åtgärd (gjort).** Ny `frontmatter.py` (`split` / `join` / `write_atomic`)
+används nu av `backlog.py`, `board/store.py` och `pm.py` — en parser att granska
+istället för fyra, och alla skrivningar går via temp-fil + `os.replace` (crash-
+säkra). Kvar: pydantic-schema för items och optimistisk låsning även på
+board-PATCH (MCP-verktygen har den redan).

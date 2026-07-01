@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
+from .. import frontmatter as fm
 from ..paths import validate_id
 
 VALID_STATUSES = frozenset(
@@ -27,10 +25,7 @@ COLUMNS = [
 
 
 def _split_fm(text: str) -> tuple[dict, str]:
-    m = re.match(r"^---\n(.*?)\n---\n?(.*)", text, re.DOTALL)
-    if not m:
-        return {}, text or ""
-    return yaml.safe_load(m.group(1)) or {}, m.group(2).strip()
+    return fm.split(text)
 
 
 def _card_view(meta: dict) -> dict:
@@ -101,8 +96,7 @@ def write_status(vault: Path, item_id: str, new_status: str) -> dict:
     meta["status"] = new_status
     meta["version"] = int(meta.get("version", 1)) + 1
     meta["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    front = yaml.dump(meta, allow_unicode=True, sort_keys=False).strip()
-    path.write_text(f"---\n{front}\n---\n{body}\n", encoding="utf-8")
+    fm.write_atomic(path, fm.join(meta, body))
     card = _card_view(meta)
     card["_old_status"] = old_status
     return card
