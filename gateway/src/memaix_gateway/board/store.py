@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+from ..paths import validate_id
+
 VALID_STATUSES = frozenset(
     {"inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done"}
 )
@@ -69,6 +71,10 @@ def list_backlog(vault: Path) -> list[dict]:
 
 def get_item(vault: Path, item_id: str) -> dict | None:
     """Return full item dict including markdown body, or None if not found."""
+    try:
+        validate_id(item_id, kind="item id")
+    except ValueError:
+        return None
     path = vault / "backlog" / f"{item_id}.md"
     if not path.exists():
         return None
@@ -85,6 +91,7 @@ def write_status(vault: Path, item_id: str, new_status: str) -> dict:
     """Update item status. Raises ValueError on bad status, FileNotFoundError if missing."""
     if new_status not in VALID_STATUSES:
         raise ValueError(f"invalid status: {new_status!r}")
+    validate_id(item_id, kind="item id")
     path = vault / "backlog" / f"{item_id}.md"
     if not path.exists():
         raise FileNotFoundError(f"item not found: {item_id}")

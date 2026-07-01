@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from ..acl import Acl
+from ..acl import Acl, AccessDenied
 from ..i18n import get_translator, locale_from_request
 from ..safety.audit import AuditLog
 from . import store as s
@@ -304,6 +304,14 @@ async def api_item_patch(request: Request) -> JSONResponse:
     acl = _acl()
 
     if project not in _user_projects(user, acl):
+        return _json_403()
+
+    # Moving a card is a status transition — same authority as the MCP tool
+    # backlog_set_status, which requires owner. Readers/collaborators may view
+    # the board but must not mutate item state through it.
+    try:
+        acl.enforce(user, project, "owner")
+    except AccessDenied:
         return _json_403()
 
     vault_str = acl.resource(project, "vault")

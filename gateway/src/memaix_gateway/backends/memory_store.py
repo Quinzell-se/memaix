@@ -13,6 +13,7 @@ TODO(perf): batch async git commits via a queue.Queue + background thread
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import subprocess
 import threading
@@ -213,6 +214,10 @@ class MemoryStore:
 
     def revert(self, commit: str) -> str:
         """Create a new commit that undoes *commit*.  Returns new commit hash."""
+        # Only accept a plain git object hash. This blocks argument injection
+        # (a value like "-x" being parsed as a git flag) and stray refspecs.
+        if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
+            raise ValueError(f"invalid commit hash: {commit!r}")
         with self.write_lock:
             r = self._run(["git", "revert", "--no-edit", commit])
             if r.returncode != 0:

@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from ..acl import Acl
+from ..paths import validate_id
 from . import backlog as t_backlog
 from . import memory as t_memory
 
@@ -261,6 +262,9 @@ def pm_plan_sprint(
     goal: str = "",
 ) -> dict:
     acl.enforce(user_id, project, "owner")
+    validate_id(sprint_id, kind="sprint id")
+    for _iid in item_ids:
+        validate_id(_iid, kind="backlog id")
     vault = _vault(acl, project)
 
     pb_meta, _ = _split_fm(_read(vault / "playbook.md") or "")
@@ -359,6 +363,7 @@ def pm_sprint_status(
     sprint_id: str,
 ) -> dict:
     acl.enforce(user_id, project, "reader")
+    validate_id(sprint_id, kind="sprint id")
     vault = _vault(acl, project)
 
     text = _read(vault / "pm" / "sprints" / f"{sprint_id}.md")

@@ -203,3 +203,36 @@ def test_get_missing_item_raises_file_not_found(acl):
 def test_no_vault_raises_value_error(acl):
     with pytest.raises(ValueError):
         backlog_add(acl, "alice", "novault", "title", "desc")
+
+
+# ------------------------------------------------------------------
+# Path traversal — a malicious id must never escape the backlog dir
+# ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("evil_id", ["../../secret", "../escape", "a/b", "..", "with space", ""])
+def test_backlog_get_rejects_traversal(acl, evil_id):
+    with pytest.raises(ValueError):
+        backlog_get(acl, "bob", "proj", evil_id)
+
+
+@pytest.mark.parametrize("evil_id", ["../../secret", "a/b"])
+def test_backlog_score_rejects_traversal(acl, evil_id):
+    with pytest.raises(ValueError):
+        backlog_score(acl, "carol", "proj", evil_id, expected_version=1, value=3)
+
+
+@pytest.mark.parametrize("evil_id", ["../../secret", "a/b"])
+def test_backlog_set_status_rejects_traversal(acl, evil_id):
+    with pytest.raises(ValueError):
+        backlog_set_status(acl, "alice", "proj", evil_id, "done", expected_version=1)
+
+
+def test_backlog_write_outside_vault_is_blocked(acl, vault, tmp_path):
+    """A traversal id must not read or overwrite a file above the vault."""
+    outside = tmp_path / "secret.md"
+    outside.write_text("---\nid: x\nversion: 1\n---\nTOP SECRET\n")
+    with pytest.raises(ValueError):
+        backlog_get(acl, "alice", "proj", "../../secret")
+    # The outside file is untouched.
+    assert "TOP SECRET" in outside.read_text()

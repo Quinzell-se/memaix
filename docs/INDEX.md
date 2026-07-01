@@ -27,6 +27,7 @@ Läs i den ordning som passar din roll.
 7. [PACKAGING.md](PACKAGING.md) — connector vs skill vs plugin; integrerad paketering.
    · [MEMAIX-PLUGIN.md](MEMAIX-PLUGIN.md) — konkret plugin-innehåll + automation (hooks/server/cron).
 8. [OPEN-GAPS.md](OPEN-GAPS.md) — kritisk självgranskning: säkerhet/UX/programmatiska luckor.
+   · [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) — kodgranskning av gatewayen: buggar, säkerhetsfynd, 10 förslag.
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
@@ -91,5 +92,6 @@ Läs i den ordning som passar din roll.
 | Hur ser jag att en instans är frisk? | OBSERVABILITY, DOCTOR |
 | Vad ändrades efter extern granskning? | REVIEW-RESPONSE |
 | Vad har vi missat (kritiskt)? | OPEN-GAPS |
+| Kod-buggar/säkerhetsfynd & förbättringsförslag? | DEVELOPMENT-PROPOSALS |
 | Juridik, GDPR & ansvar? | LEGAL |
 | Licenser (komponenter + vår kod)? | LICENSING |

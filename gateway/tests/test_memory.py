@@ -134,6 +134,13 @@ def test_revert_rolls_back(store):
     assert len(hist_after) > len(hist)
 
 
+@pytest.mark.parametrize("bad", ["-rf", "--all", "HEAD~1; rm -rf /", "not-a-hash", "", "../etc"])
+def test_revert_rejects_non_hash(store, bad):
+    """revert must only accept a plain git object hash (blocks arg injection)."""
+    with pytest.raises(ValueError):
+        store.revert(bad)
+
+
 # ------------------------------------------------------------------
 # memory_* tool ACL tests
 # ------------------------------------------------------------------

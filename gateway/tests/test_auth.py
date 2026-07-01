@@ -161,7 +161,8 @@ def test_invalid_issuer_returns_none(mock_get_key, mock_decode):
 # ---------------------------------------------------------------------------
 
 
-def test_from_config_builds_correct_jwks_uri():
+def test_from_config_builds_correct_jwks_uri(monkeypatch):
+    monkeypatch.delenv("HYDRA_INTERNAL_URL", raising=False)
     cfg = {
         "memaix": {
             "auth": {
@@ -170,8 +171,24 @@ def test_from_config_builds_correct_jwks_uri():
         }
     }
     verifier = HydraTokenVerifier.from_config(cfg)
-    assert verifier._jwks_uri == "https://auth.example.com/.well-known/jwks.json"
+    # JWKS is fetched over the internal Hydra URL (avoids external DNS from Docker);
+    # the issuer claim still uses the public URL.
+    assert verifier._jwks_uri == "http://hydra:4444/.well-known/jwks.json"
     assert verifier._issuer == "https://auth.example.com"
+
+
+def test_from_config_verifies_audience():
+    """from_config derives aud audiences (both trailing-slash variants)."""
+    cfg = {
+        "memaix": {
+            "auth": {
+                "issuer": "https://mcp.example.com",
+                "resource_server_url": "https://mcp.example.com/",
+            }
+        }
+    }
+    verifier = HydraTokenVerifier.from_config(cfg)
+    assert verifier._audiences == ["https://mcp.example.com", "https://mcp.example.com/"]
 
 
 def test_from_config_missing_issuer_raises():
