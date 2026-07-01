@@ -15,6 +15,10 @@ auth:
 #     client_id: "YOUR_GOOGLE_CLIENT_ID"
 #     client_secret_ref: "env:GOOGLE_CLIENT_SECRET"
 #     scopes:
+#       # openid+email are required so the id_token carries a real email —
+#       # without them every linked Google account collides under one key.
+#       - "openid"
+#       - "email"
 #       - "https://www.googleapis.com/auth/calendar"
 #       - "https://www.googleapis.com/auth/gmail.readonly"
 #       - "https://www.googleapis.com/auth/gmail.compose"
@@ -22,6 +26,8 @@ auth:
 #     client_id: "YOUR_AZURE_APP_CLIENT_ID"
 #     client_secret_ref: "env:MICROSOFT_CLIENT_SECRET"
 #     scopes:
+#       - "openid"
+#       - "email"
 #       - "Calendars.ReadWrite"
 #       - "Mail.Read"
 #       - "offline_access"

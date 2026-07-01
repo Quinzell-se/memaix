@@ -22,7 +22,7 @@ kvarstående är arkitektur-/processförslag.
 | 4 | Fleranvändar-auth + ACL på board:en | Säkerhet | ✅ authz åtgärdat |
 | 5 | Enhetlig behörighets-/audit-hjälpare | Arkitektur | ✅ åtgärdat |
 | 6 | Delat tillstånd till backend (SQLite) | Arkitektur | ✅ åtgärdat |
-| 7 | Robust OAuth-konto-identitet | Bugg | 📋 föreslaget |
+| 7 | Robust OAuth-konto-identitet | Bugg | ✅ åtgärdat |
 | 8 | Härda alla externa I/O-anrop | Säkerhet | ✅ IMAP/git åtgärdat |
 | 9 | Strukturerad loggning + observability | Drift | ✅ logger åtgärdat |
 | 10 | Robust datamodell för backlog/PM | Arkitektur | ✅ åtgärdat |
@@ -110,9 +110,13 @@ token-svar innehåller ingen `email` (den ligger i `id_token`). Alla Google-
 konton lagras därför under nyckeln `linked-google` → ett andra konto skriver
 över det första, och `account_list` visar platshållaren.
 
-**Åtgärd.** Avkoda `id_token` (eller anropa userinfo) för riktig e-post som
-`account_email`, så flera konton kan samexistera. Lägg till tydlig
-`needs_relink`-signal vid refresh-fel.
+**Åtgärd (gjort).** `server._get_account_email` avkodar nu `id_token`s claims
+(utan signaturverifiering — token kom redan direkt från providerns token-endpoint
+över TLS) och använder `email`/`preferred_username`/`upn`, med `sub` som andra
+fallback. Två länkade Google-konton kolliderar inte längre under samma nyckel.
+`memaix.example.yaml` uppdaterad med `openid`+`email`-scopes så providern
+faktiskt skickar med det. `needs_relink`-signalen vid refresh-fel fanns redan
+(`mark_needs_relink`).
 
 ## 8. Härda alla externa I/O-anrop
 

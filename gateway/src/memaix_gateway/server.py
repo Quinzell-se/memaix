@@ -1056,9 +1056,44 @@ def build_http_app():
     return app
 
 
+def _decode_id_token_claims(id_token: str) -> dict:
+    """Decode an OIDC id_token's claims without verifying the signature.
+
+    Safe here: the token was obtained directly from the provider's token
+    endpoint over TLS during the exchange above (never supplied by the
+    client), and is only used to derive a stable account identifier — not to
+    authenticate a request. Returns {} on any decode failure.
+    """
+    import jwt
+    try:
+        return jwt.decode(
+            id_token,
+            options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
+        )
+    except Exception:
+        return {}
+
+
 def _get_account_email(provider: str, token_data: dict) -> str:
-    """Extract account email from token response or return a placeholder."""
-    return token_data.get("email", f"linked-{provider}")
+    """Derive a stable per-account identifier from the token response.
+
+    Google/Microsoft never put the email in the token endpoint body itself —
+    it lives in the id_token's claims (requires an 'openid'+'email' scope).
+    Without this, every linked account for a provider fell back to the same
+    'linked-<provider>' key and a second linked account silently overwrote
+    the first in the token store. Falls back to the token's 'sub' (still
+    unique per account) before the last-resort shared placeholder.
+    """
+    id_token = token_data.get("id_token")
+    if id_token:
+        claims = _decode_id_token_claims(id_token)
+        email = claims.get("email") or claims.get("preferred_username") or claims.get("upn")
+        if email:
+            return email
+        sub = claims.get("sub")
+        if sub:
+            return f"{provider}-{sub}"
+    return f"linked-{provider}"
 
 
 def main() -> None:

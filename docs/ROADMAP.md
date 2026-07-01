@@ -45,7 +45,7 @@ Gör det säkert att låta agenten göra mer — *innan* den blir proaktiv.
 - 📋 **#3 Utkorg** — [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md)
 - 📋 **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md)
 - 📋 **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
-- 📋 **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
+- ✅ **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
 
 **Varför nu:** utkorg + ångra gör autonomin trygg; registret är billigt och allt
 efteråt registrerar sig i det (annars faller coverage-testet); riktig konto-
