@@ -13,6 +13,13 @@ _dav duck type (must implement):
   find_events(start: datetime, end: datetime) -> list[dict]  (same as list_events)
 
 For real CalDAV the adapter is inline below (_RealDavAdapter).
+
+Outbox gate:
+  calendar_create/calendar_update are routed through the approval outbox (see
+  outbox/policy.py) exactly like email_send — when action_mode() resolves to
+  'review', the call is queued and returns {"pending": True, "action_id": ...}
+  instead of touching the calendar. _confirmed=True (used by outbox.execute
+  after approval) always executes immediately.
 """
 
 from __future__ import annotations
@@ -438,6 +445,20 @@ def calendar_find_free(
     return free
 
 
+def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
+    """Return a {"pending": ...} dict if this action should be queued, else None."""
+    from ..outbox.policy import action_mode
+    from ..outbox.preview import render_preview
+    from ..outbox.queue import default_queue
+
+    memaix_cfg = _cfg if _cfg is not None else config.load()
+    if action_mode(memaix_cfg, acl, project, tool, args) != "review":
+        return None
+    queue = _outbox if _outbox is not None else default_queue()
+    action_id = queue.enqueue(user_id, project, tool, args, render_preview(tool, args))
+    return {"pending": True, "action_id": action_id, "note": "Väntar på godkännande i utkorgen"}
+
+
 def calendar_create(
     acl: Acl,
     user_id: str,
@@ -450,9 +471,25 @@ def calendar_create(
     description: str | None = None,
     *,
     _dav=None,
+    _confirmed: bool = False,
+    _outbox=None,
+    _cfg: dict | None = None,
 ) -> dict:
-    """Create an event.  Returns {id, title, start, end}."""
+    """Create an event.  Returns {id, title, start, end}.
+
+    Queued for approval instead of created when the outbox policy resolves
+    to 'review' (see module docstring) — unless _confirmed=True.
+    """
     acl.enforce(user_id, project, "collaborator")
+    if not _confirmed:
+        args = {
+            "title": title, "start": start, "end": end, "attendees": attendees,
+            "location": location, "description": description,
+        }
+        queued = _maybe_queue(acl, user_id, project, "calendar_create", args, _outbox=_outbox, _cfg=_cfg)
+        if queued is not None:
+            return queued
+
     start_dt = _parse_dt(start)
     end_dt = _parse_dt(end)
     import uuid as _uuid
@@ -469,10 +506,23 @@ def calendar_update(
     id: str,
     *,
     _dav=None,
+    _confirmed: bool = False,
+    _outbox=None,
+    _cfg: dict | None = None,
     **fields,
 ) -> dict:
-    """Update event fields.  Returns updated event dict."""
+    """Update event fields.  Returns updated event dict.
+
+    Queued for approval instead of applied when the outbox policy resolves
+    to 'review' (see module docstring) — unless _confirmed=True.
+    """
     acl.enforce(user_id, project, "collaborator")
+    if not _confirmed:
+        args = {"id": id, **fields}
+        queued = _maybe_queue(acl, user_id, project, "calendar_update", args, _outbox=_outbox, _cfg=_cfg)
+        if queued is not None:
+            return queued
+
     dav = _get_dav(acl, project, _dav)
     return dav.update_event(id, **fields)
 

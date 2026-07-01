@@ -13,6 +13,7 @@ import pytest
 
 from memaix_gateway import server
 from memaix_gateway.acl import AccessDenied, Acl
+from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
 
 
@@ -30,6 +31,7 @@ def wired(tmp_path, monkeypatch):
     AuditLog._clear_instances()
     monkeypatch.setattr(server, "_acl", acl)
     monkeypatch.setattr(server, "_audit", AuditLog.for_path(tmp_path / "audit.db"))
+    monkeypatch.setattr(server, "_outbox_queue", ActionQueue.for_path(tmp_path / "outbox.db"))
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
     return vault, acl
@@ -100,3 +102,92 @@ def test_stdio_mode_allows_ephemeral_key(monkeypatch):
     with pytest.warns(RuntimeWarning):
         store = server._get_token_store()
     assert store is not None
+
+
+# ------------------------------------------------------------------
+# Outbox tools (FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+
+def test_outbox_list_and_get_via_server(wired):
+    aid = server._get_outbox().enqueue("alice", "proj", "email_send", {"to": "x@y.com"}, "p")
+    listed = server.outbox_list("proj", "pending")
+    assert any(a["id"] == aid for a in listed)
+    fetched = server.outbox_get(aid)
+    assert fetched["id"] == aid
+
+
+def test_outbox_get_denied_for_invisible_project(wired):
+    aid = server._get_outbox().enqueue("alice", "other-proj", "email_send", {}, "p")
+    with pytest.raises(AccessDenied):
+        server.outbox_get(aid)
+
+
+def test_outbox_approve_executes_and_is_idempotent(wired, monkeypatch):
+    aid = server._get_outbox().enqueue(
+        "alice", "proj", "email_send", {"to": "x@y.com", "subject": "s", "body": "b", "cc": None}, "p"
+    )
+    calls = []
+
+    def fake_email_send(acl, user, project, **kwargs):
+        calls.append(kwargs)
+        return {"status": "sent"}
+
+    monkeypatch.setattr(
+        "memaix_gateway.outbox.execute._default_dispatch",
+        lambda: {"email_send": fake_email_send},
+    )
+
+    result = server.outbox_approve(aid)
+    assert result["ok"] is True
+    assert calls[0]["_confirmed"] is True
+    assert server.outbox_get(aid)["status"] == "executed"
+
+    # Second approval on the same action is a no-op conflict, not a re-send.
+    second = server.outbox_approve(aid)
+    assert second["conflict"] is True
+    assert len(calls) == 1
+
+
+def test_outbox_approve_requires_correct_role(wired):
+    aid = server._get_outbox().enqueue("alice", "proj", "email_send", {"to": "x@y.com"}, "p")
+    import os
+    os.environ["MEMAIX_USER"] = "bob"  # reader — email_send needs owner
+    try:
+        with pytest.raises(AccessDenied):
+            server.outbox_approve(aid)
+    finally:
+        os.environ["MEMAIX_USER"] = "alice"
+    assert server.outbox_get(aid)["status"] == "pending"
+
+
+def test_outbox_reject_never_executes(wired, monkeypatch):
+    aid = server._get_outbox().enqueue("alice", "proj", "email_send", {"to": "x@y.com"}, "p")
+    calls = []
+    monkeypatch.setattr(
+        "memaix_gateway.outbox.execute._default_dispatch",
+        lambda: {"email_send": lambda *a, **kw: calls.append(1) or {"status": "sent"}},
+    )
+    result = server.outbox_reject(aid, reason="not needed")
+    assert result["status"] == "rejected"
+    assert calls == []
+    assert server.outbox_get(aid)["status"] == "rejected"
+
+    # Rejecting again is a conflict, not a second decision.
+    second = server.outbox_reject(aid)
+    assert second["conflict"] is True
+
+
+def test_outbox_approve_records_failure_on_exception(wired, monkeypatch):
+    aid = server._get_outbox().enqueue("alice", "proj", "email_send", {"to": "x@y.com"}, "p")
+
+    def boom(*a, **kw):
+        raise RuntimeError("smtp unreachable")
+
+    monkeypatch.setattr(
+        "memaix_gateway.outbox.execute._default_dispatch",
+        lambda: {"email_send": boom},
+    )
+    result = server.outbox_approve(aid)
+    assert result["ok"] is False
+    assert server.outbox_get(aid)["status"] == "failed"

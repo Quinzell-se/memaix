@@ -233,3 +233,56 @@ def test_email_send_succeeds_for_owner_with_allow_send(acl):
     result = email_send(acl, "alice", "proj", "to@x.com", "Hello", "body", _smtp=smtp)
     assert result["status"] == "sent"
     assert len(smtp.sent) == 1
+
+
+# ------------------------------------------------------------------
+# email_send outbox gate (FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+
+class _FakeOutbox:
+    def __init__(self) -> None:
+        self.enqueued: list = []
+
+    def enqueue(self, user, project, tool, args, preview, ttl_h=72):
+        self.enqueued.append((user, project, tool, args, preview))
+        return "fake-action-id"
+
+
+def test_email_send_review_mode_queues_instead_of_sending(acl):
+    smtp = _MockSmtp()
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    result = email_send(
+        acl, "alice", "proj", "to@x.com", "Hello", "body", _smtp=smtp, _outbox=outbox, _cfg=cfg
+    )
+    assert result == {
+        "pending": True, "action_id": "fake-action-id",
+        "note": "Väntar på godkännande i utkorgen",
+    }
+    assert len(smtp.sent) == 0  # never touched SMTP
+    assert len(outbox.enqueued) == 1
+    assert outbox.enqueued[0][2] == "email_send"
+
+
+def test_email_send_confirmed_bypasses_outbox_even_in_review(acl):
+    smtp = _MockSmtp()
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    result = email_send(
+        acl, "alice", "proj", "to@x.com", "Hello", "body",
+        _smtp=smtp, _outbox=outbox, _cfg=cfg, _confirmed=True,
+    )
+    assert result["status"] == "sent"
+    assert len(smtp.sent) == 1
+    assert outbox.enqueued == []
+
+
+def test_email_send_still_enforces_owner_before_queueing(acl):
+    """The ACL/feature-flag gate runs before the outbox gate — collaborators
+    still can't queue a send they're not allowed to make at all."""
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    with pytest.raises(AccessDenied):
+        email_send(acl, "carol", "proj", "to@x.com", "s", "b", _outbox=outbox, _cfg=cfg)
+    assert outbox.enqueued == []

@@ -124,5 +124,9 @@
 
   "cap.pm.report.title": "Skapa en statusrapport",
   "cap.pm.report.summary": "Skapar en statussammanställning från backlog, RAID och anteckningar.",
-  "cap.pm.report.examples": ["Ge mig en statusrapport för det här projektet"]
+  "cap.pm.report.examples": ["Ge mig en statusrapport för det här projektet"],
+
+  "cap.outbox.review.title": "Granska utkorgen",
+  "cap.outbox.review.summary": "Se köade utgående åtgärder (mejl, kalenderändringar) och godkänn eller avvisa dem innan de går ut.",
+  "cap.outbox.review.examples": ["Vad väntar på mitt godkännande?", "Godkänn det köade mejlet"]
 }

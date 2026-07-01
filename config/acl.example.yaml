@@ -18,6 +18,13 @@ projects:
     # calendar:
     #   type: google
     #   auth: per_user
+    #
+    # Outbox (FEATURE-APPROVAL-OUTBOX.md): gate outgoing/hard-to-undo actions
+    # (email_send, calendar_create/update) behind human approval.
+    #   outbox: review          # 'auto' (default, unchanged behaviour) | 'review'
+    #   allowlist:               # optional — force 'review' for any recipient
+    #     - "@trusted-client.example"    # not on this list, even in 'auto' mode
+    #     - "specific@partner.example"
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true

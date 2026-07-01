@@ -124,5 +124,9 @@
 
   "cap.pm.report.title": "Generate a status report",
   "cap.pm.report.summary": "Create a status snapshot from backlog, RAID and notes.",
-  "cap.pm.report.examples": ["Give me a status report for this project"]
+  "cap.pm.report.examples": ["Give me a status report for this project"],
+
+  "cap.outbox.review.title": "Review the outbox",
+  "cap.outbox.review.summary": "See queued outgoing actions (emails, calendar changes) and approve or reject them before they go out.",
+  "cap.outbox.review.examples": ["What's waiting for my approval?", "Approve the queued email"]
 }

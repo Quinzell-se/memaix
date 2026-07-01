@@ -29,7 +29,7 @@ def _rank(role: str | None) -> int:
 
 AREAS: tuple[str, ...] = (
     "memory", "mail", "calendar", "backlog", "pm",
-    "brief", "search", "automation", "undo",
+    "brief", "search", "automation", "undo", "outbox",
 )
 
 

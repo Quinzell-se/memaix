@@ -96,6 +96,21 @@ def _audit() -> AuditLog:
     return AuditLog.for_path(db_path)
 
 
+def _outbox():
+    from ..outbox.queue import ActionQueue
+    db_path = Path(os.environ.get("MEMAIX_OUTBOX_DB", "/tmp/memaix-outbox.db"))
+    return ActionQueue.for_path(db_path)
+
+
+# Same role map as server.py's _OUTBOX_APPROVAL_ROLE — approving/rejecting a
+# queued action requires the role the underlying tool itself enforces.
+_OUTBOX_APPROVAL_ROLE = {
+    "email_send": "owner",
+    "calendar_create": "collaborator",
+    "calendar_update": "collaborator",
+}
+
+
 # ------------------------------------------------------------------
 # Auth routes
 # ------------------------------------------------------------------
@@ -363,6 +378,85 @@ async def api_activity(request: Request) -> JSONResponse:
 
 
 # ------------------------------------------------------------------
+# Outbox routes (FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+
+async def api_outbox_list(request: Request) -> JSONResponse:
+    user = _require_user(request)
+    if not user:
+        return _json_401()
+
+    acl = _acl()
+    project = request.query_params.get("project", "")
+    status = request.query_params.get("status", "pending")
+    visible = set(_user_projects(user, acl))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+
+    actions = _outbox().list(projects, status or None)
+    return JSONResponse({"actions": actions})
+
+
+async def api_outbox_decide(request: Request) -> JSONResponse:
+    user = _require_user(request)
+    if not user:
+        return _json_401()
+
+    action_id = request.path_params["id"]
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "bad request"}, status_code=400)
+
+    decision = body.get("decision", "")
+    if decision not in ("approve", "reject"):
+        return JSONResponse({"error": "decision must be 'approve' or 'reject'"}, status_code=400)
+
+    acl = _acl()
+    outbox = _outbox()
+    action = outbox.get(action_id)
+    if action is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    if action["project"] not in _user_projects(user, acl):
+        return _json_403()
+
+    need = _OUTBOX_APPROVAL_ROLE.get(action["tool"], "owner")
+    try:
+        acl.enforce(user, action["project"], need)
+    except AccessDenied:
+        return _json_403()
+
+    if decision == "reject":
+        reason = body.get("reason", "")
+        claimed = outbox.claim_for_decision(action_id, "rejected", user, reason)
+        if claimed is None:
+            return JSONResponse({"conflict": True}, status_code=409)
+        try:
+            _audit().log(user, action["project"], f"outbox_reject:{action['tool']}", True, reason)
+        except Exception:
+            pass
+        return JSONResponse({"ok": True, "status": "rejected"})
+
+    claimed = outbox.claim_for_decision(action_id, "approved", user)
+    if claimed is None:
+        return JSONResponse({"conflict": True}, status_code=409)
+
+    from ..outbox.execute import execute_pending
+    result = execute_pending(acl, claimed)
+    ok = "error" not in result
+    outbox.record_result(action_id, "executed" if ok else "failed", result)
+    try:
+        _audit().log(
+            user, action["project"], f"outbox_execute:{action['tool']}", ok,
+            "" if ok else str(result.get("error", "")),
+        )
+    except Exception:
+        pass
+    return JSONResponse({"ok": ok, "result": result})
+
+
+# ------------------------------------------------------------------
 # Route table
 # ------------------------------------------------------------------
 
@@ -376,4 +470,6 @@ board_routes = [
     Route("/board/api/item/{id}",   api_item,         methods=["GET"]),
     Route("/board/api/item/{id}",   api_item_patch,   methods=["PATCH"]),
     Route("/board/api/activity",    api_activity,     methods=["GET"]),
+    Route("/board/api/outbox",      api_outbox_list,  methods=["GET"]),
+    Route("/board/api/outbox/{id}", api_outbox_decide, methods=["POST"]),
 ]

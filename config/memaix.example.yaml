@@ -32,6 +32,10 @@ auth:
 #       - "Mail.Read"
 #       - "offline_access"
 
+# outbox:
+#   default_mode: "auto"   # 'auto' (default) | 'review' — global fallback when a
+#                          # project doesn't set its own acl.yaml `outbox:` mode.
+
 onboarding:
   enabled: true
   intro: "Hej! Jag behöver lära känna dig för att hjälpa dig bättre."

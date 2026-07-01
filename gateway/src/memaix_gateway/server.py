@@ -17,7 +17,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from . import config
-from .acl import Acl
+from .acl import Acl, AccessDenied
 from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 _acl: Acl | None = None
 _audit: AuditLog | None = None
 _token_store: "TokenStore | None" = None  # type: ignore[name-defined]
+_outbox_queue: "ActionQueue | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -91,6 +92,15 @@ def _get_audit() -> AuditLog:
         db_path = Path(os.environ.get("MEMAIX_AUDIT_DB", "/tmp/memaix-audit.db"))
         _audit = AuditLog.for_path(db_path)
     return _audit
+
+
+def _get_outbox():
+    global _outbox_queue
+    if _outbox_queue is None:
+        from .outbox.queue import ActionQueue
+        db_path = Path(os.environ.get("MEMAIX_OUTBOX_DB", "/tmp/memaix-outbox.db"))
+        _outbox_queue = ActionQueue.for_path(db_path)
+    return _outbox_queue
 
 
 def _user() -> str:
@@ -230,6 +240,94 @@ def account_unlink(provider: str, account: str) -> dict:
     user = _user()
     store = _get_token_store()
     return t_account.account_unlink(_get_acl(), user, provider, account, store)
+
+
+# ------------------------------------------------------------------
+# Outbox tools — approve/reject queued outgoing actions (SAFETY: FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+# Approving/rejecting a queued action requires the same role the underlying
+# tool itself enforces — a reader must never be able to approve an email_send.
+_OUTBOX_APPROVAL_ROLE: dict[str, str] = {
+    "email_send": "owner",
+    "calendar_create": "collaborator",
+    "calendar_update": "collaborator",
+}
+
+
+def _outbox_action_or_404(outbox, action_id: str) -> dict:
+    action = outbox.get(action_id)
+    if action is None:
+        raise FileNotFoundError(f"no such outbox action: {action_id!r}")
+    return action
+
+
+@mcp.tool()
+def outbox_list(project: str | None = None, status: str = "pending") -> list:
+    """List queued outgoing actions (default: pending) for your visible projects."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return _get_outbox().list(projects, status or None)
+
+
+@mcp.tool()
+def outbox_get(action_id: str) -> dict:
+    """Fetch a single queued action by id."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    if action["project"] not in acl.visible_projects(user):
+        raise AccessDenied(f"{user} cannot see outbox actions for {action['project']}")
+    return action
+
+
+@mcp.tool()
+def outbox_approve(action_id: str) -> dict:
+    """Approve a queued action and execute it now (requires the tool's own role)."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    need = _OUTBOX_APPROVAL_ROLE.get(action["tool"], "owner")
+    acl.enforce(user, action["project"], need)
+
+    claimed = outbox.claim_for_decision(action_id, "approved", user)
+    if claimed is None:
+        current = outbox.get(action_id) or {}
+        return {"conflict": True, "current_status": current.get("status")}
+
+    from .outbox.execute import execute_pending
+    result = execute_pending(acl, claimed)
+    ok = "error" not in result
+    outbox.record_result(action_id, "executed" if ok else "failed", result)
+    _get_audit().log(
+        user, action["project"], f"outbox_execute:{action['tool']}", ok,
+        "" if ok else str(result.get("error", "")),
+    )
+    return {"ok": ok, "action_id": action_id, "result": result}
+
+
+@mcp.tool()
+def outbox_reject(action_id: str, reason: str = "") -> dict:
+    """Reject a queued action — it is never executed."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    need = _OUTBOX_APPROVAL_ROLE.get(action["tool"], "owner")
+    acl.enforce(user, action["project"], need)
+
+    claimed = outbox.claim_for_decision(action_id, "rejected", user, reason)
+    if claimed is None:
+        current = outbox.get(action_id) or {}
+        return {"conflict": True, "current_status": current.get("status")}
+
+    _get_audit().log(user, action["project"], f"outbox_reject:{action['tool']}", True, reason)
+    return {"ok": True, "action_id": action_id, "status": "rejected"}
 
 
 @mcp.tool()
@@ -638,6 +736,11 @@ def calendar_update(project: str, id: str, **fields) -> dict:
     """Update fields on an existing calendar event."""
     user = _user()
     _rl(user, project)
+    # Reject any leading-underscore key from the client: those names are
+    # reserved for internal control kwargs (_dav/_confirmed/_outbox/_cfg) and
+    # must never be settable by a caller — otherwise a client could pass
+    # _confirmed=True and bypass the outbox gate in tools/calendar.py.
+    fields = {k: v for k, v in fields.items() if not k.startswith("_")}
     try:
         dav = _resolve_calendar_dav(project, user)
         return _audited(

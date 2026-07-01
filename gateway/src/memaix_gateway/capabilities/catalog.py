@@ -220,4 +220,16 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource="vault",
             tags=("pm", "rapport", "report", "status"),
         ),
+        # ------------------------------------------------------------------
+        # outbox (FEATURE-APPROVAL-OUTBOX.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="outbox.review", area="outbox",
+            title_key="cap.outbox.review.title",
+            summary_key="cap.outbox.review.summary",
+            tools=("outbox_list", "outbox_get", "outbox_approve", "outbox_reject"),
+            example_prompts_key="cap.outbox.review.examples",
+            needs_role="reader", needs_resource="vault",
+            tags=("utkorg", "godkänn", "outbox", "approve"),
+        ),
     )
