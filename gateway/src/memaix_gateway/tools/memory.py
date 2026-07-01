@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ..acl import Acl
 from ..backends.memory_store import MemoryStore
+from ..paths import validate_relative_path
 
 
 # ------------------------------------------------------------------
@@ -24,12 +25,7 @@ from ..backends.memory_store import MemoryStore
 
 
 def _validate_note_path(note: str) -> None:
-    if not note or not note.strip():
-        raise ValueError("note path cannot be empty")
-    if note.startswith("/"):
-        raise ValueError(f"note path must be relative: {note!r}")
-    if ".." in Path(note).parts:
-        raise ValueError(f"note path cannot contain '..': {note!r}")
+    validate_relative_path(note, kind="note path")
 
 
 def _get_store(acl: Acl, project: str) -> MemoryStore:

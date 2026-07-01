@@ -10,6 +10,7 @@ Audit: every tool call is logged to the audit DB (MEMAIX_AUDIT_DB or /tmp/...).
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -29,6 +30,8 @@ from .tools import account as t_account
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
+
+logger = logging.getLogger(__name__)
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None

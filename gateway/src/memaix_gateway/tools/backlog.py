@@ -24,6 +24,7 @@ from pathlib import Path
 import yaml
 
 from ..acl import Acl
+from ..paths import validate_id
 
 # ------------------------------------------------------------------
 # Constants
@@ -154,6 +155,7 @@ def backlog_list(
 def backlog_get(acl: Acl, user_id: str, project: str, id: str) -> dict:
     """Fetch a single backlog item.  Raises FileNotFoundError if absent."""
     acl.enforce(user_id, project, "reader")
+    validate_id(id, kind="backlog id")
     bl_dir = _backlog_dir(acl, project)
     path = bl_dir / f"{id}.md"
     if not path.exists():
@@ -173,6 +175,7 @@ def backlog_score(
 ) -> dict:
     """Update scoring fields.  Returns {id, version, commit} or conflict dict."""
     acl.enforce(user_id, project, "collaborator")
+    validate_id(id, kind="backlog id")
     bl_dir = _backlog_dir(acl, project)
     lock = _get_lock(str(bl_dir.parent.resolve()))
     path = bl_dir / f"{id}.md"
@@ -204,6 +207,7 @@ def backlog_comment(
 ) -> dict:
     """Append a comment to an item's body.  Returns {ok, commit} or conflict dict."""
     acl.enforce(user_id, project, "collaborator")
+    validate_id(id, kind="backlog id")
     bl_dir = _backlog_dir(acl, project)
     lock = _get_lock(str(bl_dir.parent.resolve()))
     path = bl_dir / f"{id}.md"
@@ -233,6 +237,7 @@ def backlog_set_status(
 ) -> dict:
     """Transition status.  Requires owner.  Returns {id, status, commit} or conflict dict."""
     acl.enforce(user_id, project, "owner")
+    validate_id(id, kind="backlog id")
     if status not in VALID_STATUSES:
         raise ValueError(
             f"invalid status {status!r}; valid values: {sorted(VALID_STATUSES)}"

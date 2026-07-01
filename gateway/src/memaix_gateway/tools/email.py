@@ -50,6 +50,17 @@ def _make_mailbox(acl: Acl, project: str):
     return mb
 
 
+def _imap_quote(value: str) -> str:
+    """Escape a string for safe use inside an IMAP quoted-string.
+
+    Within IMAP quoted-strings the backslash and double-quote are the only
+    characters that must be escaped; CR/LF are stripped since they can never
+    appear in a quoted-string and would otherwise allow command injection.
+    """
+    value = value.replace("\r", " ").replace("\n", " ")
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _msg_to_dict(m, full: bool = False) -> dict:
     base: dict = {
         "id": str(m.uid),
@@ -120,7 +131,7 @@ def email_search(
     """IMAP BODY search.  Returns [{id, subject, from, date}]."""
     acl.enforce(user_id, project, "collaborator")
     mb = _imap if _imap is not None else _make_mailbox(acl, project)
-    msgs = list(mb.fetch(f'BODY "{query}"', mark_seen=False, limit=limit))
+    msgs = list(mb.fetch(f'BODY "{_imap_quote(query)}"', mark_seen=False, limit=limit))
     return [_msg_to_dict(m) for m in msgs]
 
 

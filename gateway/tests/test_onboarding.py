@@ -76,10 +76,11 @@ def test_check_uses_default_template_if_missing(tmp_path):
 
 
 def test_complete_onboarding_writes_file(tmp_path):
-    """complete_onboarding creates shared/om-{user}.md and returns {'ok': True}."""
+    """complete_onboarding creates shared/om-{user}.md and reports ok + profile path."""
     result = complete_onboarding("alice", tmp_path, "My name is Alice.\n")
-    assert result == {"ok": True}
-    profile_path = tmp_path / "shared" / "om-jimmy.md"
+    assert result["ok"] is True
+    assert result["profile"] == "shared/om-alice.md"
+    profile_path = tmp_path / "shared" / "om-alice.md"
     assert profile_path.exists()
     content = profile_path.read_text()
     assert "My name is Alice." in content
