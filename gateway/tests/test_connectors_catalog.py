@@ -38,6 +38,11 @@ def acl():
                     "user": "acme@example.com",
                     "password_ref": "env:NC_FILES_PW",
                 },
+                "tasks": {
+                    "url": "https://nc.example.com/dav/tasks/acme/",
+                    "user": "acme@example.com",
+                    "password_ref": "env:NC_TASKS_PW",
+                },
             }
         },
     )
@@ -110,6 +115,41 @@ def test_catalog_registers_webdav_for_files(registry, acl, monkeypatch):
         "user": "acme@example.com",
         "password": "f1les",
     }
+
+
+def test_catalog_registers_caldav_for_tasks(registry, acl, monkeypatch):
+    monkeypatch.setenv("NC_TASKS_PW", "t4sks")
+    seen = {}
+
+    class _Sentinel:
+        def __init__(self, url, user, password):
+            seen["url"] = url
+            seen["user"] = user
+            seen["password"] = password
+
+    import memaix_gateway.connectors.adapters.tasks_caldav as t_tasks
+
+    monkeypatch.setattr(t_tasks, "CalDavTasksAdapter", _Sentinel)
+    result = registry.get(acl, _FakeTokenStore(), "acme", "tasks", "alice")
+    assert isinstance(result, _Sentinel)
+    assert seen == {
+        "url": "https://nc.example.com/dav/tasks/acme/",
+        "user": "acme@example.com",
+        "password": "t4sks",
+    }
+
+
+def test_tasks_and_calendar_are_independent_caldav_resources(registry, acl, monkeypatch):
+    """Both default to type 'caldav' but must not collide in the registry —
+    they're different capabilities with different resource configs."""
+    monkeypatch.setenv("NC_TASKS_PW", "t4sks")
+    import memaix_gateway.tools.calendar as t_cal
+    import memaix_gateway.connectors.adapters.tasks_caldav as t_tasks
+
+    monkeypatch.setattr(t_cal, "_RealDavAdapter", lambda acl, project: "calendar-adapter")
+    monkeypatch.setattr(t_tasks, "CalDavTasksAdapter", lambda url, user, password: "tasks-adapter")
+    assert registry.get(acl, _FakeTokenStore(), "acme", "calendar", "alice") == "calendar-adapter"
+    assert registry.get(acl, _FakeTokenStore(), "acme", "tasks", "alice") == "tasks-adapter"
 
 
 def test_files_capability_does_not_read_vault_key(registry):

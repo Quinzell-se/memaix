@@ -90,6 +90,10 @@
   "cap.files.nextcloud.summary": "List, read, search and write files in the project's linked Nextcloud — separate from the project vault, useful when the client's files live there.",
   "cap.files.nextcloud.examples": ["List the files in the shared Nextcloud folder", "Search our Nextcloud files for 'contract'"],
 
+  "cap.tasks.nextcloud.title": "Track tasks in Nextcloud",
+  "cap.tasks.nextcloud.summary": "List, add, and complete tasks in the project's linked Nextcloud task list.",
+  "cap.tasks.nextcloud.examples": ["What's on my Nextcloud task list?", "Add a task to follow up with the client", "Mark the invoice task as done"],
+
   "cap.backlog.capture.title": "Capture new ideas",
   "cap.backlog.capture.summary": "Add a new item to the project backlog.",
   "cap.backlog.capture.examples": ["Add a backlog item for the new feature request"],
@@ -167,6 +171,7 @@
   "cap.lock.link_microsoft": "Link your Microsoft account to unlock this — run account_link('microsoft').",
   "cap.lock.no_contacts": "No address book is configured for this yet — ask an admin to set one up.",
   "cap.lock.no_files": "No Nextcloud files connection is configured for this yet — ask an admin to set one up.",
+  "cap.lock.no_tasks": "No Nextcloud task list is configured for this yet — ask an admin to set one up.",
 
   "cap.contacts.search.title": "Look up a contact",
   "cap.contacts.search.summary": "Search your linked address book (e.g. Nextcloud) by name, email, organization, or phone number.",

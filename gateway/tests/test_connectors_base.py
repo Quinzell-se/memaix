@@ -11,6 +11,7 @@ from memaix_gateway.connectors.base import (
     FilesBackend,
     IssueBackend,
     MailBackend,
+    TasksBackend,
 )
 
 
@@ -83,6 +84,17 @@ class _FakeIssues:
         return {}
 
 
+class _FakeTasks:
+    def list(self):
+        return []
+
+    def add(self, title, due=None, notes=None):
+        return {}
+
+    def complete(self, id):
+        return {}
+
+
 def test_fake_mail_satisfies_mail_backend():
     assert isinstance(_FakeMail(), MailBackend)
 
@@ -105,6 +117,10 @@ def test_fake_chat_satisfies_chat_backend():
 
 def test_fake_issues_satisfies_issue_backend():
     assert isinstance(_FakeIssues(), IssueBackend)
+
+
+def test_fake_tasks_satisfies_tasks_backend():
+    assert isinstance(_FakeTasks(), TasksBackend)
 
 
 def test_incomplete_object_does_not_satisfy_mail_backend():

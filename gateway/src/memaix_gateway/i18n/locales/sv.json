@@ -90,6 +90,10 @@
   "cap.files.nextcloud.summary": "Lista, läs, sök och skriv filer i projektets länkade Nextcloud — separat från projektvaulten, användbart när kundens filer finns där.",
   "cap.files.nextcloud.examples": ["Lista filerna i den delade Nextcloud-mappen", "Sök våra Nextcloud-filer efter 'avtal'"],
 
+  "cap.tasks.nextcloud.title": "Håll koll på uppgifter i Nextcloud",
+  "cap.tasks.nextcloud.summary": "Lista, lägg till och slutför uppgifter i projektets länkade Nextcloud-uppgiftslista.",
+  "cap.tasks.nextcloud.examples": ["Vad finns på min Nextcloud-uppgiftslista?", "Lägg till en uppgift att följa upp med kunden", "Markera fakturauppgiften som klar"],
+
   "cap.backlog.capture.title": "Fånga nya idéer",
   "cap.backlog.capture.summary": "Lägg till ett nytt item i projektets backlog.",
   "cap.backlog.capture.examples": ["Lägg till ett backlog-item för den nya funktionsönskan"],
@@ -167,6 +171,7 @@
   "cap.lock.link_microsoft": "Länka ditt Microsoft-konto för att låsa upp det här — kör account_link('microsoft').",
   "cap.lock.no_contacts": "Ingen adressbok är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_files": "Ingen Nextcloud-filkoppling är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_tasks": "Ingen Nextcloud-uppgiftslista är konfigurerad för det här än — be en admin sätta upp en.",
 
   "cap.contacts.search.title": "Slå upp en kontakt",
   "cap.contacts.search.summary": "Sök i din länkade adressbok (t.ex. Nextcloud) på namn, mejl, organisation eller telefonnummer.",

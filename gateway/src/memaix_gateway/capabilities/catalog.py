@@ -138,6 +138,15 @@ def register_defaults() -> None:
             needs_role="collaborator", needs_resource="files",
             tags=("filer", "nextcloud", "webdav", "files", "documents"),
         ),
+        Capability(
+            key="tasks.nextcloud", area="pm",
+            title_key="cap.tasks.nextcloud.title",
+            summary_key="cap.tasks.nextcloud.summary",
+            tools=("nc_tasks_list", "nc_tasks_add", "nc_tasks_complete"),
+            example_prompts_key="cap.tasks.nextcloud.examples",
+            needs_role="reader", needs_resource="tasks",
+            tags=("uppgifter", "tasks", "nextcloud", "todo", "checklist"),
+        ),
         # ------------------------------------------------------------------
         # backlog
         # ------------------------------------------------------------------

@@ -41,6 +41,15 @@ projects:
     #   url: "https://cloud.example.com/remote.php/dav/files/acme/Projects/acme/"
     #   user: "acme@example.com"
     #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #
+    # Tasks (FEATURE-NEXTCLOUD-BACKEND.md) — enables nc_tasks_list/add/complete.
+    # A CalDAV VTODO collection — typically a *different* URL from `calendar`
+    # (a task list, not an event calendar), even though both default to
+    # 'type: caldav'. 'type' defaults to 'caldav' (the only adapter registered today).
+    # tasks:
+    #   url: "https://cloud.example.com/remote.php/dav/calendars/acme/tasks/"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true

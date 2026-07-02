@@ -4,10 +4,11 @@
 MailBackend and CalendarBackend intentionally mirror the *_imap*/*_dav* duck
 types tools/email.py and tools/calendar.py already accept today (see their
 module docstrings) — the point of the registry is to build one of these
-objects from project config, not to redesign what the tools call. The
-remaining protocols (Files/Contacts/Chat/Issue) describe capabilities no
-adapter implements yet; they exist so future adapters (Nextcloud,
-FEATURE-NEXTCLOUD-BACKEND.md) have a documented shape to target.
+objects from project config, not to redesign what the tools call.
+Files/Contacts/Tasks are implemented by the Nextcloud adapters
+(FEATURE-NEXTCLOUD-BACKEND.md) and wired to the nc_files_*/contacts_*/
+nc_tasks_* MCP tools. Chat/Issue have no adapter yet; they exist so a
+future one (Nextcloud Talk, Deck) has a documented shape to target.
 """
 
 from __future__ import annotations
@@ -42,8 +43,9 @@ class CalendarBackend(Protocol):
 
 @runtime_checkable
 class FilesBackend(Protocol):
-    """Not wired to tools/files.py yet — target shape for a future non-local
-    adapter (webdav/Nextcloud/Drive/OneDrive)."""
+    """Implemented by connectors/adapters/files_webdav.py; consumed by the
+    nc_files_* MCP tools — a source *additional* to the local vault, not a
+    replacement for it (see connectors/registry.py's RESOURCE_KEYS note)."""
 
     def list_files(self, path: str) -> list[dict]: ...
     def read_file(self, path: str) -> str: ...
@@ -53,10 +55,21 @@ class FilesBackend(Protocol):
 
 @runtime_checkable
 class ContactsBackend(Protocol):
-    """No MCP tool consumes this yet — see FEATURE-NEXTCLOUD-BACKEND.md."""
+    """Implemented by connectors/adapters/contacts_carddav.py; consumed by
+    the contacts_search/contacts_get MCP tools."""
 
     def search(self, query: str) -> list[dict]: ...
     def get(self, id: str) -> dict: ...
+
+
+@runtime_checkable
+class TasksBackend(Protocol):
+    """Implemented by connectors/adapters/tasks_caldav.py (CalDAV VTODO);
+    consumed by the nc_tasks_* MCP tools."""
+
+    def list(self) -> list[dict]: ...
+    def add(self, title: str, due: str | None = None, notes: str | None = None) -> dict: ...
+    def complete(self, id: str) -> dict: ...
 
 
 @runtime_checkable

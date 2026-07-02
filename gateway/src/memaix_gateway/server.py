@@ -30,6 +30,7 @@ from .tools import calendar as t_cal
 from .tools import account as t_account
 from .tools import contacts as t_contacts
 from .tools import nc_files as t_nc_files
+from .tools import nc_tasks as t_nc_tasks
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools import pm_engine as t_pm_engine
@@ -336,6 +337,7 @@ _LOCK_REASON_KEYS = {
     "no_vault": "cap.lock.no_vault",
     "no_contacts": "cap.lock.no_contacts",
     "no_files": "cap.lock.no_files",
+    "no_tasks": "cap.lock.no_tasks",
     "link_google": "cap.lock.link_google",
     "link_microsoft": "cap.lock.link_microsoft",
 }
@@ -1561,6 +1563,46 @@ def nc_files_search(project: str, query: str, path: str = "/") -> list:
     backend = _get_nc_files(project, user)
     return _audited(
         user, project, "nc_files_search", t_nc_files.nc_files_search, acl, user, project, query, path, _files=backend,
+    )
+
+
+def _get_nc_tasks(project: str, user: str):
+    from .connectors.registry import default_registry
+
+    return default_registry().get(_get_acl(), _get_token_store(), project, "tasks", user)
+
+
+@mcp.tool()
+def nc_tasks_list(project: str) -> list:
+    """List tasks in the project's linked Nextcloud task list (CalDAV VTODO)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(user, project, "nc_tasks_list", t_nc_tasks.nc_tasks_list, acl, user, project, _tasks=backend)
+
+
+@mcp.tool()
+def nc_tasks_add(project: str, title: str, due: str | None = None, notes: str | None = None) -> dict:
+    """Add a task to the project's linked Nextcloud task list."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(
+        user, project, "nc_tasks_add", t_nc_tasks.nc_tasks_add, acl, user, project, title, due, notes, _tasks=backend,
+    )
+
+
+@mcp.tool()
+def nc_tasks_complete(project: str, id: str) -> dict:
+    """Mark a Nextcloud task complete."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(
+        user, project, "nc_tasks_complete", t_nc_tasks.nc_tasks_complete, acl, user, project, id, _tasks=backend,
     )
 
 

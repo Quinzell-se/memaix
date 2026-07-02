@@ -95,8 +95,13 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   **egen** `files:`-resurs i acl.yaml, inte samma som `vault:` — vaulten är en ren
   sökväg-sträng som hela kodbasen (minne/backlog/PM/onboarding/...) redan förutsätter,
   medan Nextcloud-filer är en *tillkommande* källa nås via nya verktyg, aldrig genom
-  att koppla om `files_*`. **Kvar:** Talk (notiskanal), Tasks (VTODO), Deck-/
-  Notes-synk, dokumentgenerering.
+  att koppla om `files_*`. ✅ **Tasks (CalDAV VTODO)**: `connectors/adapters/
+  tasks_caldav.py` (samma PROPFIND+vobject-mönster som Contacts/Files) +
+  `nc_tasks_list/add/complete`. Egen `tasks:`-resurs, skild från `calendar:`
+  trots att båda defaultar till `type: caldav` — en uppgiftslista och en
+  händelsekalender är oftast olika CalDAV-collections. *Nedprioriterat på
+  användarens begäran:* Talk (notiskanal). **Kvar:** Deck-/Notes-synk,
+  dokumentgenerering.
 - 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
   ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från
