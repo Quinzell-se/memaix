@@ -23,7 +23,7 @@ FEATURE-PM-ENGINE.md's examples, not a fully generic field patcher.
 from __future__ import annotations
 
 import heapq
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .schedule import compute_schedule
@@ -94,7 +94,11 @@ def allocate(store, scenario_id: int, *, project_start: date | None = None) -> d
     if scenario is None:
         raise ValueError(f"no such scenario: {scenario_id}")
     project = scenario["project"]
-    project_start = project_start or date.today()
+    # UTC, not server-local date.today() (OPEN-GAPS.md #16) — the server's
+    # own timezone is an arbitrary deployment detail, unrelated to any
+    # project/user. Callers who need a specific calendar day (e.g. "today"
+    # in a project's or user's own timezone) pass project_start explicitly.
+    project_start = project_start or datetime.now(timezone.utc).date()
 
     tasks = store.list_tasks(project)
     deps = store.list_dependencies(project)

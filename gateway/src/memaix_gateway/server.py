@@ -1441,9 +1441,12 @@ def pm_utilization(
 
 
 @mcp.tool()
-def pm_variance(project: str) -> dict:
-    """Compare the committed baseline plan against logged actuals (hours + schedule slippage)."""
-    return _tool_call("pm_variance", project, t_pm_engine.pm_variance, _pm=_get_pm())
+def pm_variance(project: str, today: str | None = None) -> dict:
+    """Compare the committed baseline plan against logged actuals (hours + schedule slippage).
+
+    `today` (ISO date) overrides the default of "today in UTC" — e.g. to
+    match a project's own calendar day when it differs from UTC."""
+    return _tool_call("pm_variance", project, t_pm_engine.pm_variance, today, _pm=_get_pm())
 
 
 @mcp.tool()

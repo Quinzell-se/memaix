@@ -141,6 +141,18 @@ def test_milestone_add(wired):
     assert m["name"] == "Beta launch"
 
 
+def test_pm_variance_today_override(wired):
+    server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    task = server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+    server.plan_commit("proj", scenario["id"])
+    server.task_log_actual("proj", task["id"], "2025-01-06", percent_complete=50.0)
+
+    result = server.pm_variance("proj", today="2025-01-20")
+    assert result["tasks"][0]["slippage_days"] == 13  # planned finish 2025-01-07 -> 13 days late
+
+
 def test_pm_whatif_diffs_without_touching_base(wired):
     server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
     task = server.task_add("proj", "Task", estimate_hours=8)

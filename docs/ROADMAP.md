@@ -166,7 +166,11 @@ kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
   tidigare accepterade vilket fältnamn/värde som helst (`TaskUpdate` med `extra="forbid"` stänger
   det). Board-PATCH fick också valfri `expected_version`-låsning (samma konvention som
   MCP-verktygen) — se DEVELOPMENT-PROPOSALS #10.
-- **Tidszoner:** normalisera all tid till UTC, visa i användarens tz (OPEN-GAPS #16) — berör brief, kalender, PM.
+- ✅ **Tidszoner:** brief-pipelinen (`notify_prefs.timezone` + `scheduler`/`deliver`/`brief`) var
+  redan korrekt tz-medveten per användare, och kalendern litar transparent på tzinfo från
+  Google/CalDAV. De faktiska bristerna var `pm/allocate.py`/`pm/report.py`'s fallback till
+  server-lokal `date.today()` — bytt till `datetime.now(timezone.utc).date()`; `pm_variance`
+  fick även en `today`-override den saknade helt (OPEN-GAPS #16).
 - ✅ **Idempotens:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad
   körning per (användare, verktyg, idempotency_key) och är inbyggd i `server.py`'s `_audited`-
   knutpunkt — ett upprepat anrop (t.ex. AI:n retrear efter nätverksglapp) returnerar det cachade

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -230,3 +230,31 @@ def test_variance_hours_variance_computed(store):
 
     result = variance(store, "acme", today=date(2025, 1, 20))
     assert result["tasks"][0]["hours_variance"] == 4.0
+
+
+def test_allocate_defaults_project_start_to_utc_today_not_server_local(store):
+    # OPEN-GAPS.md #16 — must never fall back to server-local date.today().
+    scenario = store.add_scenario("acme", "Plan", "baseline")
+    store.add_resource("acme", "Anna")
+    store.add_task("acme", "Task", estimate_hours=8)
+
+    result = allocate(store, scenario["id"])  # no project_start override
+
+    utc_today = datetime.now(timezone.utc).date().isoformat()
+    assert result["schedule"][0]["earliest_start"] == utc_today
+
+
+def test_variance_defaults_today_to_utc_not_server_local(store):
+    scenario = store.add_scenario("acme", "Plan", "baseline")
+    store.add_resource("acme", "Anna")
+    t = store.add_task("acme", "Task", estimate_hours=8)
+    allocate(store, scenario["id"], project_start=START)
+    store.commit_scenario(scenario["id"], "alice")
+    store.add_actual(t["id"], "2025-01-06", hours_logged=8.0, percent_complete=50.0)
+
+    result = variance(store, "acme")  # no today override
+
+    utc_today = datetime.now(timezone.utc).date()
+    planned_finish = date.fromisoformat(result["tasks"][0]["planned_finish"])
+    expected_slippage = (utc_today - planned_finish).days
+    assert result["tasks"][0]["slippage_days"] == expected_slippage

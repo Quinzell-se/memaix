@@ -181,9 +181,12 @@ def pm_utilization(
     return _run_utilization(_pm, scenario_id, period_start, period_end, resource_id=resource_id)
 
 
-def pm_variance(acl: Acl, user_id: str, project: str, *, _pm) -> dict:
+def pm_variance(acl: Acl, user_id: str, project: str, today: str | None = None, *, _pm) -> dict:
     acl.enforce(user_id, project, "reader")
-    return _run_variance(_pm, project)
+    from datetime import date as _date
+
+    as_of = _date.fromisoformat(today) if today else None
+    return _run_variance(_pm, project, today=as_of)
 
 
 def plan_commit(acl: Acl, user_id: str, project: str, scenario_id: int, *, _pm) -> dict:

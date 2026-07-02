@@ -6,7 +6,7 @@ PMStore data; no scheduling logic lives here.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .allocate import daily_capacity
 
@@ -70,7 +70,9 @@ def variance(store, project: str, *, today: date | None = None) -> dict:
     if baseline is None:
         return {"ok": False, "error": "no baseline scenario yet — run allocate() then plan_commit() first"}
 
-    today = today or date.today()
+    # UTC, not server-local date.today() (OPEN-GAPS.md #16) — see the same
+    # rationale in pm/allocate.py's project_start default.
+    today = today or datetime.now(timezone.utc).date()
     schedule_rows = store.list_schedule(baseline["id"])
     tasks_by_id = {t["id"]: t for t in store.list_tasks(project)}
 

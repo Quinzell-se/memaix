@@ -120,9 +120,20 @@ korrekt**. Ingen kodtest-strategi specad.
 Git/markdown är portabelt, men ingen **ett-kommando-export** av all en kunds/persons data i öppna format.
 - **Åtgärd:** `memaix export` (vaults + struktur i öppna format); GDPR-portabilitet.
 
-### 16. Tidszoner — pervasivt, inte bara PM
+### 16. ✅ Tidszoner — pervasivt, inte bara PM
 "Morgon"-brief i *vems* tidszon? Kalender över TZ? Vi flaggade det för PM men det genomsyrar allt.
 - **Åtgärd:** TZ per användare; all tid normaliserad; explicit i brief/schema.
+- **Status:** brief-pipelinen hade redan detta — `notify_prefs.timezone` per användare, och
+  `scheduler.next_brief_epoch`/`deliver._in_quiet_hours`/`brief.build` konverterar konsekvent via
+  `ZoneInfo(prefs["timezone"])`. Kalendern är transparent tz-medveten (litar på tzinfo från
+  Google/CalDAV/vobject). De två verkliga bristerna var `pm/allocate.py` (`project_start`) och
+  `pm/report.py` (`variance`'s `today`), som föll tillbaka på server-lokal `date.today()` — en
+  odefinierad, container-beroende tidszon som inte har med varken användaren eller UTC att göra.
+  Båda bytta till `datetime.now(timezone.utc).date()` som ett väldefinierat, dokumenterat
+  default; `pm_variance`-verktyget fick även en explicit `today`-override (saknades helt förut,
+  till skillnad från `pm_allocate`/`pm_whatif`'s `project_start`). Frågan om PM:s "idag" borde
+  följa projektets/användarens egen lokala kalenderdag istället för UTC är en separat
+  produktbeslutsfråga, inte en bugg — lämnad öppen, inte gissad.
 
 ### 17. Webhooks / händelse-system
 Inget sätt för Memaix att *notifiera* andra system vid ändring, eller ta emot inkommande (formulär →
