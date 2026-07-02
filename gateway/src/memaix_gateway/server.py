@@ -28,6 +28,7 @@ from .tools import backlog as t_backlog
 from .tools import email as t_email
 from .tools import calendar as t_cal
 from .tools import account as t_account
+from .tools import contacts as t_contacts
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
@@ -311,6 +312,7 @@ _LOCK_REASON_KEYS = {
     "no_mailbox": "cap.lock.no_mailbox",
     "no_calendar": "cap.lock.no_calendar",
     "no_vault": "cap.lock.no_vault",
+    "no_contacts": "cap.lock.no_contacts",
     "link_google": "cap.lock.link_google",
     "link_microsoft": "cap.lock.link_microsoft",
 }
@@ -1317,6 +1319,40 @@ def calendar_status(project: str) -> dict:
         "details": details,
         "available_modes": ["oauth", "ical_secret", "free_busy"],
     }
+
+
+# ------------------------------------------------------------------
+# Contacts tools (FEATURE-NEXTCLOUD-BACKEND.md §5 — connector framework)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def contacts_search(project: str, query: str) -> list:
+    """Search the project's linked address book (e.g. Nextcloud CardDAV) by
+    name, email, org, or phone substring. Returns [{id, name, email, org, phone}]."""
+    from .connectors.registry import default_registry
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "contacts", user)
+    return _audited(
+        user, project, "contacts_search", t_contacts.contacts_search, acl, user, project, query, _contacts=backend,
+    )
+
+
+@mcp.tool()
+def contacts_get(project: str, id: str) -> dict:
+    """Fetch one contact by id from the project's linked address book."""
+    from .connectors.registry import default_registry
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "contacts", user)
+    return _audited(
+        user, project, "contacts_get", t_contacts.contacts_get, acl, user, project, id, _contacts=backend,
+    )
 
 
 # ------------------------------------------------------------------

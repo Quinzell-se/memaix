@@ -156,5 +156,10 @@
   "cap.lock.no_calendar": "Ingen kalender är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_vault": "Inget projektvalv är konfigurerat för det här än — be en admin sätta upp ett.",
   "cap.lock.link_google": "Länka ditt Google-konto för att låsa upp det här — kör account_link('google').",
-  "cap.lock.link_microsoft": "Länka ditt Microsoft-konto för att låsa upp det här — kör account_link('microsoft')."
+  "cap.lock.link_microsoft": "Länka ditt Microsoft-konto för att låsa upp det här — kör account_link('microsoft').",
+  "cap.lock.no_contacts": "Ingen adressbok är konfigurerad för det här än — be en admin sätta upp en.",
+
+  "cap.contacts.search.title": "Slå upp en kontakt",
+  "cap.contacts.search.summary": "Sök i din länkade adressbok (t.ex. Nextcloud) på namn, mejl, organisation eller telefonnummer.",
+  "cap.contacts.search.examples": ["Vem är anna@acme.com?", "Hitta telefonnumret till Erik på Acme"]
 }

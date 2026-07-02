@@ -28,6 +28,11 @@ def acl():
                 "vault": "/srv/vaults/acme",
                 "mailbox": {"host": "imap.example.com", "user": "acme@example.com", "password_ref": "env:PW"},
                 "calendar": {"url": "https://caldav.example.com/acme/", "user": "acme@example.com"},
+                "contacts": {
+                    "url": "https://nc.example.com/dav/contacts/",
+                    "user": "acme@example.com",
+                    "password_ref": "env:NC_PW",
+                },
             }
         },
     )
@@ -56,6 +61,28 @@ def test_catalog_registers_caldav_for_calendar(registry, acl, monkeypatch):
     monkeypatch.setattr(t_cal, "_RealDavAdapter", lambda acl, project: sentinel)
     result = registry.get(acl, _FakeTokenStore(), "acme", "calendar", "alice")
     assert result is sentinel
+
+
+def test_catalog_registers_carddav_for_contacts(registry, acl, monkeypatch):
+    monkeypatch.setenv("NC_PW", "s3cret")
+    seen = {}
+
+    class _Sentinel:
+        def __init__(self, url, user, password):
+            seen["url"] = url
+            seen["user"] = user
+            seen["password"] = password
+
+    import memaix_gateway.connectors.adapters.contacts_carddav as t_contacts
+
+    monkeypatch.setattr(t_contacts, "CardDavContactsAdapter", _Sentinel)
+    result = registry.get(acl, _FakeTokenStore(), "acme", "contacts", "alice")
+    assert isinstance(result, _Sentinel)
+    assert seen == {
+        "url": "https://nc.example.com/dav/contacts/",
+        "user": "acme@example.com",
+        "password": "s3cret",
+    }
 
 
 def test_default_registry_is_a_lazy_singleton():

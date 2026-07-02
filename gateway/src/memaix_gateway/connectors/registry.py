@@ -23,6 +23,7 @@ DEFAULT_TYPES: dict[str, str] = {
     "mail": "imap",
     "calendar": "caldav",
     "files": "local",
+    "contacts": "carddav",
 }
 
 # Capability name -> the acl.yaml resource key it actually reads today.

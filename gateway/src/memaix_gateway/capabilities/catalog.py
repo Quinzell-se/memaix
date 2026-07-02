@@ -294,4 +294,16 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource=None,
             tags=("automation", "instruktioner", "standing", "instructions"),
         ),
+        # ------------------------------------------------------------------
+        # contacts (FEATURE-NEXTCLOUD-BACKEND.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="contacts.search", area="contacts",
+            title_key="cap.contacts.search.title",
+            summary_key="cap.contacts.search.summary",
+            tools=("contacts_search", "contacts_get"),
+            example_prompts_key="cap.contacts.search.examples",
+            needs_role="reader", needs_resource="contacts",
+            tags=("kontakt", "contact", "adressbok", "nextcloud"),
+        ),
     )

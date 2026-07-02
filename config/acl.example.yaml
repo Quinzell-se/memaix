@@ -25,6 +25,13 @@ projects:
     #   allowlist:               # optional — force 'review' for any recipient
     #     - "@trusted-client.example"    # not on this list, even in 'auto' mode
     #     - "specific@partner.example"
+    #
+    # Contacts (FEATURE-NEXTCLOUD-BACKEND.md) — enables contacts_search/contacts_get.
+    # 'type' defaults to 'carddav' (the only adapter registered today).
+    # contacts:
+    #   url: "https://cloud.example.com/remote.php/dav/addressbooks/users/acme/contacts/"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true

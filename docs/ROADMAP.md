@@ -84,8 +84,13 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   har flera fungerande, testade auth-grenar (OAuth-refresh/iCal/FreeBusy/
   statisk CalDAV) som förtjänar en egen fokuserad migrering; samt en första
   ny extern adapter (Microsoft Graph) som bevis på pluggbarhet.
-- 📋 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
-  *(beror på connector-ramverket)*
+- 🔨 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
+  *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**: `connectors/adapters/contacts_carddav.py`
+  + `contacts_search`/`contacts_get`-verktyg, registrerat i förmåge-registret. Vald
+  som första skiva eftersom den är ny funktionalitet (inget existerande beteende att
+  riskera), till skillnad från Files/WebDAV som skulle ersätta lokal-valvet i
+  `files_*`. **Kvar:** Files (WebDAV) + indexeringshook, Talk (notiskanal), Tasks
+  (VTODO), Deck-/Notes-synk, dokumentgenerering.
 - 📋 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))*
 

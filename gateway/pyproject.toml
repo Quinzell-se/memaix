@@ -11,6 +11,7 @@ dependencies = [
     "pyyaml",
     "imap-tools",
     "caldav",
+    "vobject",
     "requests",
     "python-dateutil",
     "cryptography>=42",
