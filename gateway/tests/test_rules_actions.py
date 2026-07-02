@@ -113,3 +113,23 @@ def test_notify_action_one_broken_channel_does_not_block_others():
     assert result["ok"] is False
     assert len(result["errors"]) == 1
     assert sent == [1]
+
+
+def test_resolve_params_strips_underscore_control_keys():
+    # A rule must not be able to smuggle _confirmed=True (or any _-prefixed
+    # control kwarg) through to the tool and skip the outbox review gate.
+    calls = []
+
+    def fake_email_send(acl, user, project, **kwargs):
+        calls.append(kwargs)
+        return {"ok": True}
+
+    action = {
+        "type": "email_send",
+        "params": {"project": "proj", "to": "x@y.com", "_confirmed": True, "_outbox": "spoof"},
+    }
+    run_action(_acl(), "alice", action, {}, tools={"email_send": fake_email_send})
+    assert calls, "email_send should have been called"
+    assert "_confirmed" not in calls[0]
+    assert "_outbox" not in calls[0]
+    assert calls[0]["to"] == "x@y.com"

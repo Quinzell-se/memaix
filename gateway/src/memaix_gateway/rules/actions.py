@@ -13,15 +13,40 @@ from typing import Callable
 
 
 def _resolve_params(params: dict, payload: dict) -> dict:
-    """Map '<field>_from' entries to payload[value]; everything else is literal."""
+    """Map '<field>_from' entries to payload[value]; everything else is literal.
+
+    Leading-underscore keys are dropped: those names are reserved for internal
+    control kwargs (_confirmed/_outbox/_cfg/_smtp/...), and a rule must never be
+    able to set e.g. `_confirmed: true` to skip the outbox review gate — the
+    same guard server.py applies to the direct MCP calendar_update path.
+    """
     payload = payload or {}
     resolved: dict = {}
     for key, value in (params or {}).items():
+        if key.startswith("_"):
+            continue
         if key.endswith("_from"):
             resolved[key[: -len("_from")]] = payload.get(value, "")
         else:
             resolved[key] = value
     return resolved
+
+
+def _audit_action(user: str, project, action_type: str, result: dict) -> None:
+    """Best-effort audit of a rule-triggered action — rule actions call the
+    tool functions directly (not through server.py's _audited choke point),
+    so without this the automation egress path (notify especially) would be
+    invisible in the audit log. Must never break the action itself."""
+    try:
+        import os
+        from pathlib import Path
+
+        from ..safety.audit import AuditLog
+
+        audit = AuditLog.for_path(Path(os.environ.get("MEMAIX_AUDIT_DB", "/tmp/memaix-audit.db")))
+        audit.log(user, project or "-", f"rule_action:{action_type}", bool(result.get("ok")), result.get("error", ""))
+    except Exception:
+        pass
 
 
 def _default_action_dispatch() -> dict[str, Callable]:
@@ -79,7 +104,9 @@ def run_action(
         return {"ok": True, "dry_run": True, "type": action_type, "project": project, "params": params}
 
     if action_type == "notify":
-        return _run_notify(acl, user, params, tools=tools)
+        result = _run_notify(acl, user, params, tools=tools)
+        _audit_action(user, project, action_type, result)
+        return result
 
     if not project:
         return {"ok": False, "error": "action params must include 'project'"}
@@ -90,7 +117,8 @@ def run_action(
         return {"ok": False, "error": f"unknown action type: {action_type!r}"}
 
     try:
-        result = fn(acl, user, project, **params)
-        return {"ok": True, "result": result}
+        result = {"ok": True, "result": fn(acl, user, project, **params)}
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": str(exc)}
+        result = {"ok": False, "error": str(exc)}
+    _audit_action(user, project, action_type, result)
+    return result

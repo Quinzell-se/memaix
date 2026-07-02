@@ -161,6 +161,9 @@ class _ICalAdapter:
         import requests
         import vobject
 
+        from ..safety.net import validate_external_url
+
+        validate_external_url(self._url)  # authoritative SSRF check before fetching the secret iCal URL
         r = requests.get(self._url, timeout=10)
         r.raise_for_status()
         cal = vobject.readOne(r.text)

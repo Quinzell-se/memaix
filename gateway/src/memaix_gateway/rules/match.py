@@ -8,6 +8,7 @@ source (mail poller, webhook, scheduler).
 
 from __future__ import annotations
 
+import hmac
 import re
 
 
@@ -39,7 +40,13 @@ def trigger_matches(trigger: dict, event: dict) -> bool:
         return True
 
     if ttype == "webhook":
-        return bool(trigger.get("token")) and trigger["token"] == payload.get("token")
+        expected = trigger.get("token")
+        provided = payload.get("token")
+        # Constant-time compare — the token is the shared secret authenticating
+        # the caller; a plain == leaks it byte-by-byte via timing.
+        if not expected or not isinstance(provided, str):
+            return False
+        return hmac.compare_digest(str(expected), provided)
 
     if ttype == "schedule":
         # Time-window filtering happens before the event reaches evaluate();

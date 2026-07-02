@@ -116,6 +116,26 @@ def test_stdio_mode_allows_ephemeral_key(monkeypatch):
 
 
 # ------------------------------------------------------------------
+# Identity fail-closed in HTTP mode
+# ------------------------------------------------------------------
+
+
+def test_user_fails_closed_in_http_mode_without_token(monkeypatch):
+    # HTTP mode with no verified OAuth subject in context must deny — never
+    # silently fall through to the MEMAIX_USER env identity.
+    monkeypatch.setenv("MEMAIX_TRANSPORT", "http")
+    monkeypatch.setenv("MEMAIX_USER", "alice")  # present, but must be ignored in HTTP mode
+    with pytest.raises(RuntimeError, match="HTTP mode"):
+        server._user()
+
+
+def test_user_uses_env_in_stdio_mode(monkeypatch):
+    monkeypatch.delenv("MEMAIX_TRANSPORT", raising=False)
+    monkeypatch.setenv("MEMAIX_USER", "alice")
+    assert server._user() == "alice"
+
+
+# ------------------------------------------------------------------
 # Outbox tools (FEATURE-APPROVAL-OUTBOX.md)
 # ------------------------------------------------------------------
 

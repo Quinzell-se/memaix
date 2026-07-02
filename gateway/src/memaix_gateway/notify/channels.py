@@ -71,6 +71,8 @@ class WebhookChannel:
         if http is None:
             import requests
             http = requests
+            from ..safety.net import validate_external_url
+            validate_external_url(self._url)  # authoritative SSRF check before the real request
         payload = (
             {"text": f"*{subject}*\n{text}"} if self._fmt == "slack"
             else {"subject": subject, "text": text, "markdown": markdown}
@@ -89,10 +91,12 @@ class NtfyChannel:
 
     def send(self, subject: str, markdown: str, text: str) -> None:
         http = self._http
+        url = f"{self._server}/{self._topic}"
         if http is None:
             import requests
             http = requests
-        url = f"{self._server}/{self._topic}"
+            from ..safety.net import validate_external_url
+            validate_external_url(url)  # authoritative SSRF check before the real request
         resp = http.post(url, data=text.encode("utf-8"), headers={"Title": subject}, timeout=10)
         raise_for_status = getattr(resp, "raise_for_status", None)
         if raise_for_status:

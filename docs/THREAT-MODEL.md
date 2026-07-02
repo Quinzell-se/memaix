@@ -36,7 +36,15 @@ Den allvarligaste luckan (OPEN-GAPS #1–2). En assistent som **läser mejl/file
 
 ## Acceptanskriterier
 - [ ] Backend-innehåll levereras märkt som otrodd data; systemprompt förbjuder att lyda det.
+      *(Klient-promptfråga — gatewayen kan inte upprätthålla detta; den levererar innehållet som data.)*
 - [ ] Skriv-/utgående åtgärd triggad av läst innehåll kräver mänsklig bekräftelse.
+      *(Upprätthålls när projektet kör `outbox: review`; default är `auto` — se SECURITY.md.)*
 - [ ] Inget läs-verktyg kan auto-kedja till ett utgående verktyg utan godkännande.
+      *(Delvis: regel-egress är nu owner-gatead + auditad och kan inte kringgå utkorgen med
+      `_confirmed`; men i `auto`-läge körs utgående regelåtgärder ändå direkt — sätt `review`.)*
 - [ ] Utgående mejl/inbjudan till okänd mottagare kräver bekräftelse (allowlist).
+      *(Upprätthålls när en `allowlist` är satt på projektet.)*
 - [ ] Injektions-testfall ingår i eval-/testsviten (TESTING.md).
+
+> **Säkerhetsgranskning 2026-07:** flera konkreta luckor kring egress, webhook-auth, board-auth och
+> SSRF åtgärdades — se avsnittet "Åtgärdat i säkerhetsgranskning" i [SECURITY.md](SECURITY.md).

@@ -31,6 +31,12 @@ jobs:
       - name: Säkerhetsanalys (bandit)
         working-directory: gateway
         run: python -m bandit -q -r src/memaix_gateway -c pyproject.toml
+      - name: Beroende-sårbarheter (pip-audit)
+        working-directory: gateway
+        # Scans installed deps against the PyPI advisory DB (OPEN-GAPS #5).
+        run: |
+          pip install pip-audit
+          python -m pip_audit --strict --desc
 
   sbom:
     runs-on: ubuntu-latest

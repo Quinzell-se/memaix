@@ -39,15 +39,52 @@ _COOKIE_NAME = "memaix_board"
 _COOKIE_TTL_DAYS = 1
 
 
+_DEFAULT_SECRET = "dev-secret-change-me"  # nosec B105 -- sentinel we REFUSE in HTTP mode, not a credential
+
+
+class BoardDisabled(Exception):
+    """Board auth is misconfigured (default signing secret in HTTP mode) —
+    fail closed by disabling the board rather than serving forgeable cookies."""
+
+
+def _http_mode() -> bool:
+    import sys
+    return os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
+
+
 def _secret() -> bytes:
-    raw = os.environ.get("HYDRA_SYSTEM_SECRET", "dev-secret-change-me")
+    raw = os.environ.get("HYDRA_SYSTEM_SECRET", _DEFAULT_SECRET)
+    if raw == _DEFAULT_SECRET and _http_mode() and os.environ.get("MEMAIX_ALLOW_DEV_SECRET", "").lower() not in ("1", "true", "yes"):
+        # In HTTP (served) mode the cookie-signing key MUST be a real secret;
+        # the built-in default is public, so anyone could forge a session
+        # cookie for any allowed user. Refuse rather than serve forgeable
+        # auth. Set HYDRA_SYSTEM_SECRET (or MEMAIX_ALLOW_DEV_SECRET=1 for
+        # local dev over http) to enable the board.
+        raise BoardDisabled(
+            "HYDRA_SYSTEM_SECRET is unset/default in HTTP mode — board disabled to avoid "
+            "forgeable session cookies. Set a real HYDRA_SYSTEM_SECRET."
+        )
     return raw.encode()[:32].ljust(32, b"0")
 
 
-def _verify_password(provided: str) -> bool:
-    if not _PASSWORD_HASH or ":" not in _PASSWORD_HASH:
+def _password_hash_for(user: str) -> str | None:
+    """Per-user password hash (MEMAIX_LOGIN_PASSWORD_HASH_<USER>), falling back
+    to the shared MEMAIX_LOGIN_PASSWORD_HASH ONLY when exactly one user is
+    allowed — so a shared password can never authenticate as a *different*
+    user in a multi-user board."""
+    per_user = os.environ.get(f"MEMAIX_LOGIN_PASSWORD_HASH_{user.upper()}")
+    if per_user:
+        return per_user
+    if len(_ALLOWED_USERS) == 1:
+        return _PASSWORD_HASH or None
+    return None
+
+
+def _verify_password(user: str, provided: str) -> bool:
+    password_hash = _password_hash_for(user)
+    if not password_hash or ":" not in password_hash:
         return False
-    salt_hex, key_hex = _PASSWORD_HASH.split(":", 1)
+    salt_hex, key_hex = password_hash.split(":", 1)
     salt = bytes.fromhex(salt_hex)
     derived = hashlib.pbkdf2_hmac("sha256", provided.encode(), salt, 200_000)
     return hmac.compare_digest(derived.hex(), key_hex)
@@ -72,7 +109,11 @@ def _check_cookie(request: Request) -> str | None:
     today = int(time.time()) // 86400
     if abs(today - day) > _COOKIE_TTL_DAYS:
         return None
-    expected = hmac.new(_secret(), f"{user}:{day}".encode(), "sha256").hexdigest()[:32]
+    try:
+        secret = _secret()
+    except BoardDisabled:
+        return None  # fail closed — no valid session when the board is disabled
+    expected = hmac.new(secret, f"{user}:{day}".encode(), "sha256").hexdigest()[:32]
     if not hmac.compare_digest(sig, expected):
         return None
     if user not in _ALLOWED_USERS:
@@ -150,12 +191,16 @@ async def board_login(request: Request) -> JSONResponse:
     username = body.get("username", "").strip()
     password = body.get("password", "")
 
-    if username not in _ALLOWED_USERS or not _verify_password(password):
+    if username not in _ALLOWED_USERS or not _verify_password(username, password):
         return JSONResponse({"error": "invalid credentials"}, status_code=401)
 
+    try:
+        cookie = _make_cookie(username)
+    except BoardDisabled as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
     resp = JSONResponse({"ok": True, "user": username})
     resp.set_cookie(
-        _COOKIE_NAME, _make_cookie(username),
+        _COOKIE_NAME, cookie,
         httponly=True, samesite="lax", secure=True, max_age=86400 * _COOKIE_TTL_DAYS,
     )
     return resp

@@ -51,6 +51,15 @@ def test_webhook_trigger_matches_token():
     assert trigger_matches(trigger, {"type": "webhook", "payload": {"token": "wrong"}}) is False
 
 
+def test_webhook_trigger_rejects_missing_or_nonstring_token():
+    # Constant-time compare requires a real string on both sides; a missing
+    # trigger token or a non-string provided token must fail closed.
+    assert trigger_matches({"type": "webhook", "token": ""}, {"type": "webhook", "payload": {"token": "x"}}) is False
+    assert trigger_matches({"type": "webhook"}, {"type": "webhook", "payload": {"token": "x"}}) is False
+    assert trigger_matches({"type": "webhook", "token": "s"}, {"type": "webhook", "payload": {}}) is False
+    assert trigger_matches({"type": "webhook", "token": "s"}, {"type": "webhook", "payload": {"token": 123}}) is False
+
+
 def test_trigger_type_mismatch_never_matches():
     trigger = {"type": "mail", "from_contains": "x"}
     assert trigger_matches(trigger, {"type": "webhook", "payload": {}}) is False

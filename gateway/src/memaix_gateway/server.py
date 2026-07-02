@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -128,6 +129,12 @@ def _get_timeline():
     return _timeline_store
 
 
+def _http_mode() -> bool:
+    """True when the gateway is served over HTTP (vs stdio) — MEMAIX_TRANSPORT
+    or --http. In HTTP mode identity MUST come from a verified OAuth token."""
+    return os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
+
+
 def _user() -> str:
     # HTTP mode: resolve identity from the OAuth token injected by MCP SDK middleware.
     try:
@@ -140,6 +147,13 @@ def _user() -> str:
             raise RuntimeError(f"OAuth subject not mapped in acl.yaml: {token.subject!r}")
     except ImportError:
         pass
+
+    # Fail closed in HTTP mode: if we're served over HTTP but no verified OAuth
+    # subject resolved (missing token, or auth.issuer not configured), deny —
+    # never silently fall through to the MEMAIX_USER env identity, which would
+    # let an unauthenticated HTTP client act as that single user.
+    if _http_mode():
+        raise RuntimeError("no authenticated OAuth subject — refusing to identify caller in HTTP mode")
 
     # stdio fallback (Fas 1-style, backward-compatible).
     uid = os.environ.get("MEMAIX_USER", "").strip()
@@ -621,26 +635,43 @@ def _outbox_action_or_404(outbox, action_id: str) -> dict:
     return action
 
 
+def _can_approve_action(acl, user: str, action: dict) -> bool:
+    """True if the user holds the role required to approve this action. A queued
+    outgoing action's args include the full email body/recipients, so only
+    someone who could actually send it should see it — a reader must not read
+    another user's pending email content."""
+    need = _OUTBOX_APPROVAL_ROLE.get(action.get("tool") or "", "owner")
+    try:
+        acl.enforce(user, action.get("project") or "", need)
+        return True
+    except AccessDenied:
+        return False
+
+
 @mcp.tool()
 def outbox_list(project: str | None = None, status: str = "pending") -> list:
-    """List queued outgoing actions (default: pending) for your visible projects."""
+    """List queued outgoing actions (default: pending) that you have the role to
+    approve — the action body includes recipients/content, so it's scoped to
+    would-be approvers, not every reader of the project."""
     user = _user()
     acl = _get_acl()
     visible = set(acl.visible_projects(user))
     projects = [project] if project else sorted(visible)
     projects = [p for p in projects if p in visible]
-    return _get_outbox().list(projects, status or None)
+    return [a for a in _get_outbox().list(projects, status or None) if _can_approve_action(acl, user, a)]
 
 
 @mcp.tool()
 def outbox_get(action_id: str) -> dict:
-    """Fetch a single queued action by id."""
+    """Fetch a single queued action by id (requires the role that could approve it)."""
     user = _user()
     acl = _get_acl()
     outbox = _get_outbox()
     action = _outbox_action_or_404(outbox, action_id)
     if action["project"] not in acl.visible_projects(user):
         raise AccessDenied(f"{user} cannot see outbox actions for {action['project']}")
+    if not _can_approve_action(acl, user, action):
+        raise AccessDenied(f"{user} lacks the role to view/approve this {action.get('tool')} action")
     return action
 
 
@@ -783,11 +814,22 @@ def _validate_timezone(tz_name: str) -> None:
 
 
 def _validate_channels(channels: list[dict] | None) -> None:
+    from .safety.net import BlockedURLError, validate_external_url
+
     for spec in channels or []:
         if spec.get("type") not in _KNOWN_CHANNEL_TYPES:
             raise ValueError(
                 f"unknown channel type {spec.get('type')!r}; must be one of {sorted(_KNOWN_CHANNEL_TYPES)}"
             )
+        # SSRF guard for the URLs the server will POST brief content to.
+        # resolve=False at config-time; the authoritative resolve happens in
+        # notify/channels.py right before the request.
+        url = spec.get("url") if spec.get("type") == "webhook" else spec.get("server")
+        if url:
+            try:
+                validate_external_url(url, resolve=False)
+            except BlockedURLError as exc:
+                raise ValueError(f"channel url avvisad: {exc}") from exc
 
 
 @mcp.tool()
@@ -910,7 +952,9 @@ def daily_brief() -> str:
 _KNOWN_TRIGGER_TYPES = {"mail", "internal", "webhook", "schedule"}
 _KNOWN_ACTION_TYPES = {"backlog_add", "memory_append", "pm_raid_add", "email_create_draft", "email_send", "notify"}
 _KNOWN_CONDITION_OPS = {"contains", "equals", "matches"}
-_OUTGOING_ACTION_TYPES = {"email_send", "email_create_draft"}
+# 'notify' is outgoing egress too (posts to a webhook/ntfy/email channel) — a
+# rule that auto-sends it therefore requires owner to create, like email_send.
+_OUTGOING_ACTION_TYPES = {"email_send", "email_create_draft", "notify"}
 
 
 def _validate_rule_spec(trigger: dict, actions: list[dict], conditions: list[dict] | None) -> None:
@@ -1561,6 +1605,15 @@ def calendar_setup(
     if mode == "ical_secret":
         if not ical_url:
             return {"ok": False, "error": "ical_url krävs för mode=ical_secret"}
+        # SSRF guard (safety/net.py): reject a URL pointing at an internal
+        # target before we ever store or fetch it. resolve=False here — we
+        # don't want config to depend on the name resolving at set-time; the
+        # authoritative resolve happens in _ICalAdapter._fetch.
+        from .safety.net import BlockedURLError, validate_external_url
+        try:
+            validate_external_url(ical_url, resolve=False)
+        except BlockedURLError as exc:
+            return {"ok": False, "error": f"ical_url avvisad: {exc}"}
         # Store under synthetic provider — account key is a stable placeholder
         store.store(user, "ical_secret", "ical_secret", {"ical_url": ical_url})
         return {"ok": True, "mode": "ical_secret", "stored": True}
@@ -2329,16 +2382,22 @@ def build_http_app():
             resp.raise_for_status()
             token_data = resp.json()
         except Exception as exc:
-            return JSONResponse(
-                {"error": "token_exchange_failed", "detail": str(exc)}, status_code=500
-            )
+            # Don't echo the raw exception (can carry internal URLs / response
+            # fragments) back to the caller — log it, return a generic error.
+            logger.warning("OAuth token exchange failed for provider %s: %s", provider, exc)
+            return JSONResponse({"error": "token_exchange_failed"}, status_code=500)
 
         account_email = token_data.get("email", "") or _get_account_email(provider, token_data)
 
         store = _get_token_store()
         store.store(user_id, provider, account_email, token_data)
 
-        provider_label = {"google": "Google", "microsoft": "Microsoft"}.get(provider, provider.title())
+        # HTML-escape values that ultimately derive from an IdP claim
+        # (account_email) or the provider string before embedding them in the
+        # success page — an attacker-controlled claim must not inject markup.
+        from html import escape as _html_escape
+        provider_label = _html_escape({"google": "Google", "microsoft": "Microsoft"}.get(provider, provider.title()))
+        account_email = _html_escape(account_email or "")
         board_url = public_url.rstrip("/") + "/board"
         html = f"""<!doctype html>
 <html lang="sv">
@@ -2404,11 +2463,16 @@ def build_http_app():
         """Inbound trigger for webhook-type automation rules (FEATURE-AUTOMATION-RULES.md §6).
 
         The token is itself the shared secret (a random 'token' generated when
-        the rule was created) — simplified from the design doc's HMAC-signature
-        proposal since a sufficiently random URL segment is a standard, simpler
-        webhook-auth pattern (e.g. Slack incoming webhooks). Rate-limited like
-        any other externally reachable endpoint would need to be in production.
+        the rule was created) — a sufficiently random URL segment, compared in
+        constant time (rules/match.py). Rate-limited per client IP so the token
+        can't be brute-forced.
         """
+        # Unauthenticated endpoint — rate-limit per client IP so a valid token
+        # can't be guessed by volume (30 attempts / 60 s).
+        client_ip = request.client.host if request.client else "unknown"
+        if not _rate_limiter.check(f"webhook:{client_ip}", limit=30, window_s=60):
+            return JSONResponse({"error": "rate_limited"}, status_code=429)
+
         token = request.path_params["token"]
         try:
             body = await request.json()

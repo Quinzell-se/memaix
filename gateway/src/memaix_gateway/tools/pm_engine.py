@@ -51,6 +51,11 @@ def _owned_resource(pm, project: str, resource_id: int) -> dict:
     return resource
 
 
+def _owned_milestone(pm, project: str, milestone_id: int) -> None:
+    if milestone_id not in {m["id"] for m in pm.list_milestones(project)}:
+        raise FileNotFoundError(f"no such milestone in project {project!r}: {milestone_id}")
+
+
 def _owned_scenario(pm, project: str, scenario_id: int) -> dict:
     scenario = pm.get_scenario(scenario_id)
     if scenario is None or scenario["project"] != project:
@@ -101,6 +106,8 @@ def task_add(
     backlog_id: str | None = None, milestone_id: int | None = None, _pm,
 ) -> dict:
     acl.enforce(user_id, project, "collaborator")
+    if milestone_id is not None:
+        _owned_milestone(_pm, project, milestone_id)  # reject a milestone id from another project
     skill_id = _pm.get_or_create_skill(project, required_skill)["id"] if required_skill else None
     return _pm.add_task(
         project, title, backlog_id=backlog_id, estimate_hours=estimate_hours,

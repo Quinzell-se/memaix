@@ -284,3 +284,33 @@ def test_pm_report_reader_allowed(wired, monkeypatch):
     monkeypatch.setenv("MEMAIX_USER", "bob")
     result = server.pm_report("proj", kind="milestones")
     assert result["milestones"][0]["name"] == "Beta"
+
+
+# ------------------------------------------------------------------
+# Security-fix regressions
+# ------------------------------------------------------------------
+
+
+def test_task_add_rejects_milestone_from_other_project(wired):
+    other_ms = server.milestone_add("other", "Other milestone", "2025-03-01")
+    with pytest.raises(FileNotFoundError):
+        server.task_add("proj", "Task", milestone_id=other_ms["id"])
+
+
+def test_outbox_get_denies_reader_and_allows_owner(wired, monkeypatch):
+    # Queue an email_send action in proj (recipients/body live in the args).
+    action_id = server._get_outbox().enqueue(
+        "alice", "proj", "email_send",
+        {"to": "x@y.com", "subject": "secret", "body": "confidential"}, "preview",
+    )
+    # bob is a reader on proj — must NOT be able to read the queued email body
+    # (email_send approval requires owner).
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    with pytest.raises(AccessDenied):
+        server.outbox_get(action_id)
+    assert server.outbox_list("proj") == []
+
+    # alice is owner — can see it.
+    monkeypatch.setenv("MEMAIX_USER", "alice")
+    assert server.outbox_get(action_id)["id"] == action_id
+    assert any(a["id"] == action_id for a in server.outbox_list("proj"))
