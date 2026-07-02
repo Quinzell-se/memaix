@@ -63,7 +63,7 @@ indexet färskt; degraderar till FTS5 utan embedder.
 
 ## Fas 3 — Proaktivitet 📋
 - ✅ **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) (store/kanaler/BriefBuilder/leverans/scheduler/MCP-yta klart; live kalender-fusion i sökningen och FreeBusy/iCal-brief-täckning kvarstår)
-- 📋 **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md)
+- ✅ **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) (motor + internal/webhook-triggers + standing instructions klart; live mail-poll och schedule-cron-triggers kvarstår — `rule_test` täcker dry-run för alla triggertyper under tiden)
 - 📋 **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
 
 **Beroenden:** #1 bygger den generiska schemaläggaren som #4 återanvänder; #4:s

@@ -43,6 +43,7 @@ _search_store: "EmbeddingStore | None" = None  # type: ignore[name-defined]
 _search_embedder = None
 _search_embedder_loaded = False
 _notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
+_rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -158,6 +159,7 @@ def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
         _get_audit().log(user, project, tool, True)
         _maybe_record_timeline(user, project, tool, args[3:], kwargs, result)
         _maybe_index_for_search(user, project, tool, args[3:], kwargs, result)
+        _maybe_publish_internal_event(user, project, tool, args[3:], kwargs, result)
         return result
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
@@ -270,6 +272,51 @@ def _brief_tools_for_user() -> dict:
         "backlog_list": t_backlog.backlog_list,
         "pm_raid_list": t_pm.pm_raid_list,
     }
+
+
+def _get_rules():
+    global _rules_store
+    if _rules_store is None:
+        from .rules.store import RulesStore
+        db_path = Path(os.environ.get("MEMAIX_RULES_DB", "/tmp/memaix-rules.db"))
+        _rules_store = RulesStore.for_path(db_path)
+    return _rules_store
+
+
+def _index_internal_event_backlog_set_status(tail, kwargs, result):
+    # tail = (id, status, expected_version) — see backlog_set_status's _tool_call site.
+    if not isinstance(result, dict) or result.get("conflict"):
+        return None  # nothing actually transitioned
+    item_id, new_status, expected_version = tail[0], tail[1], tail[2]
+    return {
+        "event_key": f"{item_id}:{expected_version}:{new_status}",
+        "payload": {"event": "backlog.status", "to": new_status, "item_id": item_id},
+    }
+
+
+# Internal event sources are intentionally scoped to backlog status
+# transitions for v1 — the one already flowing through _audited with a
+# reliable pre/post signal. Live mail-poll and schedule-cron trigger sources
+# are documented follow-up work (FEATURE-AUTOMATION-RULES.md "Framtida arbete").
+INTERNAL_EVENT_HANDLERS = {
+    "backlog_set_status": _index_internal_event_backlog_set_status,
+}
+
+
+def _maybe_publish_internal_event(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort internal-trigger publication — must never break the tool call itself."""
+    handler = INTERNAL_EVENT_HANDLERS.get(tool)
+    if handler is None:
+        return
+    try:
+        built = handler(tail, kwargs, result)
+        if built is None:
+            return
+        event = {"type": "internal", "project": project, "id": built["event_key"], "payload": built["payload"]}
+        from .rules.engine import evaluate
+        evaluate(_get_rules(), _get_acl(), event)
+    except Exception:
+        logger.warning("internal event publish failed for tool %r", tool, exc_info=True)
 
 
 def _maybe_index_for_search(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
@@ -683,6 +730,126 @@ def brief_send_now() -> dict:
 def daily_brief() -> str:
     """Deliver today's brief for the calling user (fetch-on-open path)."""
     return _build_brief_now()["markdown"]
+
+
+# ------------------------------------------------------------------
+# Automation rules & standing instructions (FEATURE-AUTOMATION-RULES.md)
+# ------------------------------------------------------------------
+
+_KNOWN_TRIGGER_TYPES = {"mail", "internal", "webhook", "schedule"}
+_KNOWN_ACTION_TYPES = {"backlog_add", "memory_append", "pm_raid_add", "email_create_draft", "email_send", "notify"}
+_KNOWN_CONDITION_OPS = {"contains", "equals", "matches"}
+_OUTGOING_ACTION_TYPES = {"email_send", "email_create_draft"}
+
+
+def _validate_rule_spec(trigger: dict, actions: list[dict], conditions: list[dict] | None) -> None:
+    if not isinstance(trigger, dict) or trigger.get("type") not in _KNOWN_TRIGGER_TYPES:
+        raise ValueError(f"trigger.type must be one of {sorted(_KNOWN_TRIGGER_TYPES)}")
+    if not actions:
+        raise ValueError("a rule needs at least one action")
+    for a in actions:
+        if not isinstance(a, dict) or a.get("type") not in _KNOWN_ACTION_TYPES:
+            raise ValueError(f"unknown action type {a.get('type') if isinstance(a, dict) else a!r}; "
+                              f"must be one of {sorted(_KNOWN_ACTION_TYPES)}")
+    for c in conditions or []:
+        if c.get("op") not in _KNOWN_CONDITION_OPS:
+            raise ValueError(f"unknown condition op {c.get('op')!r}; must be one of {sorted(_KNOWN_CONDITION_OPS)}")
+
+
+@mcp.tool()
+def rule_add(
+    project: str, name: str, trigger: dict, actions: list[dict], conditions: list[dict] | None = None,
+) -> dict:
+    """Create an automation rule: when <trigger> happens (and <conditions>
+    hold), run <actions>. Requires owner if any action is outgoing
+    (email_send/email_create_draft — which still goes through the outbox if
+    the project is in review mode), otherwise collaborator."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    _validate_rule_spec(trigger, actions, conditions)
+    needs_owner = any(a.get("type") in _OUTGOING_ACTION_TYPES for a in actions)
+    acl.enforce(user, project, "owner" if needs_owner else "collaborator")
+    rule = _get_rules().add_rule(user, project, name, trigger, actions, conditions)
+    return {"ok": True, "rule": rule}
+
+
+@mcp.tool()
+def rule_list(project: str | None = None) -> list:
+    """List your automation rules for projects you can see."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return _get_rules().list_rules(projects)
+
+
+def _rule_or_404(rules, rule_id: str) -> dict:
+    rule = rules.get_rule(rule_id)
+    if rule is None:
+        raise FileNotFoundError(f"no such rule: {rule_id!r}")
+    return rule
+
+
+@mcp.tool()
+def rule_set_enabled(rule_id: str, enabled: bool) -> dict:
+    """Enable or disable a rule (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    return {"ok": rules.set_enabled(rule_id, enabled)}
+
+
+@mcp.tool()
+def rule_delete(rule_id: str) -> dict:
+    """Delete a rule (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    return {"ok": rules.delete_rule(rule_id)}
+
+
+@mcp.tool()
+def rule_test(rule_id: str, sample_event: dict) -> dict:
+    """Dry-run a rule against a sample event — shows what it WOULD do,
+    without doing it (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    from .rules.engine import evaluate
+    results = evaluate(rules, acl, sample_event, dry_run=True)
+    matching = [r for r in results if r["rule_id"] == rule_id]
+    return {"matched": bool(matching), "result": matching[0] if matching else None}
+
+
+@mcp.tool()
+def standing_set(text: str) -> dict:
+    """Set your standing instructions — guidance the assistant follows every session."""
+    user = _user()
+    _get_rules().set_standing(user, text)
+    return {"ok": True}
+
+
+@mcp.tool()
+def standing_get() -> dict:
+    """Get your current standing instructions."""
+    user = _user()
+    return {"text": _get_rules().get_standing(user) or ""}
+
+
+@mcp.resource("memaix://standing-instructions")
+def standing_instructions_resource() -> str:
+    """The calling user's standing instructions, for clients that read
+    resources at session start."""
+    user = _user()
+    return _get_rules().get_standing(user) or ""
 
 
 @mcp.tool()
@@ -1463,6 +1630,34 @@ def build_http_app():
         from starlette.responses import HTMLResponse as _HTMLResponse
         return _HTMLResponse(html)
 
+    async def rule_webhook(request: Request) -> JSONResponse:
+        """Inbound trigger for webhook-type automation rules (FEATURE-AUTOMATION-RULES.md §6).
+
+        The token is itself the shared secret (a random 'token' generated when
+        the rule was created) — simplified from the design doc's HMAC-signature
+        proposal since a sufficiently random URL segment is a standard, simpler
+        webhook-auth pattern (e.g. Slack incoming webhooks). Rate-limited like
+        any other externally reachable endpoint would need to be in production.
+        """
+        token = request.path_params["token"]
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        import hashlib
+        import json as _json
+        digest = hashlib.sha256(_json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        event = {
+            "type": "webhook", "project": None, "id": f"webhook:{token}:{digest}",
+            "payload": {**body, "token": token},
+        }
+        from .rules.engine import evaluate
+        results = evaluate(_get_rules(), _get_acl(), event)
+        if not results:
+            return JSONResponse({"error": "no matching enabled rule for this token"}, status_code=404)
+        return JSONResponse({"ok": True, "matched": len(results)})
+
     # ------------------------------------------------------------------
 
     cfg = config.load()
@@ -1502,6 +1697,7 @@ def build_http_app():
         Route("/oauth2/register", dcr_handler, methods=["POST"]),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
+        Route("/hooks/{token}", rule_webhook, methods=["POST"]),
         *board_routes,
     ]
 

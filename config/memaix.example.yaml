@@ -43,6 +43,15 @@ auth:
 #   send_when_empty: true          # send even when there's nothing new to report
 #   max_mail: 5                    # unread messages shown per project
 
+# rules:
+#   # Inbound webhook triggers are served at {public_url}/hooks/{token} — the
+#   # token itself (set on the rule's trigger) is the shared secret; there is
+#   # no separate config needed here. Live mail-poll and schedule-cron trigger
+#   # sources are not yet implemented (see FEATURE-AUTOMATION-RULES.md "Framtida
+#   # arbete") — today's sources are: internal (backlog status changes) and
+#   # webhook. rule_test lets you dry-run a rule against a synthetic event of
+#   # any trigger type without a live source.
+
 # search:
 #   embedder: "local"      # 'local' | 'none' (default) — 'none' means search_all()
 #                          # still works via lexical (FTS5) search, just without

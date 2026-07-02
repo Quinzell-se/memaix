@@ -140,5 +140,13 @@
 
   "cap.brief.daily.title": "Get a daily brief",
   "cap.brief.daily.summary": "A scheduled summary of your calendar, mail, backlog changes and open risks, delivered to a channel you choose.",
-  "cap.brief.daily.examples": ["Set up a daily brief for me at 7am", "Send me my brief now"]
+  "cap.brief.daily.examples": ["Set up a daily brief for me at 7am", "Send me my brief now"],
+
+  "cap.automation.rules.title": "Automate with rules",
+  "cap.automation.rules.summary": "Set up 'when X happens, do Y' rules that run without you being there.",
+  "cap.automation.rules.examples": ["When mail arrives from a client, add it to the backlog", "Show me my automation rules"],
+
+  "cap.automation.standing.title": "Set standing instructions",
+  "cap.automation.standing.summary": "Guidance the assistant follows every session, like 'always write in Swedish'.",
+  "cap.automation.standing.examples": ["Always keep answers short", "What are my standing instructions?"]
 }

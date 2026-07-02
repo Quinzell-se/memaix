@@ -140,5 +140,13 @@
 
   "cap.brief.daily.title": "Få en daglig brief",
   "cap.brief.daily.summary": "En schemalagd sammanfattning av kalender, mejl, backlog-ändringar och öppna risker, levererad till en kanal du väljer.",
-  "cap.brief.daily.examples": ["Sätt upp en daglig brief åt mig kl 07", "Skicka min brief nu"]
+  "cap.brief.daily.examples": ["Sätt upp en daglig brief åt mig kl 07", "Skicka min brief nu"],
+
+  "cap.automation.rules.title": "Automatisera med regler",
+  "cap.automation.rules.summary": "Sätt upp \"när X händer, gör Y\"-regler som körs utan att du behöver vara där.",
+  "cap.automation.rules.examples": ["När mejl kommer från en kund, lägg till det i backloggen", "Visa mina automationsregler"],
+
+  "cap.automation.standing.title": "Sätt stående instruktioner",
+  "cap.automation.standing.summary": "Vägledning assistenten följer varje session, som \"skriv alltid på svenska\".",
+  "cap.automation.standing.examples": ["Håll svaren korta", "Vilka är mina stående instruktioner?"]
 }

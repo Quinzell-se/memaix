@@ -268,4 +268,25 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource=None,
             tags=("brief", "morgonbrief", "notiser", "notifications"),
         ),
+        # ------------------------------------------------------------------
+        # automation (FEATURE-AUTOMATION-RULES.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="automation.rules", area="automation",
+            title_key="cap.automation.rules.title",
+            summary_key="cap.automation.rules.summary",
+            tools=("rule_add", "rule_list", "rule_set_enabled", "rule_delete", "rule_test"),
+            example_prompts_key="cap.automation.rules.examples",
+            needs_role="collaborator", needs_resource="vault",
+            tags=("automation", "regel", "rule", "when"),
+        ),
+        Capability(
+            key="automation.standing", area="automation",
+            title_key="cap.automation.standing.title",
+            summary_key="cap.automation.standing.summary",
+            tools=("standing_set", "standing_get"),
+            example_prompts_key="cap.automation.standing.examples",
+            needs_role="reader", needs_resource=None,
+            tags=("automation", "instruktioner", "standing", "instructions"),
+        ),
     )

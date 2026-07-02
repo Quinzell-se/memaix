@@ -16,6 +16,7 @@ from memaix_gateway.acl import AccessDenied, Acl
 from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
 from memaix_gateway.notify.store import NotifyStore
+from memaix_gateway.rules.store import RulesStore
 from memaix_gateway.search.embedder import FakeEmbedder
 from memaix_gateway.search.store import EmbeddingStore
 from memaix_gateway.timeline.store import ActionsStore
@@ -41,6 +42,7 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_search_embedder", None)
     monkeypatch.setattr(server, "_search_embedder_loaded", True)  # skip config.load(); no embedder by default
     monkeypatch.setattr(server, "_notify_store", NotifyStore.for_path(tmp_path / "notify.db"))
+    monkeypatch.setattr(server, "_rules_store", RulesStore.for_path(tmp_path / "rules.db"))
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
     return vault, acl
@@ -441,3 +443,125 @@ def test_brief_send_now_ignores_quiet_hours(wired, monkeypatch):
     result = server.brief_send_now()
     assert result["ok"] is True
     assert sent == [1]
+
+
+# ------------------------------------------------------------------
+# Automation rules & standing instructions (FEATURE-AUTOMATION-RULES.md)
+# ------------------------------------------------------------------
+
+
+def test_rule_add_then_list(wired):
+    result = server.rule_add(
+        "proj", "New client mail", {"type": "mail", "from_contains": "@client.com"},
+        [{"type": "backlog_add", "params": {"project": "proj", "title_from": "subject"}}],
+    )
+    assert result["ok"] is True
+    rules = server.rule_list("proj")
+    assert len(rules) == 1
+    assert rules[0]["name"] == "New client mail"
+
+
+def test_rule_add_rejects_unknown_trigger_type(wired):
+    with pytest.raises(ValueError):
+        server.rule_add("proj", "r", {"type": "carrier-pigeon"}, [{"type": "notify", "params": {}}])
+
+
+def test_rule_add_rejects_empty_actions(wired):
+    with pytest.raises(ValueError):
+        server.rule_add("proj", "r", {"type": "mail"}, [])
+
+
+def test_rule_add_with_outgoing_action_requires_owner(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "bob")  # reader on 'proj' in test_server acl? no—bob is reader
+    with pytest.raises(AccessDenied):
+        server.rule_add(
+            "proj", "r", {"type": "mail"},
+            [{"type": "email_send", "params": {"project": "proj", "to": "x@y.com"}}],
+        )
+
+
+def test_rule_set_enabled_and_delete(wired):
+    added = server.rule_add("proj", "r", {"type": "mail"}, [{"type": "notify", "params": {"text": "hi"}}])
+    rule_id = added["rule"]["id"]
+
+    assert server.rule_set_enabled(rule_id, False)["ok"] is True
+    rules = server.rule_list("proj")
+    assert rules[0]["enabled"] is False
+
+    assert server.rule_delete(rule_id)["ok"] is True
+    assert server.rule_list("proj") == []
+
+
+def test_rule_management_requires_owner(wired, monkeypatch):
+    added = server.rule_add("proj", "r", {"type": "mail"}, [{"type": "notify", "params": {"text": "hi"}}])
+    rule_id = added["rule"]["id"]
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    with pytest.raises(AccessDenied):
+        server.rule_set_enabled(rule_id, False)
+    with pytest.raises(AccessDenied):
+        server.rule_delete(rule_id)
+
+
+def test_rule_test_dry_runs_without_executing(wired, monkeypatch):
+    added = server.rule_add(
+        "proj", "r", {"type": "mail", "from_contains": "@client.com"},
+        [{"type": "backlog_add", "params": {"project": "proj", "title_from": "subject"}}],
+    )
+    rule_id = added["rule"]["id"]
+
+    before = server.backlog_list("proj")
+    result = server.rule_test(
+        rule_id, {"type": "mail", "project": "proj", "id": "x", "payload": {"from": "a@client.com", "subject": "Hi"}}
+    )
+    assert result["matched"] is True
+    assert result["result"]["actions"][0]["dry_run"] is True
+    after = server.backlog_list("proj")
+    assert before == after  # nothing was actually created
+
+
+def test_standing_set_and_get(wired):
+    assert server.standing_get() == {"text": ""}
+    server.standing_set("Always answer in Swedish.")
+    assert server.standing_get() == {"text": "Always answer in Swedish."}
+
+
+def test_standing_instructions_resource(wired):
+    server.standing_set("Be concise.")
+    assert server.standing_instructions_resource() == "Be concise."
+
+
+def test_backlog_status_change_triggers_internal_rule(wired):
+    r = server.backlog_add("proj", "Fix bug", "desc")
+    item_id = r["id"]
+    server.rule_add(
+        "proj", "on-done", {"type": "internal", "event": "backlog.status", "to": "done"},
+        [{"type": "notify", "params": {"text": "Item done!"}}],
+    )
+    sent = []
+    import memaix_gateway.rules.actions as actions_mod
+    orig_run_notify = actions_mod._run_notify
+    actions_mod._run_notify = lambda acl, user, params, *, tools: (sent.append(params) or {"ok": True, "errors": [], "channels_used": 0})
+    try:
+        server.backlog_set_status("proj", item_id, "done", expected_version=1)
+    finally:
+        actions_mod._run_notify = orig_run_notify
+    assert sent == [{"text": "Item done!"}]
+
+
+def test_backlog_status_change_conflict_does_not_trigger_rule(wired):
+    r = server.backlog_add("proj", "Fix bug", "desc")
+    item_id = r["id"]
+    server.rule_add(
+        "proj", "on-done", {"type": "internal", "event": "backlog.status", "to": "done"},
+        [{"type": "notify", "params": {"text": "Item done!"}}],
+    )
+    sent = []
+    import memaix_gateway.rules.actions as actions_mod
+    orig_run_notify = actions_mod._run_notify
+    actions_mod._run_notify = lambda acl, user, params, *, tools: sent.append(1)
+    try:
+        result = server.backlog_set_status("proj", item_id, "done", expected_version=99)  # wrong version
+        assert result.get("conflict") is True
+    finally:
+        actions_mod._run_notify = orig_run_notify
+    assert sent == []
