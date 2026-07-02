@@ -193,3 +193,85 @@ def plan_commit(acl: Acl, user_id: str, project: str, scenario_id: int, *, _pm) 
     acl.enforce(user_id, project, "owner")
     _owned_scenario(_pm, project, scenario_id)
     return _pm.commit_scenario(scenario_id, user_id)
+
+
+_REPORT_KINDS = {"status", "milestones", "variance", "raid", "utilization"}
+_AUDIENCES = {"team", "leadership"}
+
+
+def _milestone_rollup(milestones: list[dict], today, audience: str) -> list[dict]:
+    from datetime import date as _date
+
+    rows = []
+    for m in milestones:
+        target = _date.fromisoformat(m["target_date"]) if m.get("target_date") else None
+        rows.append({
+            "id": m["id"], "name": m["name"], "target_date": m.get("target_date"),
+            "status": m["status"], "overdue": bool(target and target < today),
+        })
+    if audience == "leadership":
+        # Condensed view: only what leadership needs to act on. There's no
+        # milestone_set_status tool yet, so `status` is always "open" today
+        # — filtering by overdue-ness is the only real signal available.
+        rows = [r for r in rows if r["overdue"]]
+    return rows
+
+
+def _raid_rollup(raid: dict, audience: str) -> dict:
+    entries = raid.get("entries", [])
+    if audience == "leadership":
+        # Same caveat as milestones: pm_raid_add always writes status='open'
+        # (no close tool yet) — the status filter is forward-looking, the
+        # severity filter is what actually condenses today.
+        entries = [
+            e for e in entries
+            if e.get("status", "open") == "open" and e.get("severity", "").lower() in ("high", "critical")
+        ]
+    return {"entries": entries, "count": len(entries)}
+
+
+def pm_report(
+    acl: Acl, user_id: str, project: str, kind: str = "status", audience: str = "team",
+    scenario_id: int | None = None, period_start: str | None = None, period_end: str | None = None,
+    *, _pm,
+) -> dict:
+    """Rollup PM data for the LLM to narrate (FEATURE-PM-ENGINE.md §5) — never
+    computes anything new, just re-packages/filters what allocate/variance/
+    the RAID log already produced. `kind` selects which sections to include
+    ('status' = everything except utilization, which needs scenario_id +
+    a period and so isn't part of the default bundle); `audience` levels
+    the detail ('leadership' condenses to overdue milestones + high/critical
+    RAID entries, dropping per-task noise 'team' gets)."""
+    acl.enforce(user_id, project, "reader")
+    if kind not in _REPORT_KINDS:
+        raise ValueError(f"unknown report kind: {kind!r}; valid: {sorted(_REPORT_KINDS)}")
+    if audience not in _AUDIENCES:
+        raise ValueError(f"unknown audience: {audience!r}; valid: {sorted(_AUDIENCES)}")
+
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).date()
+    report: dict = {"project": project, "kind": kind, "audience": audience}
+
+    if kind in ("status", "milestones"):
+        report["milestones"] = _milestone_rollup(_pm.list_milestones(project), today, audience)
+
+    if kind in ("status", "variance"):
+        report["variance"] = _run_variance(_pm, project, today=today)
+
+    if kind in ("status", "raid"):
+        from . import pm as t_pm
+
+        try:
+            raid = t_pm.pm_raid_list(acl, user_id, project)
+        except ValueError:
+            raid = {"ok": True, "entries": [], "count": 0, "note": "no vault configured"}
+        report["raid"] = _raid_rollup(raid, audience)
+
+    if kind == "utilization":
+        if scenario_id is None or not period_start or not period_end:
+            raise ValueError("utilization report requires scenario_id, period_start and period_end")
+        _owned_scenario(_pm, project, scenario_id)
+        report["utilization"] = _run_utilization(_pm, scenario_id, period_start, period_end)
+
+    return report

@@ -100,7 +100,10 @@ def _parse_raid(text: str) -> list[dict]:
     entries = []
     blocks = text.split("<!-- raid -->")[1:]
     head = re.compile(r"###\s+(RAID-\d+)\s+·\s+(\w+)\s+·\s+(\w+)")
-    field_re = re.compile(r"-\s+\*\*(\w+):\*\*\s*(.*)")
+    # [ \t]* (not \s*) after the colon: \s* would swallow the newline after
+    # an empty field (e.g. a blank "Owner:") and greedily capture the next
+    # field's entire line as this field's value instead of leaving it empty.
+    field_re = re.compile(r"-\s+\*\*(\w+):\*\*[ \t]*(.*)")
     for b in blocks:
         m = head.search(b)
         if not m:

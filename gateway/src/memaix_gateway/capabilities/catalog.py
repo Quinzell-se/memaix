@@ -269,7 +269,7 @@ def register_defaults() -> None:
                 "resource_add", "resource_list", "resource_availability", "resource_set_skill",
                 "milestone_add", "task_add", "task_estimate", "task_log_actual", "dependency_add",
                 "scenario_add", "scenario_list", "pm_allocate", "pm_whatif", "pm_utilization", "pm_variance",
-                "plan_commit",
+                "plan_commit", "pm_report",
             ),
             example_prompts_key="cap.pm.planning_engine.examples",
             needs_role="reader", needs_resource="vault",

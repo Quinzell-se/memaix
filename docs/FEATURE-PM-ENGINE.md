@@ -152,6 +152,17 @@ Lat `_get_pm()`. Verktygen i §5 via `_tool_call` (planändring enforce:ar owner
 resource_add→task_estimate→allocate→utilization-flöde; `whatif` returnerar diff utan
 att röra committed; reader nekas `allocate`/`plan_commit`.
 
+✅ **`pm_report(kind, audience)`** (v2): rollup över milstolpar/varians/RAID/
+utnyttjande — beräknar inget nytt, paketerar bara vad `variance`/`list_milestones`/
+`pm_raid_list` redan producerar. `kind="status"` (default) buntar
+milstolpar+varians+RAID; `kind="utilization"` kräver `scenario_id`+period (för att
+den, till skillnad från de andra, inte har ett förnuftigt utan-parametrar-default).
+`audience="leadership"` kondenserar till försenade milstolpar + hög/kritisk
+RAID-poster; `"team"` (default) ger allt. Hittade och fixade i förbifarten: `_parse_raid`s
+fältregex i `tools/pm.py` läckte en tom fälts värde in i nästa fält (`\s*` åt över
+radbrytningen) — aldrig testat tidigare eftersom inga befintliga tester round-trippade
+RAID-fält genom markdown.
+
 ### Steg 6 — Agent-prompter
 `pm_plan_session`, `pm_whatif_session`; utöka `pm_review`. Prompterna instruerar
 LLM:en att **aldrig räkna själv** utan kalla motorn och förklara. **Test:** prompt-

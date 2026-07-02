@@ -1457,6 +1457,23 @@ def plan_commit(project: str, scenario_id: int) -> dict:
 
 
 @mcp.tool()
+def pm_report(
+    project: str, kind: str = "status", audience: str = "team",
+    scenario_id: int | None = None, period_start: str | None = None, period_end: str | None = None,
+) -> dict:
+    """Rollup PM data (milestones/variance/RAID/utilization) for you to narrate.
+
+    kind: 'status' (milestones+variance+raid, default), 'milestones',
+    'variance', 'raid', or 'utilization' (requires scenario_id/period_start/
+    period_end). audience: 'team' (full detail) or 'leadership' (condensed
+    to overdue milestones and high/critical RAID entries)."""
+    return _tool_call(
+        "pm_report", project, t_pm_engine.pm_report, kind, audience, scenario_id, period_start, period_end,
+        _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
 def calendar_setup(
     project: str,
     mode: str,

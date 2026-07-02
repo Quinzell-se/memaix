@@ -205,3 +205,82 @@ def test_pm_whatif_rejects_task_from_other_project(wired):
             "proj", scenario["id"],
             [{"entity": "task", "entity_id": other_task["id"], "field": "estimate_hours", "value": 10}], None,
         )
+
+
+# ------------------------------------------------------------------
+# pm_report (FEATURE-PM-ENGINE.md §5)
+# ------------------------------------------------------------------
+
+
+def test_pm_report_status_bundles_milestones_variance_raid(wired):
+    server.milestone_add("proj", "Beta launch", "2025-01-01")  # in the past -> overdue
+    server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+    server.plan_commit("proj", scenario["id"])
+    server.pm_raid_add("proj", "Risk", "Vendor delay")
+
+    result = server.pm_report("proj")
+
+    assert result["kind"] == "status"
+    assert result["audience"] == "team"
+    assert result["milestones"][0]["name"] == "Beta launch"
+    assert result["milestones"][0]["overdue"] is True
+    assert result["variance"]["ok"] is True
+    assert result["raid"]["count"] == 1
+
+
+def test_pm_report_leadership_condenses_milestones_to_overdue(wired):
+    server.milestone_add("proj", "On track", "2999-01-01")
+    server.milestone_add("proj", "Late", "2025-01-01")
+
+    result = server.pm_report("proj", kind="milestones", audience="leadership")
+
+    names = [m["name"] for m in result["milestones"]]
+    assert names == ["Late"]
+
+
+def test_pm_report_leadership_condenses_raid_to_high_severity(wired):
+    server.pm_raid_add("proj", "Risk", "Minor thing", severity="low")
+    server.pm_raid_add("proj", "Issue", "Big problem", severity="high")
+
+    result = server.pm_report("proj", kind="raid", audience="leadership")
+
+    assert result["raid"]["count"] == 1
+    assert result["raid"]["entries"][0]["summary"] == "Big problem"
+
+
+def test_pm_report_utilization_requires_scenario_and_period(wired):
+    with pytest.raises(ValueError):
+        server.pm_report("proj", kind="utilization")
+
+
+def test_pm_report_utilization_kind(wired):
+    server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+
+    result = server.pm_report(
+        "proj", kind="utilization", scenario_id=scenario["id"],
+        period_start="2025-01-06", period_end="2025-01-06",
+    )
+    assert result["utilization"]["resources"][0]["utilization_pct"] == 100.0
+
+
+def test_pm_report_rejects_unknown_kind(wired):
+    with pytest.raises(ValueError):
+        server.pm_report("proj", kind="bogus")
+
+
+def test_pm_report_rejects_unknown_audience(wired):
+    with pytest.raises(ValueError):
+        server.pm_report("proj", audience="bogus")
+
+
+def test_pm_report_reader_allowed(wired, monkeypatch):
+    server.milestone_add("proj", "Beta", "2025-01-01")
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    result = server.pm_report("proj", kind="milestones")
+    assert result["milestones"][0]["name"] == "Beta"
