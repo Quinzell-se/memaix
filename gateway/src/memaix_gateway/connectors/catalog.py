@@ -16,6 +16,15 @@ reproduce a 3-way per-user auth-priority chain (Google OAuth → iCal secret
 single-type/single-auth-mode `get()` shape without extending it — a
 focused migration of its own, not a mechanical rewire like mail's.
 
+`mail`/`microsoft` (Byggordning step 6 — the first *new* external adapter,
+proof that adding one doesn't touch tools/email.py) wraps
+`connectors/adapters/mail_microsoft.py`'s `GraphMailAdapter`, `auth=
+"per_user"`: a project sets its `mailbox` resource's `type: microsoft`, and
+whichever user is calling uses their own linked "microsoft" account
+(`server.py`'s `_ensure_fresh_microsoft_mail_token` refreshes the access
+token first if it's expiring — `registry.get()`'s per_user branch only
+loads whatever's stored, it doesn't refresh).
+
 `contacts`/`carddav`, `files`/`webdav`, `tasks`/`caldav`, `deck`/`nextcloud`
 and `notes`/`nextcloud` are the Nextcloud adapters (FEATURE-NEXTCLOUD-
 BACKEND.md §4-5-7, Byggordning steps 5-6) and are wired all the way to
@@ -47,6 +56,12 @@ def _caldav_factory(acl, project, user, resource_cfg, token):
     from ..tools.calendar import _RealDavAdapter
 
     return _RealDavAdapter(acl, project)
+
+
+def _microsoft_mail_factory(acl, project, user, resource_cfg, token):
+    from .adapters.mail_microsoft import GraphMailAdapter
+
+    return GraphMailAdapter(token["access_token"])
 
 
 def _carddav_factory(acl, project, user, resource_cfg, token):
@@ -92,6 +107,7 @@ def _notes_factory(acl, project, user, resource_cfg, token):
 def register_defaults(registry: ConnectorRegistry) -> None:
     registry.register(
         ConnectorSpec(type="imap", capability="mail", auth="shared", factory=_imap_factory),
+        ConnectorSpec(type="microsoft", capability="mail", auth="per_user", factory=_microsoft_mail_factory),
         ConnectorSpec(type="caldav", capability="calendar", auth="shared", factory=_caldav_factory),
         ConnectorSpec(type="carddav", capability="contacts", auth="shared", factory=_carddav_factory),
         ConnectorSpec(type="webdav", capability="files", auth="shared", factory=_webdav_files_factory),

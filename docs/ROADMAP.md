@@ -90,8 +90,13 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   migreras **aldrig** hit — `"files"`-kapabiliteten är redan upptagen av
   Nextcloud-WebDAV (`nc_files_*`), och vault:en har en helt annan
   resursform (bar sökväg, inte `{type,url,...}`); se `connectors/registry.py`'s
-  docstring. Samt en första ny extern adapter (Microsoft Graph) som bevis på
-  pluggbarhet.
+  docstring. ✅ **Microsoft Graph mail (första nya externa adapter):**
+  `connectors/adapters/mail_microsoft.py`'s `GraphMailAdapter`, `auth="per_user"` — ett
+  projekt sätter `mailbox.type: microsoft`, gatewayen använder den inloggade användarens
+  egna länkade `microsoft`-konto (redan byggda `account_link`-flödet), med
+  token-uppdatering (`server._ensure_fresh_microsoft_mail_token`) innan registret läser
+  den. Byggd utan att röra `tools/email.py` — bevis på pluggbarhet. v1: läsning +
+  utkast-skapande, `email_send` kvar på SMTP.
 - 🔨 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
   *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**:
   `connectors/adapters/contacts_carddav.py` + `contacts_search`/`contacts_get`.

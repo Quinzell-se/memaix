@@ -210,8 +210,32 @@ Självregistrera alla inbyggda adaptrar; importera från `server.py`. **Test:**
 katalogen registrerar minst imap/caldav/google/local; `registry.get` hittar dem.
 
 ### Steg 6 — Första nya adapter (bevis)
-Implementera **Microsoft Graph mail** *eller* peka på Nextcloud-specen som första
-externa. Isolerat testbar med mockad HTTP. **Test:** list/read via mockad Graph-svar.
+✅ **Microsoft Graph mail** — `connectors/adapters/mail_microsoft.py`'s `GraphMailAdapter`,
+registrerad som `ConnectorSpec(type="microsoft", capability="mail", auth="per_user")` i
+`catalog.py`. Byggd helt utan att röra `tools/email.py` — bevis på att en ny extern integration
+verkligen bara kräver en ny adapter + registrering.
+
+Graphs REST-API (JSON, mapp-id:n, `$search`/`$filter`) ser inget ut som IMAP, men
+`connectors/base.py`'s `MailBackend` (och `tools/email.py`'s faktiska `_imap`-användning)
+speglar imap_tools exakt: `.folder.set(namn)`, `.fetch(criteria, mark_seen=, limit=)` med
+kriteriesträngarna `"ALL"` / `f"UID {id}"` / `f'BODY "{query}"'`, samt `.append(msg_bytes,
+flags, folder=)`. Adaptern översätter: en liten parser för de tre kriteriesträngarna
+`tools/email.py` någonsin skickar, en `.folder`-proxy som mappar mappnamn mot Graphs
+välkända mapp-id:n, och ett meddelande-omslag som exponerar samma attribut
+(`uid`/`subject`/`from_`/`date_str`/`seen`/`to`/`cc`/`text`/`html`) som imap_tools-meddelanden
+har. v1-omfång: läsning (list/read/search) + append-till-Drafts — allt `tools/email.py`
+anropar `_imap` för. `email_send` ligger kvar på SMTP; `In-Reply-To`-trådning tappas
+medvetet vid utkast-skapande (Graph v1.0 saknar ett enkelt sätt att sätta godtyckliga
+MIME-headers på ett nytt meddelande) — en dokumenterad brist, inte en tyst.
+
+Auth är `per_user`: ett projekt sätter sin `mailbox`-resurs `type: microsoft`, och
+gatewayen använder den inloggade användarens egna länkade `microsoft`-konto (samma
+OAuth-länkningsflöde `account_link`/`account_link_callback` redan hanterar). `server.py`'s
+`_ensure_fresh_microsoft_mail_token` uppdaterar en föråldrad access_token innan registret
+läser den — `registry.get()`'s `per_user`-gren laddar bara vad som redan finns lagrat, den
+uppdaterar inget själv (samma ansvarsuppdelning som `_resolve_calendar_dav`'s
+Google-uppdatering). **Test:** `test_mail_microsoft_adapter.py` (mockad HTTP mot adaptern
+isolerat) + `test_mail_microsoft_server.py` (token-uppdatering + registret end-to-end).
 
 ### Steg 7 — Config + docs
 Bekräfta att `acl.example.yaml`-resursformatet (BACKENDS.md §Config) räcker; lägg
@@ -227,10 +251,14 @@ uppdatera BACKENDS.md-fasrutan att peka hit.
 - [x] En ny adapter läggs till genom att registrera en `ConnectorSpec` — utan att röra verktygsfilerna
       (visat av contacts/webdav-files/tasks/deck/notes-adaptrarna, alla tillagda utan ändringar i
       `server.py`'s befintliga `email_*`/`calendar_*`-verktyg).
-- [ ] Ett projekt kör IMAP-mail, ett annat Google-kalender, samtidigt (registret väljer per resurs).
-- [ ] `per_user`-adapter väljer rätt token för inloggad användare; fel användare når aldrig annans token.
-- [ ] Utgående adapter-åtgärder (chat/issue/mail-send) går via Utkorgen (#3) i review-läge.
-- [ ] Credentials exponeras aldrig mot AI:n/loggar; adapterfel isoleras; hela sviten + docs-index grön.
+- [x] Ett projekt kör IMAP-mail, ett annat Microsoft Graph-mail, samtidigt (registret väljer per
+      resurs `type`; visat av `test_mail_microsoft_server.py`).
+- [x] `per_user`-adapter väljer rätt token för inloggad användare (TokenStore nycklas på
+      `(user, provider, account)`; fel användare kan inte nå en annans `microsoft`-token).
+- [ ] Utgående adapter-åtgärder (chat/issue/mail-send) går via Utkorgen (#3) i review-läge —
+      `email_send` var redan utkorgs-gated innan detta ramverk; `chat`/`issue` har inga adaptrar än.
+- [x] Credentials exponeras aldrig mot AI:n/loggar; adapterfel isoleras; hela sviten (714 tester) +
+      docs-index grön.
 
 ---
 

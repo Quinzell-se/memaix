@@ -1725,12 +1725,18 @@ def notes_sync(project: str) -> dict:
 
 def _mail_backend(project: str, user: str):
     """Resolve the project's mail connector (FEATURE-CONNECTOR-FRAMEWORK.md
-    Byggordning step 4) — same imap adapter _make_mailbox always built,
-    now resolved through the registry so a future non-IMAP mail type
-    (Google/Microsoft) only needs a new ConnectorSpec, not a tools/email.py
-    change."""
+    Byggordning step 4/6) — same imap adapter _make_mailbox always built for
+    the shared-IMAP case, or the per-user Microsoft Graph adapter if the
+    user has a linked microsoft account and the project's mail resource
+    selects it (see ConnectorRegistry.get's per_user auth branch).
+
+    _ensure_fresh_microsoft_mail_token runs first: the registry's per_user
+    branch just loads whatever token is stored, it doesn't refresh an
+    expiring one — refreshing (and re-storing) has to happen before load,
+    same division of labor as _resolve_calendar_dav's Google refresh."""
     from .connectors.registry import default_registry
 
+    _ensure_fresh_microsoft_mail_token(user)
     return default_registry().get(_get_acl(), _get_token_store(), project, "mail", user)
 
 
@@ -1915,6 +1921,60 @@ def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data:
         return new_data.get("access_token")
     except Exception:
         return None
+
+
+def _refresh_microsoft_token(cfg: dict, store, user: str, account: str, token_data: dict) -> str | None:
+    """Mirrors _refresh_google_token for the microsoft provider (used by
+    the Graph mail adapter)."""
+    import requests as req_lib
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        return None
+    provider_cfg = cfg.get("memaix", {}).get("oauth_providers", {}).get("microsoft", {})
+    client_id = provider_cfg.get("client_id", "")
+    client_secret = config.secret(provider_cfg.get("client_secret_ref", "")) or ""
+    try:
+        resp = req_lib.post(
+            "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        new_data = resp.json()
+        # Microsoft may not re-issue refresh_token on every refresh — preserve the original
+        new_data.setdefault("refresh_token", refresh_token)
+        store.store(user, "microsoft", account, new_data)
+        return new_data.get("access_token")
+    except Exception:
+        return None
+
+
+def _ensure_fresh_microsoft_mail_token(user: str) -> None:
+    """If the user has a linked microsoft account, refresh its access_token
+    when it's missing/expiring before the connector registry loads it —
+    registry.get()'s per_user branch only loads whatever is stored, it
+    doesn't refresh. A no-op if the user has no microsoft account (the
+    project's mail resource is presumably shared IMAP instead)."""
+    store = _get_token_store()
+    accounts = [a for a in store.list_accounts(user) if a["provider"] == "microsoft"]
+    if not accounts:
+        return
+    account = accounts[0]["account"]
+    token_data = store.load_one(user, "microsoft", account)
+    if not token_data:
+        return
+    import time
+    expires_at = token_data.get("expires_at") or (
+        token_data.get("created_at", 0) + token_data.get("expires_in", 3600)
+    )
+    if isinstance(expires_at, (int, float)) and expires_at - 60 < time.time():
+        if not _refresh_microsoft_token(config.load(), store, user, account, token_data):
+            store.mark_needs_relink(user, "microsoft", account)
 
 
 def _resolve_calendar_dav(project: str, user: str):
