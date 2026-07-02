@@ -11,15 +11,17 @@ since `_resolve_calendar_dav` in particular has several working, tested
 auth-priority branches (OAuth refresh, iCal, FreeBusy, static CalDAV) that
 deserve their own focused migration rather than being bundled in here.
 
-`contacts`/`carddav`, `files`/`webdav`, `tasks`/`caldav` and `deck`/
-`nextcloud` are the Nextcloud adapters (FEATURE-NEXTCLOUD-BACKEND.md §4-5-7,
-Byggordning steps 5-6) and are wired all the way to live MCP tools
-(server.py's `contacts_search`/`contacts_get`, `nc_files_*`, `nc_tasks_*`,
-`deck_sync`) since, unlike the local vault, they aren't replacing an
-existing working code path — they're additional capability. `tasks` is a
-resource key distinct from `calendar` even though both default to type
-'caldav' — a VTODO task list and an event calendar are typically different
-CalDAV collections.
+`contacts`/`carddav`, `files`/`webdav`, `tasks`/`caldav`, `deck`/`nextcloud`
+and `notes`/`nextcloud` are the Nextcloud adapters (FEATURE-NEXTCLOUD-
+BACKEND.md §4-5-7, Byggordning steps 5-6) and are wired all the way to
+live MCP tools (server.py's `contacts_search`/`contacts_get`, `nc_files_*`,
+`nc_tasks_*`, `deck_sync`, `notes_sync`) since, unlike the local vault,
+they aren't replacing an existing working code path — they're additional
+capability. `tasks` is a resource key distinct from `calendar` even
+though both default to type 'caldav' — a VTODO task list and an event
+calendar are typically different CalDAV collections; likewise `deck` and
+`notes` both default to type 'nextcloud' but are separate resource keys
+(a project can link one, the other, both, or neither).
 
 `chat` has no adapter to wrap yet — it gets a registered spec once a real
 backend exists (Nextcloud Talk).
@@ -74,6 +76,14 @@ def _deck_factory(acl, project, user, resource_cfg, token):
     return DeckAdapter(resource_cfg["url"], resource_cfg.get("user", ""), password or "")
 
 
+def _notes_factory(acl, project, user, resource_cfg, token):
+    from .. import config
+    from .adapters.notes_nextcloud import NotesAdapter
+
+    password = config.secret(resource_cfg.get("password_ref"))
+    return NotesAdapter(resource_cfg["url"], resource_cfg.get("user", ""), password or "")
+
+
 def register_defaults(registry: ConnectorRegistry) -> None:
     registry.register(
         ConnectorSpec(type="imap", capability="mail", auth="shared", factory=_imap_factory),
@@ -82,4 +92,5 @@ def register_defaults(registry: ConnectorRegistry) -> None:
         ConnectorSpec(type="webdav", capability="files", auth="shared", factory=_webdav_files_factory),
         ConnectorSpec(type="caldav", capability="tasks", auth="shared", factory=_tasks_caldav_factory),
         ConnectorSpec(type="nextcloud", capability="deck", auth="shared", factory=_deck_factory),
+        ConnectorSpec(type="nextcloud", capability="notes", auth="shared", factory=_notes_factory),
     )

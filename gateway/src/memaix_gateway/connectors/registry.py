@@ -26,6 +26,7 @@ DEFAULT_TYPES: dict[str, str] = {
     "files": "webdav",
     "tasks": "caldav",
     "deck": "nextcloud",
+    "notes": "nextcloud",
 }
 
 # Capability name -> the acl.yaml resource key it actually reads today.

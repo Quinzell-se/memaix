@@ -107,8 +107,13 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   (`deck_synced_at`-baslinje) upptäcks per sida; ändrar bara en sida vinner
   den sidan, ändrar båda blir det en **konflikt** som loggas och löses med
   "senast ändrad vinner". v1 synkar bara titel+beskrivning (inte etiketter/
-  förfallodatum/tilldelning — en uttalad avgränsning). **Kvar:** Notes-synk,
-  dokumentgenerering.
+  förfallodatum/tilldelning — en uttalad avgränsning). ✅ **Notes-synk**:
+  `connectors/adapters/notes_nextcloud.py` (samma JSON-REST-mönster som Deck)
+  + `nextcloud/sync.py::notes_sync` — samma konfliktregel som Deck-synken,
+  men eftersom minnesanteckningar (till skillnad från backlog-items) saknar
+  frontmatter/metadata-plats lever länken+baslinjen i en egen liten
+  `NotesLinkStore` (SQLite) istället för i filen själv. Nya Nextcloud-
+  anteckningar blir `notes/<slug>.md`. **Kvar:** dokumentgenerering.
 - 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
   ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från

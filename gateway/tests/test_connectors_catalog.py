@@ -50,6 +50,11 @@ def acl():
                     "board_id": 1,
                     "stack_id": 2,
                 },
+                "notes": {
+                    "url": "https://nc.example.com",
+                    "user": "acme@example.com",
+                    "password_ref": "env:NC_NOTES_PW",
+                },
             }
         },
     )
@@ -175,6 +180,37 @@ def test_catalog_registers_nextcloud_for_deck(registry, acl, monkeypatch):
     result = registry.get(acl, _FakeTokenStore(), "acme", "deck", "alice")
     assert isinstance(result, _Sentinel)
     assert seen == {"url": "https://nc.example.com", "user": "acme@example.com", "password": "d3ck"}
+
+
+def test_catalog_registers_nextcloud_for_notes(registry, acl, monkeypatch):
+    monkeypatch.setenv("NC_NOTES_PW", "n0tes")
+    seen = {}
+
+    class _Sentinel:
+        def __init__(self, url, user, password):
+            seen["url"] = url
+            seen["user"] = user
+            seen["password"] = password
+
+    import memaix_gateway.connectors.adapters.notes_nextcloud as t_notes
+
+    monkeypatch.setattr(t_notes, "NotesAdapter", _Sentinel)
+    result = registry.get(acl, _FakeTokenStore(), "acme", "notes", "alice")
+    assert isinstance(result, _Sentinel)
+    assert seen == {"url": "https://nc.example.com", "user": "acme@example.com", "password": "n0tes"}
+
+
+def test_deck_and_notes_are_independent_nextcloud_resources(registry, acl, monkeypatch):
+    """Both default to type 'nextcloud' but must not collide in the registry."""
+    monkeypatch.setenv("NC_DECK_PW", "d3ck")
+    monkeypatch.setenv("NC_NOTES_PW", "n0tes")
+    import memaix_gateway.connectors.adapters.deck_nextcloud as t_deck
+    import memaix_gateway.connectors.adapters.notes_nextcloud as t_notes
+
+    monkeypatch.setattr(t_deck, "DeckAdapter", lambda url, user, password: "deck-adapter")
+    monkeypatch.setattr(t_notes, "NotesAdapter", lambda url, user, password: "notes-adapter")
+    assert registry.get(acl, _FakeTokenStore(), "acme", "deck", "alice") == "deck-adapter"
+    assert registry.get(acl, _FakeTokenStore(), "acme", "notes", "alice") == "notes-adapter"
 
 
 def test_files_capability_does_not_read_vault_key(registry):

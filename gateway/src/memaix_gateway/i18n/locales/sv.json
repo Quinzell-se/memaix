@@ -58,6 +58,10 @@
   "cap.memory.undo.summary": "Återställ en minnesnot till en tidigare version.",
   "cap.memory.undo.examples": ["Ångra min senaste ändring i noten"],
 
+  "cap.memory.notes_sync.title": "Synka med Nextcloud Notes",
+  "cap.memory.notes_sync.summary": "Tvåvägssynk mellan din Nextcloud Notes och minnesanteckningar — nya anteckningar hämtas in, och ändringar på båda håll hålls i synk (senast ändrad vinner vid konflikt). Endast ägare.",
+  "cap.memory.notes_sync.examples": ["Synka mina minnesanteckningar med Nextcloud Notes", "Hämta in nya Nextcloud-anteckningar"],
+
   "cap.mail.triage.title": "Hålla koll på inkorgen",
   "cap.mail.triage.summary": "Lista, sök och läs projektets brevlåda.",
   "cap.mail.triage.examples": ["Visa olästa mejl från den här veckan", "Hitta mejlet om avtalet"],
@@ -177,6 +181,7 @@
   "cap.lock.no_files": "Ingen Nextcloud-filkoppling är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_tasks": "Ingen Nextcloud-uppgiftslista är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_deck": "Ingen Nextcloud Deck-tavla är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_notes": "Ingen Nextcloud Notes-koppling är konfigurerad för det här än — be en admin sätta upp en.",
 
   "cap.contacts.search.title": "Slå upp en kontakt",
   "cap.contacts.search.summary": "Sök i din länkade adressbok (t.ex. Nextcloud) på namn, mejl, organisation eller telefonnummer.",

@@ -58,6 +58,10 @@
   "cap.memory.undo.summary": "Revert a memory note to a previous version.",
   "cap.memory.undo.examples": ["Undo my last note edit"],
 
+  "cap.memory.notes_sync.title": "Sync with Nextcloud Notes",
+  "cap.memory.notes_sync.summary": "Two-way sync between your Nextcloud Notes and memory notes — new notes are pulled in, and changes on either side are kept in sync (most-recently-changed wins on conflict). Owner only.",
+  "cap.memory.notes_sync.examples": ["Sync my memory notes with Nextcloud Notes", "Pull in any new Nextcloud notes"],
+
   "cap.mail.triage.title": "Keep track of your inbox",
   "cap.mail.triage.summary": "List, search and read your project mailbox.",
   "cap.mail.triage.examples": ["Show me unread mail from this week", "Find the email about the contract"],
@@ -177,6 +181,7 @@
   "cap.lock.no_files": "No Nextcloud files connection is configured for this yet — ask an admin to set one up.",
   "cap.lock.no_tasks": "No Nextcloud task list is configured for this yet — ask an admin to set one up.",
   "cap.lock.no_deck": "No Nextcloud Deck board is configured for this yet — ask an admin to set one up.",
+  "cap.lock.no_notes": "No Nextcloud Notes connection is configured for this yet — ask an admin to set one up.",
 
   "cap.contacts.search.title": "Look up a contact",
   "cap.contacts.search.summary": "Search your linked address book (e.g. Nextcloud) by name, email, organization, or phone number.",

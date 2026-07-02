@@ -57,6 +57,15 @@ def register_defaults() -> None:
             needs_role="collaborator", needs_resource="vault",
             tags=("ångra", "undo"),
         ),
+        Capability(
+            key="memory.notes_sync", area="memory",
+            title_key="cap.memory.notes_sync.title",
+            summary_key="cap.memory.notes_sync.summary",
+            tools=("notes_sync",),
+            example_prompts_key="cap.memory.notes_sync.examples",
+            needs_role="owner", needs_resource="notes",
+            tags=("nextcloud", "notes", "memory", "sync"),
+        ),
         # ------------------------------------------------------------------
         # mail
         # ------------------------------------------------------------------

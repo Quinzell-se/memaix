@@ -50,6 +50,7 @@ _notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
 _rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
 _nudge_state: "NudgeState | None" = None  # type: ignore[name-defined]
 _pm_store: "PMStore | None" = None  # type: ignore[name-defined]
+_notes_link_store: "NotesLinkStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -339,6 +340,7 @@ _LOCK_REASON_KEYS = {
     "no_files": "cap.lock.no_files",
     "no_tasks": "cap.lock.no_tasks",
     "no_deck": "cap.lock.no_deck",
+    "no_notes": "cap.lock.no_notes",
     "link_google": "cap.lock.link_google",
     "link_microsoft": "cap.lock.link_microsoft",
 }
@@ -1625,6 +1627,35 @@ def deck_sync(project: str) -> dict:
     return _audited(
         user, project, "deck_sync", _run_deck_sync, acl, user, project,
         _deck=backend, board_id=deck_cfg.get("board_id"), stack_id=deck_cfg.get("stack_id"),
+    )
+
+
+def _get_notes_link_store():
+    global _notes_link_store
+    if _notes_link_store is None:
+        from .nextcloud.notes_store import NotesLinkStore
+        db_path = Path(os.environ.get("MEMAIX_NOTES_LINK_DB", "/tmp/memaix-notes-link.db"))
+        _notes_link_store = NotesLinkStore.for_path(db_path)
+    return _notes_link_store
+
+
+@mcp.tool()
+def notes_sync(project: str) -> dict:
+    """Two-way sync between the project's linked Nextcloud Notes account and
+    its memory notes. New notes become memory notes at 'notes/<slug>.md';
+    when only one side changed since the last sync that side wins, and when
+    both changed it's reported as a conflict (most-recently-changed side
+    wins). Owner only — it mutates both stores."""
+    from .connectors.registry import default_registry
+    from .nextcloud.sync import notes_sync as _run_notes_sync
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "notes", user)
+    return _audited(
+        user, project, "notes_sync", _run_notes_sync, acl, user, project,
+        _notes=backend, link_store=_get_notes_link_store(),
     )
 
 
