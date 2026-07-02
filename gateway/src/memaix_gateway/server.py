@@ -31,6 +31,7 @@ from .tools import account as t_account
 from .tools import contacts as t_contacts
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
+from .tools import pm_engine as t_pm_engine
 from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ _search_embedder_loaded = False
 _notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
 _rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
 _nudge_state: "NudgeState | None" = None  # type: ignore[name-defined]
+_pm_store: "PMStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -283,6 +285,15 @@ def _get_rules():
         db_path = Path(os.environ.get("MEMAIX_RULES_DB", "/tmp/memaix-rules.db"))
         _rules_store = RulesStore.for_path(db_path)
     return _rules_store
+
+
+def _get_pm():
+    global _pm_store
+    if _pm_store is None:
+        from .pm.store import PMStore
+        db_path = Path(os.environ.get("MEMAIX_PM_DB", "/tmp/memaix-pm.db"))
+        _pm_store = PMStore.for_path(db_path)
+    return _pm_store
 
 
 def _get_nudge_state():
@@ -1239,6 +1250,140 @@ def pm_weekly_review(project: str) -> str:
         "then pm_status_report to persist a snapshot. "
         "Summarize blockers and burndown for the user."
     )
+
+
+# ------------------------------------------------------------------
+# PM planning-engine tools (FEATURE-PM-ENGINE.md) — deterministic
+# resource/task/critical-path/allocation engine, distinct from the
+# markdown+git pm_* tools above. The engine computes; nothing here or in
+# tools/pm_engine.py ever guesses a date.
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def resource_add(project: str, name: str, cost_per_hour: float | None = None, capacity_hours_per_day: float = 8.0) -> dict:
+    """Add a plannable resource (person) to the PM engine."""
+    return _tool_call(
+        "resource_add", project, t_pm_engine.resource_add, name,
+        cost_per_hour=cost_per_hour, capacity_hours_per_day=capacity_hours_per_day, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def resource_list(project: str) -> list:
+    """List PM-engine resources for a project."""
+    return _tool_call("resource_list", project, t_pm_engine.resource_list, _pm=_get_pm())
+
+
+@mcp.tool()
+def resource_availability(
+    project: str, resource_id: int, start_date: str, end_date: str, hours_per_day: float, reason: str | None = None,
+) -> dict:
+    """Record an availability exception (vacation, part-time, ...) for a resource."""
+    return _tool_call(
+        "resource_availability", project, t_pm_engine.resource_availability,
+        resource_id, start_date, end_date, hours_per_day, reason, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def resource_set_skill(project: str, resource_id: int, skill: str, level: int | None = None) -> dict:
+    """Tag a resource with a skill (creates the skill if it's new)."""
+    return _tool_call(
+        "resource_set_skill", project, t_pm_engine.resource_set_skill, resource_id, skill, level, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def milestone_add(project: str, name: str, target_date: str | None = None) -> dict:
+    """Add a milestone that tasks can be linked to."""
+    return _tool_call("milestone_add", project, t_pm_engine.milestone_add, name, target_date, _pm=_get_pm())
+
+
+@mcp.tool()
+def task_add(
+    project: str, title: str, estimate_hours: float | None = None, required_skill: str | None = None,
+    priority: int = 3, backlog_id: str | None = None, milestone_id: int | None = None,
+) -> dict:
+    """Add a PM-engine task (scheduled/allocated work — distinct from backlog_add)."""
+    return _tool_call(
+        "task_add", project, t_pm_engine.task_add, title,
+        estimate_hours=estimate_hours, required_skill=required_skill, priority=priority,
+        backlog_id=backlog_id, milestone_id=milestone_id, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def task_estimate(project: str, task_id: int, estimate_hours: float) -> dict:
+    """Set or update a task's estimate."""
+    return _tool_call("task_estimate", project, t_pm_engine.task_estimate, task_id, estimate_hours, _pm=_get_pm())
+
+
+@mcp.tool()
+def task_log_actual(
+    project: str, task_id: int, date: str, hours_logged: float | None = None,
+    percent_complete: float | None = None, note: str | None = None,
+) -> dict:
+    """Log actual progress (hours and/or percent complete) against a task, for variance tracking."""
+    return _tool_call(
+        "task_log_actual", project, t_pm_engine.task_log_actual, task_id, date,
+        hours_logged=hours_logged, percent_complete=percent_complete, note=note, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def dependency_add(project: str, predecessor_id: int, successor_id: int, type: str = "FS", lag_days: float = 0.0) -> dict:
+    """Add a task dependency (FS/SS/FF/SF). Rejected if it would create a cycle."""
+    return _tool_call(
+        "dependency_add", project, t_pm_engine.dependency_add,
+        predecessor_id, successor_id, type, lag_days, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def scenario_add(project: str, name: str) -> dict:
+    """Create a planning scenario to allocate tasks against."""
+    return _tool_call("scenario_add", project, t_pm_engine.scenario_add, name, _pm=_get_pm())
+
+
+@mcp.tool()
+def scenario_list(project: str) -> list:
+    """List planning scenarios for a project."""
+    return _tool_call("scenario_list", project, t_pm_engine.scenario_list, _pm=_get_pm())
+
+
+@mcp.tool()
+def pm_allocate(project: str, scenario_id: int, project_start: str | None = None) -> dict:
+    """Run the planning engine for a scenario: critical path + resource-constrained
+    allocation. Deterministic — always recomputed from resources/tasks/dependencies,
+    never guessed. Owner only."""
+    return _tool_call(
+        "pm_allocate", project, t_pm_engine.pm_allocate, scenario_id, project_start, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def pm_utilization(
+    project: str, scenario_id: int, period_start: str, period_end: str, resource_id: int | None = None,
+) -> dict:
+    """Allocated hours vs capacity per resource over a period, for a scenario."""
+    return _tool_call(
+        "pm_utilization", project, t_pm_engine.pm_utilization,
+        scenario_id, period_start, period_end, resource_id, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def pm_variance(project: str) -> dict:
+    """Compare the committed baseline plan against logged actuals (hours + schedule slippage)."""
+    return _tool_call("pm_variance", project, t_pm_engine.pm_variance, _pm=_get_pm())
+
+
+@mcp.tool()
+def plan_commit(project: str, scenario_id: int) -> dict:
+    """Freeze a scenario as the committed plan and its baseline for future variance
+    tracking. Owner only; who committed it is recorded (audit)."""
+    return _tool_call("plan_commit", project, t_pm_engine.plan_commit, scenario_id, _pm=_get_pm())
 
 
 @mcp.tool()

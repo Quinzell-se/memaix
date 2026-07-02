@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Server-level tests for the PM planning-engine MCP tools
+(FEATURE-PM-ENGINE.md §5) — RBAC, audit, and an end-to-end
+resource->task->allocate->utilization->commit->variance flow."""
+
+from __future__ import annotations
+
+import pytest
+
+from memaix_gateway import server
+from memaix_gateway.acl import AccessDenied, Acl
+from memaix_gateway.outbox.queue import ActionQueue
+from memaix_gateway.pm.store import PMStore
+from memaix_gateway.safety.audit import AuditLog
+from memaix_gateway.notify.store import NotifyStore
+from memaix_gateway.rules.store import RulesStore
+from memaix_gateway.search.store import EmbeddingStore
+from memaix_gateway.timeline.store import ActionsStore
+
+
+@pytest.fixture()
+def wired(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    (vault / "backlog").mkdir(parents=True)
+    acl = Acl(
+        users={
+            "alice": {"grants": {"proj": "owner", "other": "owner"}},
+            "bob": {"grants": {"proj": "reader"}},
+            "carol": {"grants": {"proj": "collaborator"}},
+        },
+        projects={"proj": {"vault": str(vault)}, "other": {"vault": str(tmp_path / "other-vault")}},
+    )
+    AuditLog._clear_instances()
+    monkeypatch.setattr(server, "_acl", acl)
+    monkeypatch.setattr(server, "_audit", AuditLog.for_path(tmp_path / "audit.db"))
+    monkeypatch.setattr(server, "_outbox_queue", ActionQueue.for_path(tmp_path / "outbox.db"))
+    monkeypatch.setattr(server, "_timeline_store", ActionsStore.for_path(tmp_path / "actions.db"))
+    monkeypatch.setattr(server, "_search_store", EmbeddingStore.for_path(tmp_path / "index.db"))
+    monkeypatch.setattr(server, "_search_embedder", None)
+    monkeypatch.setattr(server, "_search_embedder_loaded", True)
+    monkeypatch.setattr(server, "_notify_store", NotifyStore.for_path(tmp_path / "notify.db"))
+    monkeypatch.setattr(server, "_rules_store", RulesStore.for_path(tmp_path / "rules.db"))
+    monkeypatch.setattr(server, "_pm_store", PMStore.for_path(tmp_path / "pm.db"))
+    monkeypatch.setenv("MEMAIX_USER", "alice")
+    server._rate_limiter._windows.clear()
+    return vault, acl
+
+
+def test_full_plan_flow(wired):
+    resource = server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    task = server.task_add("proj", "Design API", estimate_hours=16)
+    scenario = server.scenario_add("proj", "Sprint 1")
+
+    result = server.pm_allocate("proj", scenario["id"], "2025-01-06")
+    assert result["warnings"] == []
+    assert len(result["allocations"]) == 1
+    assert result["allocations"][0]["resource_id"] == resource["id"]
+
+    util = server.pm_utilization("proj", scenario["id"], "2025-01-06", "2025-01-07")
+    assert util["resources"][0]["utilization_pct"] == 100.0
+
+    commit_result = server.plan_commit("proj", scenario["id"])
+    assert commit_result["committed_scenario_id"] == scenario["id"]
+
+    server.task_log_actual("proj", task["id"], "2025-01-06", hours_logged=16.0, percent_complete=100.0)
+    variance = server.pm_variance("proj")
+    assert variance["ok"] is True
+    assert variance["tasks"][0]["percent_complete"] == 100.0
+
+
+def test_dependency_add_rejects_cycle(wired):
+    a = server.task_add("proj", "A")
+    b = server.task_add("proj", "B")
+    server.dependency_add("proj", a["id"], b["id"])
+    with pytest.raises(ValueError):
+        server.dependency_add("proj", b["id"], a["id"])
+
+
+def test_resource_add_requires_owner(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "carol")  # collaborator
+    with pytest.raises(AccessDenied):
+        server.resource_add("proj", "Anna")
+
+
+def test_task_add_allows_collaborator(wired, monkeypatch):
+    monkeypatch.setenv("MEMAIX_USER", "carol")
+    task = server.task_add("proj", "Some task")
+    assert task["title"] == "Some task"
+
+
+def test_reader_cannot_allocate(wired, monkeypatch):
+    scenario = server.scenario_add("proj", "Sprint 1")
+    monkeypatch.setenv("MEMAIX_USER", "bob")  # reader
+    with pytest.raises(AccessDenied):
+        server.pm_allocate("proj", scenario["id"])
+
+
+def test_reader_can_list_resources_and_run_utilization_variance(wired, monkeypatch):
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.resource_add("proj", "Anna")
+    server.task_add("proj", "Task", estimate_hours=8)
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    assert server.resource_list("proj") != []
+    server.pm_utilization("proj", scenario["id"], "2025-01-06", "2025-01-07")
+    server.pm_variance("proj")  # no baseline yet — should not raise, just {"ok": False}
+
+
+def test_plan_commit_requires_owner(wired, monkeypatch):
+    scenario = server.scenario_add("proj", "Sprint 1")
+    monkeypatch.setenv("MEMAIX_USER", "carol")
+    with pytest.raises(AccessDenied):
+        server.plan_commit("proj", scenario["id"])
+
+
+def test_task_add_and_resource_add_are_audited(wired):
+    server.task_add("proj", "Task")
+    server.resource_add("proj", "Anna")
+    tools = [e["tool"] for e in server._get_audit().tail(10)]
+    assert "task_add" in tools
+    assert "resource_add" in tools
+
+
+def test_scenario_scoped_to_own_project(wired):
+    scenario = server.scenario_add("proj", "Sprint 1")
+    # A scenario created under "proj" must not be usable from "other".
+    with pytest.raises(FileNotFoundError):
+        server.pm_allocate("other", scenario["id"])
+
+
+def test_resource_availability_and_skill(wired):
+    r = server.resource_add("proj", "Anna")
+    server.resource_availability("proj", r["id"], "2025-01-06", "2025-01-06", 0.0, "holiday")
+    result = server.resource_set_skill("proj", r["id"], "python", 4)
+    assert result["skill"] == "python"
+
+
+def test_milestone_add(wired):
+    m = server.milestone_add("proj", "Beta launch", "2025-03-01")
+    assert m["name"] == "Beta launch"

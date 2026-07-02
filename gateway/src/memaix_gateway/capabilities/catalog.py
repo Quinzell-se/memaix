@@ -225,6 +225,19 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource="vault",
             tags=("pm", "rapport", "report", "status"),
         ),
+        Capability(
+            key="pm.planning_engine", area="pm",
+            title_key="cap.pm.planning_engine.title",
+            summary_key="cap.pm.planning_engine.summary",
+            tools=(
+                "resource_add", "resource_list", "resource_availability", "resource_set_skill",
+                "milestone_add", "task_add", "task_estimate", "task_log_actual", "dependency_add",
+                "scenario_add", "scenario_list", "pm_allocate", "pm_utilization", "pm_variance", "plan_commit",
+            ),
+            example_prompts_key="cap.pm.planning_engine.examples",
+            needs_role="reader", needs_resource="vault",
+            tags=("pm", "planering", "planning", "resurser", "resources", "schema", "kritisk linje", "critical path", "allokering"),
+        ),
         # ------------------------------------------------------------------
         # outbox (FEATURE-APPROVAL-OUTBOX.md)
         # ------------------------------------------------------------------

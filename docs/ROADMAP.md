@@ -91,8 +91,24 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   riskera), till skillnad från Files/WebDAV som skulle ersätta lokal-valvet i
   `files_*`. **Kvar:** Files (WebDAV) + indexeringshook, Talk (notiskanal), Tasks
   (VTODO), Deck-/Notes-synk, dokumentgenerering.
-- 📋 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
-  *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))*
+- 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
+  *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
+  ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från
+  PM-DATA-MODEL.md, cykel-avvisning på `dependency`), `pm/schedule.py`
+  (kritisk linje: forward/backward pass, FS/SS/FF/SF + lag, cykel → tydligt
+  fel), `pm/allocate.py` (prioritetsbaserad list-scheduling: kompetens +
+  kapacitet + tillgänglighet + beroenden, deterministisk och idempotent),
+  `pm/report.py` (`utilization`, `variance`). Verktyg:
+  `resource_add/list/availability/set_skill`, `milestone_add`, `task_add/
+  estimate/log_actual`, `dependency_add`, `scenario_add/list`,
+  `pm_allocate`, `pm_utilization`, `pm_variance`, `plan_commit` — RBAC per
+  PM-AGENT.md (planändring = owner). **Medvetet bortvalt v1:** `task_assign`
+  (schemat har inget fält för manuell override — allokering är alltid
+  motor-beräknad, matchar "LLM:en räknar aldrig"); kalender är
+  arbetsdag-agnostisk (ingen helg/röd dag-modell ännu). **Kvar:** `whatif`
+  (scenario-diff), CP-SAT-allokering (uttryckligen valfritt i byggspecen),
+  agent-prompter (`pm_plan_session`/`pm_whatif_session`), generisk
+  `pm_report(kind, audience)`.
 
 **Varför sist:** störst värde när kärnan är stabil, sökbar och säker. PM-motorn
 kan dock byggas parallellt med fas 2–3 eftersom den är fristående.

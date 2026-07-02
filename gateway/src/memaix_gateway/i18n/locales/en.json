@@ -126,6 +126,10 @@
   "cap.pm.report.summary": "Create a status snapshot from backlog, RAID and notes.",
   "cap.pm.report.examples": ["Give me a status report for this project"],
 
+  "cap.pm.planning_engine.title": "Plan resources and tasks with the PM engine",
+  "cap.pm.planning_engine.summary": "Model resources, capacity and task dependencies, then compute a real critical-path schedule and resource-constrained allocation — the engine calculates, never guesses; you approve the plan.",
+  "cap.pm.planning_engine.examples": ["Add Anna as a resource with 6 hours/day capacity", "What's the critical path for this project?", "How utilized is the team next month?"],
+
   "cap.outbox.review.title": "Review the outbox",
   "cap.outbox.review.summary": "See queued outgoing actions (emails, calendar changes) and approve or reject them before they go out.",
   "cap.outbox.review.examples": ["What's waiting for my approval?", "Approve the queued email"],

@@ -62,6 +62,11 @@ auth:
 #   max_candidates: 500    # cap on vectors compared per query (cosine is done
 #                          # in Python — raise only if your vault is huge)
 
+# PM planning engine (FEATURE-PM-ENGINE.md) — resource_add/task_add/pm_allocate/
+# pm_utilization/pm_variance/plan_commit. Own SQLite DB (MEMAIX_PM_DB env var,
+# default /tmp/memaix-pm.db); no config needed today — v1 is the heuristic
+# allocator only (no `pm.allocator` switch yet; CP-SAT is future work).
+
 onboarding:
   enabled: true
   intro: "Hej! Jag behöver lära känna dig för att hjälpa dig bättre."
