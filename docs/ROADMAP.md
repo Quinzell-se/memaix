@@ -73,8 +73,17 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
 överblick → drill-down.
 
 ## Fas 4 — Ekosystem & fördjupning 📋
-- 📋 **Connector-ramverk** — [FEATURE-CONNECTOR-FRAMEWORK.md](FEATURE-CONNECTOR-FRAMEWORK.md)
+- ✅ **Connector-ramverk (grund)** — [FEATURE-CONNECTOR-FRAMEWORK.md](FEATURE-CONNECTOR-FRAMEWORK.md)
   *(realiserar adaptermodellen i [BACKENDS.md](BACKENDS.md) som en pluggbar SDK)*
+  `connectors/base.py` (kapabilitets-protokoll) + `connectors/registry.py`
+  (`ConnectorSpec`/`ConnectorRegistry.get` med `shared`/`per_user`-auth) +
+  `connectors/catalog.py` (registrerar dagens `imap`/`caldav`) klart och
+  testat isolerat. **Kvar:** flytta `email_*`/`calendar_*`/`files_*`:s
+  faktiska anrop till att gå via registret (byter ut `_make_mailbox`/
+  `_resolve_calendar_dav`) — skjutet upp eftersom `_resolve_calendar_dav`
+  har flera fungerande, testade auth-grenar (OAuth-refresh/iCal/FreeBusy/
+  statisk CalDAV) som förtjänar en egen fokuserad migrering; samt en första
+  ny extern adapter (Microsoft Graph) som bevis på pluggbarhet.
 - 📋 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
   *(beror på connector-ramverket)*
 - 📋 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
