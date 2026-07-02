@@ -106,6 +106,17 @@ def test_write_file_returns_ok(adapter, http):
     assert ("PUT", "https://nc.example.com/dav/files/alice/notes.txt") in http.requests
 
 
+def test_write_binary_returns_ok(adapter, http):
+    result = adapter.write_binary("report.odt", b"\x50\x4b\x03\x04not really a zip but bytes")
+    assert result == "ok: report.odt"
+    assert ("PUT", "https://nc.example.com/dav/files/alice/report.odt") in http.requests
+
+
+def test_write_binary_rejects_traversal(adapter):
+    with pytest.raises(ValueError):
+        adapter.write_binary("../escape.odt", b"pwned")
+
+
 def test_search_files_finds_match_in_subdir(adapter):
     results = adapter.search_files("budget")
     assert len(results) == 1

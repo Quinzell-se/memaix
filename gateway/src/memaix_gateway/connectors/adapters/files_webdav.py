@@ -96,6 +96,16 @@ class WebDavFilesAdapter:
         resp.raise_for_status()
         return f"ok: {path}"
 
+    def write_binary(self, path: str, data: bytes) -> str:
+        """Same as write_file but for raw bytes (e.g. a generated .odt) —
+        write_file's `content: str` would corrupt non-text data by forcing
+        a UTF-8 encode. Used by nextcloud/docgen.py; not part of the
+        FilesBackend text-only surface nc_files_write exposes."""
+        rel = _safe_rel(path)
+        resp = self._request("PUT", rel, data=data)
+        resp.raise_for_status()
+        return f"ok: {path}"
+
     def _walk(self, path: str):
         for entry in self.list_files(path):
             child = f"{path.rstrip('/')}/{entry['name']}" if path not in ("", "/") else f"/{entry['name']}"

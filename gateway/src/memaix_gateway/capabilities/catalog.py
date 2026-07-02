@@ -142,7 +142,7 @@ def register_defaults() -> None:
             key="files.nextcloud", area="pm",
             title_key="cap.files.nextcloud.title",
             summary_key="cap.files.nextcloud.summary",
-            tools=("nc_files_list", "nc_files_read", "nc_files_write", "nc_files_search"),
+            tools=("nc_files_list", "nc_files_read", "nc_files_write", "nc_files_search", "nc_generate_report"),
             example_prompts_key="cap.files.nextcloud.examples",
             needs_role="collaborator", needs_resource="files",
             tags=("filer", "nextcloud", "webdav", "files", "documents"),

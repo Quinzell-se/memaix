@@ -28,6 +28,7 @@ from .tools import contacts as t_contacts
 from .tools import email as t_email
 from .tools import files as t_files
 from .tools import memory as t_memory
+from .tools import nc_docgen as t_nc_docgen
 from .tools import nc_files as t_nc_files
 from .tools import nc_tasks as t_nc_tasks
 from .tools import onboarding as t_onboarding
@@ -1695,6 +1696,26 @@ def nc_files_search(project: str, query: str, path: str = "/") -> list:
     backend = _get_nc_files(project, user)
     return _audited(
         user, project, "nc_files_search", t_nc_files.nc_files_search, acl, user, project, query, path, _files=backend,
+    )
+
+
+@mcp.tool()
+def nc_generate_report(
+    project: str, path: str, kind: str = "status", audience: str = "team",
+    scenario_id: int | None = None, period_start: str | None = None, period_end: str | None = None,
+) -> dict:
+    """Render a pm_report() rollup (milestones/variance/RAID/utilization) as
+    a real .odt file and write it to the project's linked Nextcloud files —
+    for sharing a status report with stakeholders as a document, not just
+    structured data. Same kind/audience options as pm_report."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_generate_report", t_nc_docgen.nc_generate_report,
+        acl, user, project, path, kind, audience, scenario_id, period_start, period_end,
+        _files=backend, _pm=_get_pm(),
     )
 
 

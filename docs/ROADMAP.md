@@ -97,7 +97,7 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   token-uppdatering (`server._ensure_fresh_microsoft_mail_token`) innan registret läser
   den. Byggd utan att röra `tools/email.py` — bevis på pluggbarhet. v1: läsning +
   utkast-skapande, `email_send` kvar på SMTP.
-- 🔨 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
+- ✅ **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
   *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**:
   `connectors/adapters/contacts_carddav.py` + `contacts_search`/`contacts_get`.
   ✅ **Files (WebDAV)**: `connectors/adapters/files_webdav.py` (PROPFIND/GET/PUT,
@@ -126,7 +126,14 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   men eftersom minnesanteckningar (till skillnad från backlog-items) saknar
   frontmatter/metadata-plats lever länken+baslinjen i en egen liten
   `NotesLinkStore` (SQLite) istället för i filen själv. Nya Nextcloud-
-  anteckningar blir `notes/<slug>.md`. **Kvar:** dokumentgenerering.
+  anteckningar blir `notes/<slug>.md`. ✅ **Dokumentgenerering**:
+  `nc_generate_report` kör `pm_report()` och skriver resultatet som en riktig
+  `.odt`-fil (`nextcloud/docgen.py::render_odt`, hand-byggd zip+XML — inget
+  nytt beroende för något så här smalt) till projektets Nextcloud-filer via
+  en ny `write_binary` på `WebDavFilesAdapter` (`write_file`s `str`-typ hade
+  förstört ODT:ns binära data). Lägst prioriterat enligt specen själv, och
+  sista biten kvar av Nextcloud-specen. **Nedprioriterat på användarens
+  begäran, inte glömt:** Talk (notiskanal) — ingen `ChatBackend` finns än.
 - ✅ **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
   ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från
