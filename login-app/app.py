@@ -46,20 +46,48 @@ HYDRA_ADMIN = os.environ.get("HYDRA_ADMIN_URL", "http://hydra:4445")
 ALLOWED_USERS: set[str] = set(
     os.environ.get("MEMAIX_ALLOWED_USERS", "alice").split(",")
 )
-# Format: salt_hex:pbkdf2_hex  (genereras av setup-script)
-_PASSWORD_HASH = os.environ.get("MEMAIX_LOGIN_PASSWORD_HASH", "")
+# Shared fallback hash (single-user backwards-compat). Format: salt_hex:pbkdf2_hex
+_SHARED_HASH = os.environ.get("MEMAIX_LOGIN_PASSWORD_HASH", "")
+
+# Per-user hashes from acl.yaml (users.<id>.password_hash). Loaded at startup.
+_PER_USER_HASHES: dict[str, str] = {}
+
+_ACL_PATH = os.environ.get("MEMAIX_ACL_CONFIG", "/app/config/acl.yaml")
+
+
+def _load_per_user_hashes() -> None:
+    try:
+        import yaml
+        with open(_ACL_PATH) as f:
+            acl = yaml.safe_load(f) or {}
+        for uid, udata in (acl.get("users") or {}).items():
+            h = (udata or {}).get("password_hash", "")
+            if h:
+                _PER_USER_HASHES[uid] = h
+    except Exception:
+        pass  # acl.yaml missing or unparseable — fall back to shared hash
+
+
+_load_per_user_hashes()
 
 app = FastAPI(title="Memaix login")
 templates = Jinja2Templates(directory="/app/templates")
 
 
-def _verify_password(provided: str) -> bool:
-    if not _PASSWORD_HASH or ":" not in _PASSWORD_HASH:
+def _pbkdf2_check(provided: str, stored_hash: str) -> bool:
+    if not stored_hash or ":" not in stored_hash:
         return False
-    salt_hex, key_hex = _PASSWORD_HASH.split(":", 1)
+    salt_hex, key_hex = stored_hash.split(":", 1)
     salt = bytes.fromhex(salt_hex)
     derived = hashlib.pbkdf2_hmac("sha256", provided.encode(), salt, 200_000)
     return hmac.compare_digest(derived.hex(), key_hex)
+
+
+def _verify_password(user: str, provided: str) -> bool:
+    per_user = _PER_USER_HASHES.get(user)
+    if per_user:
+        return _pbkdf2_check(provided, per_user)
+    return _pbkdf2_check(provided, _SHARED_HASH)
 
 
 def _hydra_get(path: str, challenge_name: str, challenge: str) -> dict:
@@ -132,7 +160,7 @@ async def login_post(
     password: str = Form(...),
 ):
     t, locale = _t_for_request(request)
-    if username not in ALLOWED_USERS or not _verify_password(password):
+    if username not in ALLOWED_USERS or not _verify_password(username, password):
         return templates.TemplateResponse(
             request, "login.html",
             {"challenge": login_challenge, "error": t("login_error_credentials"), "t": t, "locale": locale},

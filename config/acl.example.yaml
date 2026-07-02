@@ -1,14 +1,28 @@
 users:
   alice:
+    # admin: true ger implicit owner på alla projekt + tillgång till /app/admin
+    admin: true
     # OAuth subject från Hydra. Sätts till användarnamnet vi angav vid inloggning.
     oauth_subjects:
       - alice
+    # Per-user lösenord för login-appen. Generera med: python3 -c "
+    #   import hashlib, secrets, sys; s=secrets.token_hex(16);
+    #   h=hashlib.pbkdf2_hmac('sha256',sys.argv[1].encode(),bytes.fromhex(s),200_000);
+    #   print(s+':'+h.hex())" 'ditt-lösenord'
+    # password_hash: salt_hex:pbkdf2_hex
     grants:
       acme: owner
       project-a: owner
       project-b: owner
       personal: owner
       shared: owner
+  bob:
+    oauth_subjects:
+      - bob
+    # password_hash: salt_hex:pbkdf2_hex
+    grants:
+      acme: collaborator
+      shared: reader
 
 projects:
   acme:

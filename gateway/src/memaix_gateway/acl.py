@@ -46,8 +46,14 @@ class Acl:
     def grants(self, user_id: str) -> dict:
         return self.users.get(user_id, {}).get("grants", {})
 
+    def is_admin(self, user_id: str) -> bool:
+        """Return True if the user has the global admin flag set in acl.yaml."""
+        return bool(self.users.get(user_id, {}).get("admin", False))
+
     def enforce(self, user_id: str, project: str, need: str = "reader") -> None:
         """Raise AccessDenied unless `user_id` has at least `need` on `project`."""
+        if self.is_admin(user_id):
+            return  # admin has implicit owner on every project
         if project not in self.projects:
             raise AccessDenied(f"unknown project: {project}")
         role = self.grants(user_id).get(project)
@@ -61,4 +67,6 @@ class Acl:
         return self.projects.get(project, {}).get(key)
 
     def visible_projects(self, user_id: str) -> list[str]:
+        if self.is_admin(user_id):
+            return sorted(self.projects.keys())
         return sorted(self.grants(user_id).keys())

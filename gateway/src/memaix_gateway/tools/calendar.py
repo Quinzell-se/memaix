@@ -490,3 +490,87 @@ def calendar_delete(
     dav = _get_dav(acl, project, _dav)
     dav.delete_event(id)
     return {"deleted": True, "requires_confirmation": True}
+
+
+# ------------------------------------------------------------------
+# Setup / status — extracted from MCP wrappers so web-routes can reuse
+# ------------------------------------------------------------------
+
+
+def setup_mode(
+    acl: Acl,
+    user_id: str,
+    project: str,
+    mode: str,
+    store,
+    public_url: str,
+    ical_url: str | None = None,
+    calendar_id: str | None = None,
+) -> dict:
+    """Configure per-user calendar access mode for a project.
+
+    Called by both the MCP tool (calendar_setup) and web-routes
+    (POST /app/api/calendar-mode).  Accepts explicit dependencies
+    instead of relying on MCP context helpers.
+    """
+    acl.enforce(user_id, project, "collaborator")
+    from .account import account_link
+
+    if mode == "oauth":
+        result = account_link(acl, user_id, "google", public_url)
+        return {"ok": True, "mode": "oauth", "link_url": result["link_url"],
+                "next": f"Öppna {result['link_url']} i din webbläsare"}
+
+    if mode == "ical_secret":
+        if not ical_url:
+            return {"ok": False, "error": "ical_url krävs för mode=ical_secret"}
+        store.store(user_id, "ical_secret", "ical_secret", {"ical_url": ical_url})
+        return {"ok": True, "mode": "ical_secret", "stored": True}
+
+    if mode == "free_busy":
+        if not calendar_id:
+            return {"ok": False, "error": "calendar_id krävs för mode=free_busy"}
+        store.store(user_id, "free_busy", "free_busy", {"calendar_id": calendar_id})
+        return {"ok": True, "mode": "free_busy", "calendar_id": calendar_id,
+                "note": "Kräver att google_api_key finns i memaix.yaml och att din kalender är publik"}
+
+    if mode == "none":
+        for provider, account in [("ical_secret", "ical_secret"), ("free_busy", "free_busy")]:
+            store.delete(user_id, provider, account)
+        return {"ok": True, "mode": "none",
+                "note": "Kalender-koppling borttagen (OAuth-token behåller du via account_unlink)"}
+
+    return {"ok": False, "error": f"Okänt mode: {mode!r}. Välj oauth, ical_secret, free_busy eller none"}
+
+
+def get_status(user_id: str, project: str, acl: Acl, store) -> dict:
+    """Return active calendar mode for user in project.
+
+    Called by both the MCP tool (calendar_status) and web-routes
+    (GET /app/api/calendar-mode).
+    """
+    acl.enforce(user_id, project, "reader")
+    all_accounts = store.list_accounts(user_id)
+
+    google = [a for a in all_accounts if a["provider"] == "google"]
+    ical = [a for a in all_accounts if a["provider"] == "ical_secret"]
+    fb = [a for a in all_accounts if a["provider"] == "free_busy"]
+
+    active = "none"
+    details: dict = {}
+    if google:
+        active = "oauth"
+        details = {"account": google[0]["account"], "status": google[0]["status"]}
+    elif ical:
+        active = "ical_secret"
+        details = {"status": ical[0]["status"]}
+    elif fb:
+        active = "free_busy"
+        token_data = store.load_one(user_id, "free_busy", "free_busy") or {}
+        details = {"calendar_id": token_data.get("calendar_id", ""), "status": fb[0]["status"]}
+
+    return {
+        "active_mode": active,
+        "details": details,
+        "available_modes": ["oauth", "ical_secret", "free_busy"],
+    }
