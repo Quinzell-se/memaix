@@ -112,7 +112,7 @@ class ActionsStore:
         with self._lock, self._connect() as conn:
             placeholders = ",".join("?" for _ in projects)
             rows = conn.execute(
-                f"SELECT * FROM actions WHERE project IN ({placeholders}) "
+                f"SELECT * FROM actions WHERE project IN ({placeholders}) "  # nosec B608 -- placeholders is a "?,?,..." count string, values are bound
                 "ORDER BY created_at DESC LIMIT ?",
                 (*projects, limit),
             ).fetchall()

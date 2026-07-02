@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ def next_brief_epoch(prefs: dict, now: datetime) -> int:
     """Next UTC epoch (int seconds) for prefs['brief_time'] in prefs['timezone'],
     strictly after *now*."""
     from zoneinfo import ZoneInfo
+    tz: tzinfo
     try:
         tz = ZoneInfo(prefs.get("timezone", "UTC"))
     except Exception:

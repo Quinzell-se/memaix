@@ -25,7 +25,7 @@ DEFAULT_INTERVIEW = (
 )
 
 _FLAG_PATH = "_system/onboarding.json"
-_INCOMPLETE_TOKEN = "profil_status: ofullständig"
+_INCOMPLETE_TOKEN = "profil_status: ofullständig"  # nosec B105 -- profile-status marker, not a credential
 
 
 def _interview_template(vault: Path, cfg: dict | None = None) -> str:
@@ -47,7 +47,7 @@ def build_interview_prompt(user_id: str, vault: Path | None, cfg: dict | None = 
     """Return the full prompt text for the onboarding_interview MCP prompt."""
     template = _interview_template(vault, cfg) if vault else DEFAULT_INTERVIEW
     outro = (cfg or {}).get("memaix", {}).get("onboarding", {}).get(
-        "outro", "Tack! Sammanställ nu en kondenserad profil (löptext + punkter, inte råa svar) och anropa verktyget `onboarding_complete` med texten som `profile_content`. Hoppa inte över det steget — det är det som markerar onboarding som klar."
+        "outro", "Tack! Sammanställ nu en kondenserad profil (löptext + punkter, inte råa svar) och anropa verktyget `onboarding_complete` med texten som `profile_content`. Hoppa inte över det steget — det är det som markerar onboarding som klar."  # noqa: E501
     )
     return (
         f"{template}\n\n"

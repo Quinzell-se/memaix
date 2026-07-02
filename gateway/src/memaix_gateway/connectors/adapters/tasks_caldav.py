@@ -11,8 +11,9 @@ three Nextcloud adapters and simple to test without a real server.
 from __future__ import annotations
 
 import uuid
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+import defusedxml.ElementTree as ET
 
 
 def _first(prop) -> str:

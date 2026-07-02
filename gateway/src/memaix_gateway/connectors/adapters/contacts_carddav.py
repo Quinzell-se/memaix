@@ -12,7 +12,7 @@ test against a small mocked HTTP client without a real Nextcloud in CI.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 
 def _vcard_to_dict(card) -> dict:

@@ -155,6 +155,8 @@ def pm_whatif(
     _owned_scenario(_pm, project, base_scenario_id)
     for change in changes:
         entity, entity_id, field = change.get("entity"), change.get("entity_id"), change.get("field")
+        if not isinstance(entity_id, int):
+            raise ValueError(f"whatif change entity_id must be an int, got {entity_id!r}")
         if entity == "task":
             _owned_task(_pm, project, entity_id)
         elif entity == "resource":

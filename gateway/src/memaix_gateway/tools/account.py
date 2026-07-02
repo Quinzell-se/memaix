@@ -13,8 +13,12 @@ import os
 import sqlite3
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..acl import Acl
+
+if TYPE_CHECKING:
+    from ..backends.token_store import TokenStore
 
 # In-process state for pending OAuth flows: state_token → {user_id, provider, exp}
 # This is the default (memory) backend. For multi-worker deployments set
@@ -129,7 +133,7 @@ def account_link(acl: Acl, user_id: str, provider: str, public_url: str) -> dict
     return {"link_url": link_url, "expires_in": 600, "provider": provider}
 
 
-def account_list(acl: Acl, user_id: str, store: "TokenStore") -> list[dict]:  # noqa: F821
+def account_list(acl: Acl, user_id: str, store: TokenStore) -> list[dict]:
     """List linked accounts for the calling user."""
     return store.list_accounts(user_id)
 
@@ -139,7 +143,7 @@ def account_unlink(
     user_id: str,
     provider: str,
     account: str,
-    store: "TokenStore",  # noqa: F821
+    store: TokenStore,
 ) -> dict:
     """Unlink (delete) an account. Returns {ok: True}."""
     if provider not in PROVIDERS:

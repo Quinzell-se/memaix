@@ -36,7 +36,7 @@ class CalendarAuthRequired(Exception):
     def __init__(self, link_url: str, options: list[dict] | None = None) -> None:
         self.link_url = link_url
         self.options = options or []
-        super().__init__(f"auth_required: configure calendar via calendar_setup")
+        super().__init__("auth_required: configure calendar via calendar_setup")
 
 
 # ------------------------------------------------------------------
@@ -156,14 +156,15 @@ class _ICalAdapter:
         self._url = ical_url
 
     def _fetch(self) -> list[dict]:
+        from datetime import date, timezone
+
         import requests
         import vobject
-        from datetime import timezone, date
 
         r = requests.get(self._url, timeout=10)
         r.raise_for_status()
         cal = vobject.readOne(r.text)
-        events = []
+        events: list[dict] = []
         for component in cal.components():
             if component.name != "VEVENT":
                 continue
@@ -232,8 +233,9 @@ class _FreeBusyAdapter:
         self._api_key = api_key
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
-        import requests
         from datetime import timezone
+
+        import requests
 
         def _iso(dt: datetime) -> str:
             if not dt.tzinfo:
@@ -277,13 +279,17 @@ class _FreeBusyAdapter:
 
 class _RealDavAdapter:
     def __init__(self, acl: Acl, project: str) -> None:
-        import caldav
+        # caldav's package __init__ exposes DAVClient via a lazy PEP 562
+        # __getattr__ typed to return `object`, which makes mypy treat
+        # `caldav.DAVClient(...)` as calling a non-callable. Importing the
+        # real class from its submodule keeps the actual type.
+        from caldav.davclient import DAVClient
 
         cfg = acl.resource(project, "calendar")
         if not cfg:
             raise ValueError(f"project {project!r} has no calendar configured")
         password = config.secret(cfg.get("password_ref"))
-        client = caldav.DAVClient(
+        client = DAVClient(
             url=cfg["url"],
             username=cfg.get("user", ""),
             password=password,

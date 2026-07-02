@@ -17,12 +17,16 @@ dependencies = [
     "cryptography>=42",
     "pyjwt>=2.8",
     "numpy>=1.26",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-anyio",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "bandit>=1.7",
 ]
 # Optional local semantic embedder (FEATURE-SEMANTIC-SEARCH.md). Without it,
 # search_all() degrades gracefully to lexical (FTS5) search only.
@@ -39,3 +43,40 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# server.py's lazy-singleton globals are annotated with string forward-refs
+# to classes that are only imported inside the functions that assign them
+# (kept out of module scope to avoid heavy imports at startup). mypy accepts
+# these via inline `# type: ignore[name-defined]`; ruff's F821 doesn't look
+# at those comments, so it's silenced here instead.
+"src/memaix_gateway/server.py" = ["F821"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false
+
+[tool.bandit]
+# Accepted-by-design patterns, not genuine findings — see docs/THREAT-MODEL.md:
+#   B101 - assert used to document/enforce invariants mypy can't infer from
+#          control flow (e.g. "just inserted, so the row exists"); never used
+#          for security control flow, so stripping under -O is harmless.
+#   B108 - hardcoded /tmp/... default paths; every one is overridable via a
+#          MEMAIX_*_DB env var and used only as a fallback default.
+#   B110 - try/except/pass: best-effort operations (notification channel
+#          delivery, UI hints) where failure must never break the caller.
+#   B112 - try/except/continue: same best-effort pattern inside a loop.
+#   B404/B603/B607 - subprocess used only to shell out to `git` with a list
+#          of args (never shell=True, never a partial/untrusted path).
+# Genuine findings (SQL string-building, XML parsing, password args, SSRF-ish
+# urlopen) are fixed at the call site or annotated individually with a
+# `# nosec <ID> -- <reason>` comment instead of a blanket skip.
+skips = ["B101", "B108", "B110", "B112", "B404", "B603", "B607"]

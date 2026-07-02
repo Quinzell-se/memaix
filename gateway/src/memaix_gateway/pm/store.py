@@ -168,7 +168,10 @@ class PMStore:
             )
             conn.commit()
             resource_id = cur.lastrowid
-        return self.get_resource(resource_id)
+        assert resource_id is not None
+        resource = self.get_resource(resource_id)
+        assert resource is not None  # just inserted
+        return resource
 
     def get_resource(self, resource_id: int) -> dict | None:
         with self._lock, self._connect() as conn:
@@ -279,7 +282,10 @@ class PMStore:
             )
             conn.commit()
             task_id = cur.lastrowid
-        return self.get_task(task_id)
+        assert task_id is not None
+        task = self.get_task(task_id)
+        assert task is not None  # just inserted
+        return task
 
     def get_task(self, task_id: int) -> dict | None:
         with self._lock, self._connect() as conn:
@@ -287,13 +293,14 @@ class PMStore:
         return dict(row) if row else None
 
     def update_task(self, task_id: int, **fields) -> dict:
-        if not fields:
-            return self.get_task(task_id)
-        columns = ", ".join(f"{k}=?" for k in fields)
-        with self._lock, self._connect() as conn:
-            conn.execute(f"UPDATE task SET {columns} WHERE id=?", (*fields.values(), task_id))
-            conn.commit()
-        return self.get_task(task_id)
+        if fields:
+            columns = ", ".join(f"{k}=?" for k in fields)
+            with self._lock, self._connect() as conn:
+                conn.execute(f"UPDATE task SET {columns} WHERE id=?", (*fields.values(), task_id))  # nosec B608 -- keys are hardcoded kwargs from call sites, not external input; values are bound
+                conn.commit()
+        task = self.get_task(task_id)
+        assert task is not None  # caller passed an existing task_id
+        return task
 
     def list_tasks(self, project: str) -> list[dict]:
         with self._lock, self._connect() as conn:
@@ -344,7 +351,10 @@ class PMStore:
             )
             conn.commit()
             scenario_id = cur.lastrowid
-        return self.get_scenario(scenario_id)
+        assert scenario_id is not None
+        scenario = self.get_scenario(scenario_id)
+        assert scenario is not None  # just inserted
+        return scenario
 
     def get_scenario(self, scenario_id: int) -> dict | None:
         with self._lock, self._connect() as conn:

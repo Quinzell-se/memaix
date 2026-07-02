@@ -18,7 +18,6 @@ from ..acl import Acl
 from ..backends.memory_store import MemoryStore
 from ..paths import validate_relative_path
 
-
 # ------------------------------------------------------------------
 # Validation
 # ------------------------------------------------------------------

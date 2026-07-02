@@ -24,13 +24,13 @@ from __future__ import annotations
 
 import heapq
 from datetime import date, timedelta
+from typing import Any, Callable
 
 from .schedule import compute_schedule
 
-
-_OVERLAY_PARSERS = {
+_OVERLAY_PARSERS: dict[str, Callable[[Any], Any]] = {
     "estimate_hours": lambda v: float(v) if v is not None else None,
-    "priority": int,
+    "priority": lambda v: int(v),
     "required_skill_id": lambda v: int(v) if v is not None else None,
     "active": lambda v: str(v).lower() in ("1", "true", "yes"),
 }
@@ -167,6 +167,7 @@ def allocate(store, scenario_id: int, *, project_start: date | None = None) -> d
                     start, end = _simulate_placement(r, ready_date, estimate, availability_by_resource[r["id"]], trial_ledger)
                     if best is None or end < best[1]:
                         best = (r, end, start, trial_ledger)
+                assert best is not None  # eligible is non-empty, so the loop ran at least once
                 r, end, start, trial_ledger = best
                 ledger.update(trial_ledger)
                 finish_date[task_id] = end

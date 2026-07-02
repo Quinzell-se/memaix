@@ -14,8 +14,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from ..acl import Acl, AccessDenied
-from ..i18n import get_translator, locale_from_request
+from ..acl import AccessDenied, Acl
+from ..i18n import locale_from_request
 from ..safety.audit import AuditLog
 from . import store as s
 
@@ -223,7 +223,7 @@ async def api_board(request: Request) -> JSONResponse:
         if sprint_filter == "active":
             active_sprint_id = detected_active
             if active_sprint_id:
-                sprint_items = next(
+                sprint_items: list = next(
                     (sp["items"] for sp in sprints if sp["id"] == active_sprint_id), []
                 )
                 cards = [c for c in cards if c["id"] in sprint_items]

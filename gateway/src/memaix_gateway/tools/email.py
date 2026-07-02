@@ -35,7 +35,6 @@ from email.message import EmailMessage
 from .. import config
 from ..acl import Acl
 
-
 # ------------------------------------------------------------------
 # Internal helpers
 # ------------------------------------------------------------------
@@ -53,6 +52,8 @@ def _make_mailbox(acl: Acl, project: str):
 
     cfg = _mailbox_cfg(acl, project)
     password = config.secret(cfg.get("password_ref"))
+    if password is None:
+        raise ValueError(f"no password configured for mailbox (project {project!r})")
     mb = MailBox(cfg["host"])
     mb.login(cfg["user"], password)
     return mb
@@ -233,6 +234,8 @@ def email_send(
         port = int(smtp_cfg.get("port", 587))
         user = cfg.get("user", "")
         password = config.secret(cfg.get("password_ref"))
+        if password is None:
+            raise ValueError(f"no password configured for mailbox (project {project!r})")
         with smtplib.SMTP(host, port) as s:
             s.starttls()
             s.login(user, password)

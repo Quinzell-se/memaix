@@ -68,7 +68,7 @@ def conditions_pass(conditions: list[dict], payload: dict) -> bool:
     """All conditions must pass (AND). An unknown op fails closed."""
     payload = payload or {}
     for cond in conditions or []:
-        op_fn = _OPS.get(cond.get("op"))
+        op_fn = _OPS.get(cond.get("op") or "")
         if op_fn is None:
             return False
         if not op_fn(payload.get(cond.get("field"), ""), cond.get("value")):

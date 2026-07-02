@@ -151,7 +151,14 @@ kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
 ---
 
 ## Tvärgående (löpande)
-- **Kvalitetsgrindar:** `ruff` / `mypy` / `bandit` som CI-steg (DEVELOPMENT-PROPOSALS #3, nästa steg).
+- ✅ **Kvalitetsgrindar:** `ruff` / `mypy` / `bandit` som separata CI-gate-steg (DEVELOPMENT-PROPOSALS #3).
+  Alla tre körs rent (0 findings) mot hela `gateway/src/memaix_gateway`. Genuina fynd åtgärdades i
+  koden (defusedxml för Nextcloud-XML-parsning, None-säkring av SMTP/IMAP-lösenord, explicita
+  typannoteringar/asserts för mypy); accepterade-per-design-mönster (best-effort try/except,
+  `/tmp`-defaultsökvägar, git-subprocess med listargument, interna invarant-asserts) är
+  dokumenterat skippade i `gateway/pyproject.toml`'s `[tool.bandit]`-sektion. De sju SQL-frågor som
+  bygger platshållar-antal via f-strängar (alla värden parametriserade) har individuella
+  `# nosec B608`-kommentarer med motivering.
 - **Skala:** Redis-backend bakom rate-limit/state-gränssnittet när fler workers behövs (#6).
 - **Datarobusthet:** pydantic-schema för backlog/PM-items (#10, nästa steg).
 - **Tidszoner:** normalisera all tid till UTC, visa i användarens tz (OPEN-GAPS #16) — berör brief, kalender, PM.

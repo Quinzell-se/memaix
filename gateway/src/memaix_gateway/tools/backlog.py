@@ -22,8 +22,8 @@ from pathlib import Path
 
 import yaml
 
-from ..acl import Acl
 from .. import frontmatter as fm
+from ..acl import Acl
 from ..paths import validate_id
 
 # ------------------------------------------------------------------

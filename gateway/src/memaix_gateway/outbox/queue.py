@@ -110,7 +110,7 @@ class ActionQueue:
             return []
         with self._lock, self._connect() as conn:
             placeholders = ",".join("?" for _ in projects)
-            sql = f"SELECT * FROM pending_actions WHERE project IN ({placeholders})"
+            sql = f"SELECT * FROM pending_actions WHERE project IN ({placeholders})"  # nosec B608 -- placeholders is a "?,?,..." count string, values are bound below
             params: list = list(projects)
             if status:
                 sql += " AND status=?"

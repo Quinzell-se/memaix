@@ -16,8 +16,9 @@ be for the local vault.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
 from urllib.parse import unquote
+
+import defusedxml.ElementTree as ET
 
 from ...paths import validate_relative_path
 

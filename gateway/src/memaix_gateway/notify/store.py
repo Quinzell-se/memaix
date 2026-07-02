@@ -112,7 +112,9 @@ class NotifyStore:
                 ),
             )
             conn.commit()
-        return self.get_prefs(user)
+        prefs = self.get_prefs(user)
+        assert prefs is not None  # just upserted
+        return prefs
 
     # ------------------------------------------------------------------
     # Schedule

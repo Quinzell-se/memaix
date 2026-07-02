@@ -71,7 +71,12 @@ def clear_registry() -> None:
 
 
 def _account_providers(accounts: list[dict] | None) -> set[str]:
-    return {a.get("provider") for a in (accounts or []) if a.get("provider")}
+    providers: set[str] = set()
+    for a in accounts or []:
+        provider = a.get("provider")
+        if provider:
+            providers.add(provider)
+    return providers
 
 
 def available_for(

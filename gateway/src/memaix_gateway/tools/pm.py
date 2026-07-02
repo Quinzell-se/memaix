@@ -8,8 +8,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..acl import Acl
 from .. import frontmatter as fm
+from ..acl import Acl
 from ..paths import validate_id
 from . import backlog as t_backlog
 from . import memory as t_memory

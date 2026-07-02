@@ -108,7 +108,9 @@ class RulesStore:
                 ),
             )
             conn.commit()
-        return self.get_rule(rule_id)
+        rule = self.get_rule(rule_id)
+        assert rule is not None  # just inserted under the same id
+        return rule
 
     def get_rule(self, rule_id: str) -> dict | None:
         with self._lock, self._connect() as conn:
@@ -119,7 +121,7 @@ class RulesStore:
         with self._lock, self._connect() as conn:
             if projects:
                 placeholders = ",".join("?" for _ in projects)
-                sql = f"SELECT * FROM rules WHERE project IN ({placeholders})"
+                sql = f"SELECT * FROM rules WHERE project IN ({placeholders})"  # nosec B608 -- placeholders is a "?,?,..." count string, values are bound below
                 params: list = list(projects)
             else:
                 sql = "SELECT * FROM rules WHERE 1=1"

@@ -22,7 +22,15 @@ jobs:
       - name: Testsvit
         working-directory: gateway
         run: python -m pytest -q
-      # TODO: lägg till ruff/mypy/bandit som separata gate-steg.
+      - name: Lint (ruff)
+        working-directory: gateway
+        run: python -m ruff check src/memaix_gateway
+      - name: Typkontroll (mypy)
+        working-directory: gateway
+        run: python -m mypy src/memaix_gateway
+      - name: Säkerhetsanalys (bandit)
+        working-directory: gateway
+        run: python -m bandit -q -r src/memaix_gateway -c pyproject.toml
 
   sbom:
     runs-on: ubuntu-latest

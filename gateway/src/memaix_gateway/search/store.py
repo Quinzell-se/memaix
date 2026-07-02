@@ -130,7 +130,7 @@ class EmbeddingStore:
             pph = ",".join("?" for _ in projects)
             sph = ",".join("?" for _ in source_types)
             rows = conn.execute(
-                f"SELECT * FROM chunks WHERE project IN ({pph}) AND source_type IN ({sph}) "
+                f"SELECT * FROM chunks WHERE project IN ({pph}) AND source_type IN ({sph}) "  # nosec B608 -- pph/sph are "?,?,..." count strings, values are bound
                 "AND vector IS NOT NULL LIMIT ?",
                 (*projects, *source_types, limit),
             ).fetchall()
@@ -151,7 +151,7 @@ class EmbeddingStore:
                 rows = conn.execute(
                     f"SELECT project, source_type, ref, title, text "
                     f"FROM chunks_fts WHERE chunks_fts MATCH ? "
-                    f"AND project IN ({pph}) AND source_type IN ({sph}) LIMIT ?",
+                    f"AND project IN ({pph}) AND source_type IN ({sph}) LIMIT ?",  # nosec B608 -- pph/sph are "?,?,..." count strings, values are bound
                     (query, *projects, *source_types, limit),
                 ).fetchall()
             except sqlite3.OperationalError:
@@ -164,7 +164,7 @@ class EmbeddingStore:
         with self._lock, self._connect() as conn:
             pph = ",".join("?" for _ in projects)
             rows = conn.execute(
-                f"SELECT project, COUNT(*) as n FROM chunks WHERE project IN ({pph}) "
+                f"SELECT project, COUNT(*) as n FROM chunks WHERE project IN ({pph}) "  # nosec B608 -- pph is a "?,?,..." count string, values are bound
                 "GROUP BY project",
                 projects,
             ).fetchall()

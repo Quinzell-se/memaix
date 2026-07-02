@@ -17,24 +17,24 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from . import config
-from .acl import Acl, AccessDenied
+from .acl import AccessDenied, Acl
 from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
-from .tools import files as t_files
-from .tools import whoami as t_whoami
-from .tools import memory as t_memory
-from .tools import backlog as t_backlog
-from .tools import email as t_email
-from .tools import calendar as t_cal
 from .tools import account as t_account
+from .tools import backlog as t_backlog
+from .tools import calendar as t_cal
 from .tools import contacts as t_contacts
+from .tools import email as t_email
+from .tools import files as t_files
+from .tools import memory as t_memory
 from .tools import nc_files as t_nc_files
 from .tools import nc_tasks as t_nc_tasks
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools import pm_engine as t_pm_engine
-from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
+from .tools import whoami as t_whoami
+from .tools.calendar import CalendarAuthRequired, _FreeBusyAdapter, _ICalAdapter, _PerUserGoogleAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,9 @@ def _get_acl() -> Acl:
 def _get_token_store():
     global _token_store
     if _token_store is None:
-        from .backends.token_store import TokenStore
         from cryptography.fernet import Fernet
+
+        from .backends.token_store import TokenStore
         key_ref = os.environ.get("TOKEN_MASTER_KEY")
         if not key_ref:
             # In HTTP (server) mode an ephemeral key silently discards every
@@ -780,7 +781,8 @@ def brief_configure(
     _validate_timezone(timezone)
     _validate_channels(channels)
 
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
+    from datetime import timezone as _tz
     store = _get_notify()
     prefs = store.set_prefs(
         user, now_iso=datetime.now(_tz.utc).isoformat(),
@@ -808,7 +810,8 @@ def brief_status() -> dict:
     if prefs is None:
         return {"configured": False}
 
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
+    from datetime import timezone as _tz
     schedule = store.get_schedule(user, "daily")
     next_run = (
         datetime.fromtimestamp(schedule["next_run"], tz=_tz.utc).isoformat() if schedule else None
@@ -827,7 +830,9 @@ def _build_brief_now() -> dict:
     prefs = store.get_prefs(user) or {
         "timezone": "UTC", "brief_time": "07:00", "projects": [], "channels": [],
     }
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
+    from datetime import timezone as _tz
+
     from .notify.brief import build
     return build(acl, user, config.load(), prefs, now=datetime.now(_tz.utc), tools=_brief_tools_for_user())
 
@@ -851,7 +856,9 @@ def brief_send_now() -> dict:
     if not prefs:
         return {"ok": False, "error": "brief not configured — call brief_configure first"}
 
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
+    from datetime import timezone as _tz
+
     from .notify.deliver import deliver
     result = deliver(
         store, acl, config.load(), user, prefs,
@@ -1012,7 +1019,7 @@ def memaix_help(area: str = "") -> str:
             lines.append(f"- **{entry['area']}**: {titles}")
         if data["locked"]:
             lines += ["", "Låst just nu:"]
-            lines += [f"- {l['title']} — {l['hint']}" for l in data["locked"]]
+            lines += [f"- {locked['title']} — {locked['hint']}" for locked in data["locked"]]
         lines += ["", "Fråga om ett specifikt område (t.ex. \"mail\") för konkreta exempel."]
     else:
         lines += [f"# {data['area']}", ""]
@@ -1024,7 +1031,7 @@ def memaix_help(area: str = "") -> str:
             lines.append("")
         if data["locked"]:
             lines += ["Låst just nu:"]
-            lines += [f"- {l['title']} — {l['hint']}" for l in data["locked"]]
+            lines += [f"- {locked['title']} — {locked['hint']}" for locked in data["locked"]]
         lines += ["", "Vill du att jag gör något av detta nu?"]
     return "\n".join(lines)
 
@@ -1041,9 +1048,10 @@ def next_suggestion(last_tool: str) -> dict:
     """After calling `last_tool`, ask whether there's one natural next
     capability worth mentioning. Sparse and rate-limited — never suggests a
     locked capability, and returns {} most of the time by design."""
-    from .capabilities.registry import available_for
-    from .capabilities.nudges import suggest
     import time
+
+    from .capabilities.nudges import suggest
+    from .capabilities.registry import available_for
 
     user = _user()
     cfg = config.load()
@@ -1918,10 +1926,10 @@ def _resolve_calendar_dav(project: str, user: str):
 
 def build_http_app():
     """Build the Starlette app with Bearer-auth for HTTP transport."""
-    from starlette.routing import Route
-    from starlette.responses import JSONResponse, RedirectResponse
-    from starlette.requests import Request
     from starlette.middleware.cors import CORSMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, RedirectResponse, Response
+    from starlette.routing import Route
 
     # ------------------------------------------------------------------
     # Custom HTTP handlers
@@ -2042,7 +2050,7 @@ def build_http_app():
         auth_url = PROVIDER_AUTH_URLS[provider] + "?" + urlencode(params)
         return RedirectResponse(auth_url)
 
-    async def link_callback(request: Request) -> JSONResponse:
+    async def link_callback(request: Request) -> Response:
         """Handle OAuth callback: exchange code for tokens and store them."""
         provider = request.path_params["provider"]
         code = request.query_params.get("code", "")
@@ -2191,8 +2199,9 @@ def build_http_app():
     auth_cfg = cfg.get("memaix", {}).get("auth", {})
 
     if auth_cfg.get("issuer"):
-        from .auth.token import HydraTokenVerifier
         from mcp.server.auth.settings import AuthSettings
+
+        from .auth.token import HydraTokenVerifier
         verifier = HydraTokenVerifier.from_config(cfg)
         mcp.settings.auth = AuthSettings(
             issuer_url=auth_cfg["issuer"],
@@ -2203,8 +2212,9 @@ def build_http_app():
     # FastMCP's DNS rebinding protection defaults to allowed_hosts=[] when binding
     # to 0.0.0.0 (as opposed to localhost), which causes 421 for every real hostname.
     # Explicitly allow the public host extracted from resource_server_url.
-    from mcp.server.transport_security import TransportSecuritySettings
     from urllib.parse import urlparse as _urlparse2
+
+    from mcp.server.transport_security import TransportSecuritySettings
     _pub_host = _urlparse2(
         auth_cfg.get("resource_server_url", auth_cfg.get("issuer", ""))
     ).netloc or "mcp.example.com"
@@ -2254,6 +2264,7 @@ def build_http_app():
         @contextlib.asynccontextmanager
         async def _lifespan_with_scheduler(app):
             import asyncio
+
             from .notify.deliver import deliver as _deliver_brief
             from .notify.scheduler import scheduler_loop
 

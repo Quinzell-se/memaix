@@ -44,6 +44,7 @@ def _run_notify(acl, user: str, params: dict, *, tools: dict | None) -> dict:
     if channels is None:
         import os
         from pathlib import Path
+
         from ..notify.channels import build_channels
         from ..notify.store import NotifyStore
 
@@ -69,6 +70,8 @@ def run_action(
 ) -> dict:
     """Execute one rule action. Never raises — failures come back as {"ok": False, "error": ...}."""
     action_type = action.get("type")
+    if not isinstance(action_type, str):
+        return {"ok": False, "error": "action must include a string 'type'"}
     params = _resolve_params(action.get("params", {}), payload)
     project = params.pop("project", None)
 

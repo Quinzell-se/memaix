@@ -52,6 +52,8 @@ class EmailChannel:
         host = smtp_cfg.get("host", cfg.get("host", "localhost"))
         port = int(smtp_cfg.get("port", 587))
         password = cfg_mod.secret(cfg.get("password_ref"))
+        if password is None:
+            raise ValueError(f"no password configured for mailbox (project {self._project!r})")
         with smtplib.SMTP(host, port) as s:
             s.starttls()
             s.login(cfg.get("user", ""), password)

@@ -9,7 +9,7 @@ broken channel stop the others.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 
 from .brief import build
 from .channels import build_channels
@@ -22,6 +22,7 @@ def _in_quiet_hours(now: datetime, prefs: dict) -> bool:
     if not qs or not qe:
         return False
     from zoneinfo import ZoneInfo
+    tz: tzinfo
     try:
         tz = ZoneInfo(prefs.get("timezone", "UTC"))
     except Exception:
