@@ -128,10 +128,20 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   PM-AGENT.md (planändring = owner). **Medvetet bortvalt v1:** `task_assign`
   (schemat har inget fält för manuell override — allokering är alltid
   motor-beräknad, matchar "LLM:en räknar aldrig"); kalender är
-  arbetsdag-agnostisk (ingen helg/röd dag-modell ännu). **Kvar:** `whatif`
-  (scenario-diff), CP-SAT-allokering (uttryckligen valfritt i byggspecen),
-  agent-prompter (`pm_plan_session`/`pm_whatif_session`), generisk
-  `pm_report(kind, audience)`.
+  arbetsdag-agnostisk (ingen helg/röd dag-modell ännu).
+  ✅ **What-if-scenarier**: `pm/whatif.py::whatif` + verktyget `pm_whatif`
+  (collaborator, eftersom den aldrig rör den committade planen) — klonar
+  bas-scenariot till ett nytt `kind='whatif'`, lägger ändringarna som
+  `scenario_change`-rader (samma overlay `allocate.py` redan läser: uppgifts-
+  estimat/prioritet/kompetenskrav, resurs på/av), kör om motorn på klonen,
+  och diffar resultatet mot bas-scenariots *redan lagrade* schema/allokering
+  — rör alltså aldrig bas-scenariot. Diffen pekar ut ändrad slutdatum/
+  kritiskhet per uppgift, ändrad resurstilldelning, och förskjutna
+  milstolpar. Detta är den kontrollerade "vad händer om"-vägen — i
+  kontrast mot att redigera schemat direkt för hand, vilket fortfarande
+  inte går (se ovan). **Kvar:** CP-SAT-allokering (uttryckligen valfritt i
+  byggspecen), agent-prompter (`pm_plan_session`/`pm_whatif_session`),
+  generisk `pm_report(kind, audience)`.
 
 **Varför sist:** störst värde när kärnan är stabil, sökbar och säker. PM-motorn
 kan dock byggas parallellt med fas 2–3 eftersom den är fristående.

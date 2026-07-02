@@ -144,7 +144,7 @@
 
   "cap.pm.planning_engine.title": "Planera resurser och uppgifter med PM-motorn",
   "cap.pm.planning_engine.summary": "Modellera resurser, kapacitet och uppgiftsberoenden, och beräkna sedan ett riktigt kritisk linje-schema och resursbegränsad allokering — motorn räknar, gissar aldrig; du godkänner planen.",
-  "cap.pm.planning_engine.examples": ["Lägg till Anna som resurs med 6 timmars kapacitet per dag", "Vad är kritiska linjen för det här projektet?", "Hur utnyttjat är teamet nästa månad?"],
+  "cap.pm.planning_engine.examples": ["Lägg till Anna som resurs med 6 timmars kapacitet per dag", "Vad är kritiska linjen för det här projektet?", "Hur utnyttjat är teamet nästa månad?", "Vad händer med deadline om vi tappar Anna i två veckor?"],
 
   "cap.outbox.review.title": "Granska utkorgen",
   "cap.outbox.review.summary": "Se köade utgående åtgärder (mejl, kalenderändringar) och godkänn eller avvisa dem innan de går ut.",

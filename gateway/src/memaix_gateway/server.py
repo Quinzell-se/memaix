@@ -1380,6 +1380,20 @@ def pm_allocate(project: str, scenario_id: int, project_start: str | None = None
 
 
 @mcp.tool()
+def pm_whatif(project: str, base_scenario_id: int, changes: list[dict], project_start: str | None = None) -> dict:
+    """Simulate the effect of `changes` (each {entity: 'task'|'resource',
+    entity_id, field, value} — supported fields: task.estimate_hours,
+    task.priority, task.required_skill_id, resource.active) against
+    base_scenario_id, in a brand-new scenario. Never touches the base or
+    committed plan. Returns a diff: which tasks' finish date or criticality
+    changed, which resource assignments changed, and which milestones moved.
+    Collaborator role (it doesn't touch the committed plan, unlike allocate)."""
+    return _tool_call(
+        "pm_whatif", project, t_pm_engine.pm_whatif, base_scenario_id, changes, project_start, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
 def pm_utilization(
     project: str, scenario_id: int, period_start: str, period_end: str, resource_id: int | None = None,
 ) -> dict:

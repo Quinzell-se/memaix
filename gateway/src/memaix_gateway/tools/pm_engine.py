@@ -18,6 +18,7 @@ from ..acl import Acl
 from ..pm.allocate import allocate as _run_allocate
 from ..pm.report import utilization as _run_utilization
 from ..pm.report import variance as _run_variance
+from ..pm.whatif import whatif as _run_whatif
 
 
 def _owned_task(pm, project: str, task_id: int) -> dict:
@@ -135,6 +136,38 @@ def pm_allocate(acl: Acl, user_id: str, project: str, scenario_id: int, project_
 
     start = _date.fromisoformat(project_start) if project_start else None
     return _run_allocate(_pm, scenario_id, project_start=start)
+
+
+_WHATIF_CHANGE_FIELDS = {
+    "task": {"estimate_hours", "priority", "required_skill_id"},
+    "resource": {"active"},
+}
+
+
+def pm_whatif(
+    acl: Acl, user_id: str, project: str, base_scenario_id: int, changes: list[dict],
+    project_start: str | None = None, *, _pm,
+) -> dict:
+    """Simulate `changes` against `base_scenario_id` in a fresh scenario,
+    without touching the base. Each change is {entity: 'task'|'resource',
+    entity_id, field, value} — see allocate.py's supported overlay fields."""
+    acl.enforce(user_id, project, "collaborator")
+    _owned_scenario(_pm, project, base_scenario_id)
+    for change in changes:
+        entity, entity_id, field = change.get("entity"), change.get("entity_id"), change.get("field")
+        if entity == "task":
+            _owned_task(_pm, project, entity_id)
+        elif entity == "resource":
+            _owned_resource(_pm, project, entity_id)
+        else:
+            raise ValueError(f"unsupported whatif entity: {entity!r} (must be 'task' or 'resource')")
+        if field not in _WHATIF_CHANGE_FIELDS[entity]:
+            raise ValueError(f"unsupported whatif field for {entity!r}: {field!r}")
+
+    from datetime import date as _date
+
+    start = _date.fromisoformat(project_start) if project_start else None
+    return _run_whatif(_pm, base_scenario_id, changes, project_start=start)
 
 
 def pm_utilization(

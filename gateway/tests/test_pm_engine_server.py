@@ -139,3 +139,57 @@ def test_resource_availability_and_skill(wired):
 def test_milestone_add(wired):
     m = server.milestone_add("proj", "Beta launch", "2025-03-01")
     assert m["name"] == "Beta launch"
+
+
+def test_pm_whatif_diffs_without_touching_base(wired):
+    server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    task = server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+    base_schedule_before = server._get_pm().list_schedule(scenario["id"])
+
+    result = server.pm_whatif(
+        "proj", scenario["id"], [{"entity": "task", "entity_id": task["id"], "field": "estimate_hours", "value": 40}],
+        "2025-01-06",
+    )
+
+    assert result["whatif_scenario_id"] != scenario["id"]
+    assert len(result["schedule_changes"]) == 1
+    assert server._get_pm().list_schedule(scenario["id"]) == base_schedule_before
+
+
+def test_pm_whatif_collaborator_allowed(wired, monkeypatch):
+    server.resource_add("proj", "Anna", capacity_hours_per_day=8.0)
+    task = server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    server.pm_allocate("proj", scenario["id"], "2025-01-06")
+
+    monkeypatch.setenv("MEMAIX_USER", "carol")  # collaborator, not owner
+    result = server.pm_whatif(
+        "proj", scenario["id"], [{"entity": "task", "entity_id": task["id"], "field": "priority", "value": 1}], None,
+    )
+    assert result["whatif_scenario_id"] != scenario["id"]
+
+
+def test_pm_whatif_reader_denied(wired, monkeypatch):
+    scenario = server.scenario_add("proj", "Sprint 1")
+    monkeypatch.setenv("MEMAIX_USER", "bob")
+    with pytest.raises(AccessDenied):
+        server.pm_whatif("proj", scenario["id"], [], None)
+
+
+def test_pm_whatif_rejects_unsupported_field(wired):
+    task = server.task_add("proj", "Task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    with pytest.raises(ValueError):
+        server.pm_whatif("proj", scenario["id"], [{"entity": "task", "entity_id": task["id"], "field": "title", "value": "Hacked"}], None)
+
+
+def test_pm_whatif_rejects_task_from_other_project(wired):
+    other_task = server.task_add("other", "Other task", estimate_hours=8)
+    scenario = server.scenario_add("proj", "Sprint 1")
+    with pytest.raises(FileNotFoundError):
+        server.pm_whatif(
+            "proj", scenario["id"],
+            [{"entity": "task", "entity_id": other_task["id"], "field": "estimate_hours", "value": 10}], None,
+        )

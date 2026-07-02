@@ -257,6 +257,11 @@ class PMStore:
             milestone_id = cur.lastrowid
         return {"id": milestone_id, "project": project, "name": name, "target_date": target_date, "status": status}
 
+    def list_milestones(self, project: str) -> list[dict]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute("SELECT * FROM milestone WHERE project=? ORDER BY id", (project,)).fetchall()
+        return [dict(r) for r in rows]
+
     def add_task(
         self, project: str, title: str, *, backlog_id: str | None = None,
         estimate_hours: float | None = None, required_skill_id: int | None = None,
