@@ -1723,22 +1723,44 @@ def notes_sync(project: str) -> dict:
 # ------------------------------------------------------------------
 
 
+def _mail_backend(project: str, user: str):
+    """Resolve the project's mail connector (FEATURE-CONNECTOR-FRAMEWORK.md
+    Byggordning step 4) — same imap adapter _make_mailbox always built,
+    now resolved through the registry so a future non-IMAP mail type
+    (Google/Microsoft) only needs a new ConnectorSpec, not a tools/email.py
+    change."""
+    from .connectors.registry import default_registry
+
+    return default_registry().get(_get_acl(), _get_token_store(), project, "mail", user)
+
+
+def _with_mail_backend(fn):
+    """Wrap a tools.email function so `_imap` is resolved lazily, inside
+    _audited's try/except — resolving it eagerly at the call site would move
+    an unconfigured-mailbox ValueError outside the audit-log boundary."""
+
+    def wrapped(acl, user_id, project, *args, **kwargs):
+        return fn(acl, user_id, project, *args, _imap=_mail_backend(project, user_id), **kwargs)
+
+    return wrapped
+
+
 @mcp.tool()
 def email_list(project: str, folder: str = "INBOX", limit: int = 20) -> list:
     """List recent messages in a mailbox folder."""
-    return _tool_call("email_list", project, t_email.email_list, folder, limit)
+    return _tool_call("email_list", project, _with_mail_backend(t_email.email_list), folder, limit)
 
 
 @mcp.tool()
 def email_read(project: str, id: str) -> dict:
     """Read a message by UID."""
-    return _tool_call("email_read", project, t_email.email_read, id)
+    return _tool_call("email_read", project, _with_mail_backend(t_email.email_read), id)
 
 
 @mcp.tool()
 def email_search(project: str, query: str, limit: int = 20) -> list:
     """Search messages by body content."""
-    return _tool_call("email_search", project, t_email.email_search, query, limit)
+    return _tool_call("email_search", project, _with_mail_backend(t_email.email_search), query, limit)
 
 
 @mcp.tool()
@@ -1756,7 +1778,7 @@ def email_create_draft(
     Pass idempotency_key (same value on retry) to avoid creating a second
     draft if the call is retried after e.g. a network timeout."""
     return _tool_call(
-        "email_create_draft", project, t_email.email_create_draft,
+        "email_create_draft", project, _with_mail_backend(t_email.email_create_draft),
         to, subject, body, cc, in_reply_to, idempotency_key=idempotency_key,
     )
 

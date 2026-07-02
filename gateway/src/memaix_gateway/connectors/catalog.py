@@ -4,12 +4,17 @@ registry (FEATURE-CONNECTOR-FRAMEWORK.md §6).
 
 `mail`/`imap` and `calendar`/`caldav` wrap the pluggable adapters
 tools/email.py (`_imap`) and tools/calendar.py (`_dav`) already had before
-this framework existed. Cutting `email_*`/`calendar_*`'s actual call sites
-over to `registry.get(...)` (replacing `_make_mailbox`/
-`_resolve_calendar_dav`) is deferred follow-up work — see ROADMAP.md —
-since `_resolve_calendar_dav` in particular has several working, tested
-auth-priority branches (OAuth refresh, iCal, FreeBusy, static CalDAV) that
-deserve their own focused migration rather than being bundled in here.
+this framework existed. `server.py`'s `email_list`/`email_read`/
+`email_search`/`email_create_draft` now resolve their mailbox via
+`registry.get(..., "mail", user)` instead of calling `_make_mailbox`
+directly (Byggordning step 4) — `email_send` is untouched since SMTP isn't
+a registered capability. Cutting `calendar_*`'s call sites over to
+`registry.get(..., "calendar", user)` (replacing `_resolve_calendar_dav`)
+remains deferred: unlike mail's single shared-IMAP path, it has to
+reproduce a 3-way per-user auth-priority chain (Google OAuth → iCal secret
+→ FreeBusy → static CalDAV fallback) that doesn't fit the registry's
+single-type/single-auth-mode `get()` shape without extending it — a
+focused migration of its own, not a mechanical rewire like mail's.
 
 `contacts`/`carddav`, `files`/`webdav`, `tasks`/`caldav`, `deck`/`nextcloud`
 and `notes`/`nextcloud` are the Nextcloud adapters (FEATURE-NEXTCLOUD-

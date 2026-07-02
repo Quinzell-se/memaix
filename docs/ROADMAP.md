@@ -78,12 +78,20 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   `connectors/base.py` (kapabilitets-protokoll) + `connectors/registry.py`
   (`ConnectorSpec`/`ConnectorRegistry.get` med `shared`/`per_user`-auth) +
   `connectors/catalog.py` (registrerar dagens `imap`/`caldav`) klart och
-  testat isolerat. **Kvar:** flytta `email_*`/`calendar_*`/`files_*`:s
-  faktiska anrop till att gå via registret (byter ut `_make_mailbox`/
-  `_resolve_calendar_dav`) — skjutet upp eftersom `_resolve_calendar_dav`
-  har flera fungerande, testade auth-grenar (OAuth-refresh/iCal/FreeBusy/
-  statisk CalDAV) som förtjänar en egen fokuserad migrering; samt en första
-  ny extern adapter (Microsoft Graph) som bevis på pluggbarhet.
+  testat isolerat. ✅ **Mail-cutover:** `email_list`/`email_read`/
+  `email_search`/`email_create_draft` går nu via `registry.get(...,"mail",user)`
+  istället för att bygga `_make_mailbox` direkt (`email_send`s SMTP är inte en
+  registrerad kapabilitet, orörd). **Kvar (avsiktligt skjutet upp, inte
+  bortglömt):** `calendar_*`'s cutover — `_resolve_calendar_dav` har en
+  3-vägs per-användare auth-prioritetskedja (Google-OAuth → iCal-hemlighet →
+  FreeBusy → statisk CalDAV) som inte passar registrets
+  en-typ/en-auth-läge-`get()`-form utan att utöka den; en fokuserad egen
+  migrering, inte en mekanisk omkoppling som mail var. `files_*` (lokal vault)
+  migreras **aldrig** hit — `"files"`-kapabiliteten är redan upptagen av
+  Nextcloud-WebDAV (`nc_files_*`), och vault:en har en helt annan
+  resursform (bar sökväg, inte `{type,url,...}`); se `connectors/registry.py`'s
+  docstring. Samt en första ny extern adapter (Microsoft Graph) som bevis på
+  pluggbarhet.
 - 🔨 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
   *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**:
   `connectors/adapters/contacts_carddav.py` + `contacts_search`/`contacts_get`.

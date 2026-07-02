@@ -184,10 +184,26 @@ dem, och låt `server._resolve_calendar_dav` delegera till `registry.get(...,'ca
 registret.
 
 ### Steg 4 — Migrera mail + files(local)
-Bryt ut `email._make_mailbox` → `connectors/adapters/mail_imap.py` (`MailBackend`);
-`email_*` kallar registret men behåller `_imap`-injektionen (registret returnerar
-`_imap` om satt). Lokal vault → `connectors/adapters/files_local.py`. **Test:**
-`test_email.py` oförändrat; nytt test för registret-bygget.
+✅ **Mail:** `server.py`'s `email_list`/`email_read`/`email_search`/
+`email_create_draft` resolverar mailboxen via `registry.get(...,"mail",user)`
+(en `_with_mail_backend`-wrapper som håller resolutionen innanför
+`_audited`'s try/except, så ett okonfigurerat projekt fortfarande
+audit-loggas identiskt med innan). `email_send` rör SMTP direkt — inte en
+registrerad kapabilitet, orört. `tools/email.py`'s egna `_make_mailbox` finns
+kvar oförändrad (används fortfarande av `catalog.py`'s `imap`-factory och
+som fallback när `_imap` inte injiceras, t.ex. i enhetstester som kallar
+`tools/email.py` direkt). **Test:** `test_email.py` oförändrat;
+`test_email_server.py` nytt, täcker registret-bygget på server-lagret.
+
+**Files(local) — avsiktligt inte migrerat, inte glömt:** `"files"`-kapabiliteten
+är redan upptagen av Nextcloud-WebDAV (`nc_files_*`, se
+FEATURE-NEXTCLOUD-BACKEND.md); den lokala valvet har en helt annan resursform
+(bar sökväg i `acl.yaml`, inte `{type,url,...}`) och är en *ytterligare*
+filkälla, inte samma kapabilitet under ett nytt namn. Att flytta
+`tools/files.py` hit skulle antingen kollidera med webdav-resursen eller
+kräva en ny kapabilitetsnyckel (`"vault"`) + schemaändring i `acl.yaml` —
+ett produktbeslut, inte en mekanisk refaktor, så det lämnas som öppet
+framtida arbete istället för att gissas fram.
 
 ### Steg 5 — `connectors/catalog.py`
 Självregistrera alla inbyggda adaptrar; importera från `server.py`. **Test:**
@@ -206,8 +222,11 @@ uppdatera BACKENDS.md-fasrutan att peka hit.
 `cd gateway && python -m pytest -q` + `python3 scripts/check-docs-index.py`.
 
 ### Acceptanskriterier
-- [ ] `email_*`/`calendar_*`/`files_*` fungerar oförändrat via registret (befintliga tester gröna).
-- [ ] En ny adapter läggs till genom att registrera en `ConnectorSpec` — utan att röra verktygsfilerna.
+- [x] `email_*` fungerar oförändrat via registret (befintliga tester gröna); `calendar_*` kvar
+      (dokumenterat skäl ovan), `files_*` (lokal vault) migreras inte hit (dokumenterat skäl ovan).
+- [x] En ny adapter läggs till genom att registrera en `ConnectorSpec` — utan att röra verktygsfilerna
+      (visat av contacts/webdav-files/tasks/deck/notes-adaptrarna, alla tillagda utan ändringar i
+      `server.py`'s befintliga `email_*`/`calendar_*`-verktyg).
 - [ ] Ett projekt kör IMAP-mail, ett annat Google-kalender, samtidigt (registret väljer per resurs).
 - [ ] `per_user`-adapter väljer rätt token för inloggad användare; fel användare når aldrig annans token.
 - [ ] Utgående adapter-åtgärder (chat/issue/mail-send) går via Utkorgen (#3) i review-läge.
