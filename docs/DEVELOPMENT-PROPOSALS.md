@@ -148,5 +148,21 @@ och board-PATCH saknar optimistisk låsning.
 **Åtgärd (gjort).** Ny `frontmatter.py` (`split` / `join` / `write_atomic`)
 används nu av `backlog.py`, `board/store.py` och `pm.py` — en parser att granska
 istället för fyra, och alla skrivningar går via temp-fil + `os.replace` (crash-
-säkra). Kvar: pydantic-schema för items och optimistisk låsning även på
-board-PATCH (MCP-verktygen har den redan).
+säkra).
+
+**Åtgärd (gjort, del 2).** `backlog_schema.py`'s `BacklogItem` validerar varje
+backlog-items form (status-enum, `value`/`complexity`/`risk` 1–5 per
+MCP-API.md) på både läsning (`_parse_item`) och skrivning (`_write_item`) i
+`tools/backlog.py` — pydantics `ValidationError` ärver `ValueError`, så
+befintliga `except (ValueError, yaml.YAMLError)`-anrop fångar den utan
+ändring. `pm/schemas.py` gör motsvarande för PM-lagrets skrivmetoder
+(`add_resource`/`add_availability`/`add_milestone`/`add_task`/`update_task`/
+`add_dependency`/`add_scenario`) — värst var `update_task(**fields)`, som
+tidigare accepterade vilket fältnamn/värde som helst; `TaskUpdate`
+(`extra="forbid"`) stänger det hålet. Gränser sattes bara där koden redan
+behandlar dem som invarianter (t.ex. `percent_complete` 0–100, som
+`pm/report.py` jämför mot 100) — odokumenterade fält som `priority` fick
+ingen påhittad övre gräns. Board-PATCH (`board/store.py`'s `write_status`)
+tog också valfri `expected_version` — samma `{"conflict": True,
+"current_version": N}`-konvention som MCP-verktygen, bakåtkompatibel eftersom
+dagens board-UI ännu inte skickar en version.

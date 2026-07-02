@@ -160,7 +160,12 @@ kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
   bygger platshållar-antal via f-strängar (alla värden parametriserade) har individuella
   `# nosec B608`-kommentarer med motivering.
 - **Skala:** Redis-backend bakom rate-limit/state-gränssnittet när fler workers behövs (#6).
-- **Datarobusthet:** pydantic-schema för backlog/PM-items (#10, nästa steg).
+- ✅ **Datarobusthet:** `backlog_schema.py`'s `BacklogItem` validerar varje backlog-items form
+  (status-enum, `value`/`complexity`/`risk` 1–5) på läsning och skrivning i `tools/backlog.py`;
+  `pm/schemas.py` validerar PM-lagrets skrivmetoder, framför allt `update_task(**fields)` som
+  tidigare accepterade vilket fältnamn/värde som helst (`TaskUpdate` med `extra="forbid"` stänger
+  det). Board-PATCH fick också valfri `expected_version`-låsning (samma konvention som
+  MCP-verktygen) — se DEVELOPMENT-PROPOSALS #10.
 - **Tidszoner:** normalisera all tid till UTC, visa i användarens tz (OPEN-GAPS #16) — berör brief, kalender, PM.
 - ✅ **Idempotens:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad
   körning per (användare, verktyg, idempotency_key) och är inbyggd i `server.py`'s `_audited`-

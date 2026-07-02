@@ -24,6 +24,7 @@ import yaml
 
 from .. import frontmatter as fm
 from ..acl import Acl
+from ..backlog_schema import BacklogItem
 from ..paths import validate_id
 
 # ------------------------------------------------------------------
@@ -64,17 +65,23 @@ def _backlog_dir(acl: Acl, project: str) -> Path:
 
 
 def _parse_item(path: Path) -> dict:
-    """Read and parse a backlog markdown file.  Returns merged dict (meta + description)."""
+    """Read and parse a backlog markdown file.  Returns merged dict (meta + description).
+
+    Validated through BacklogItem — a malformed field (bad status, an
+    out-of-range score, ...) raises ValueError just like a missing
+    frontmatter block, so existing `except (ValueError, yaml.YAMLError)`
+    callers already treat it as "skip this corrupted item"."""
     text = path.read_text()
     meta, body = fm.split(text)
     if not meta:
         raise ValueError(f"missing or malformed frontmatter in {path.name}")
     meta["description"] = body
-    return meta
+    return BacklogItem.model_validate(meta).model_dump()
 
 
 def _write_item(path: Path, meta: dict) -> None:
     """Serialise a backlog item back to markdown with YAML frontmatter (atomic)."""
+    BacklogItem.model_validate(meta)  # reject bad data before it ever reaches disk
     # Pop description before serialising frontmatter
     description = meta.pop("description", "")
     fm.write_atomic(path, fm.join(meta, description))

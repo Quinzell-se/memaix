@@ -322,6 +322,7 @@ async def api_item_patch(request: Request) -> JSONResponse:
 
     project = body.get("project", "")
     new_status = body.get("status", "")
+    expected_version = body.get("expected_version")
     acl = _acl()
 
     if project not in _user_projects(user, acl):
@@ -340,11 +341,14 @@ async def api_item_patch(request: Request) -> JSONResponse:
         return JSONResponse({"error": "no vault"}, status_code=404)
 
     try:
-        card = s.write_status(Path(vault_str), item_id, new_status)
+        card = s.write_status(Path(vault_str), item_id, new_status, expected_version)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except FileNotFoundError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
+
+    if card.get("conflict"):
+        return JSONResponse(card, status_code=409)
 
     old = card.pop("_old_status", "?")
     try:

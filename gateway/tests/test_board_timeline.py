@@ -68,3 +68,34 @@ def test_board_move_to_same_status_is_not_recorded(rig):
     resp = client.patch(f"/board/api/item/{item_id}", json={"project": "proj", "status": "inbox"})
     assert resp.status_code == 200
     assert timeline.list(["proj"]) == []
+
+
+def test_board_move_without_expected_version_ignores_locking(rig):
+    # Backward-compatible default: today's UI doesn't send a version yet.
+    client, acl, timeline, item_id, vault = rig
+    resp = client.patch(f"/board/api/item/{item_id}", json={"project": "proj", "status": "triaged"})
+    assert resp.status_code == 200
+    assert resp.json()["item"]["status"] == "triaged"
+
+
+def test_board_move_with_stale_expected_version_returns_409(rig):
+    client, acl, timeline, item_id, vault = rig
+    client.patch(f"/board/api/item/{item_id}", json={"project": "proj", "status": "triaged"})  # version -> 2
+    resp = client.patch(
+        f"/board/api/item/{item_id}",
+        json={"project": "proj", "status": "evaluated", "expected_version": 1},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["conflict"] is True
+    # No new timeline entry from the rejected move.
+    assert len(timeline.list(["proj"])) == 1
+
+
+def test_board_move_with_matching_expected_version_succeeds(rig):
+    client, acl, timeline, item_id, vault = rig
+    resp = client.patch(
+        f"/board/api/item/{item_id}",
+        json={"project": "proj", "status": "triaged", "expected_version": 1},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["item"]["version"] == 2

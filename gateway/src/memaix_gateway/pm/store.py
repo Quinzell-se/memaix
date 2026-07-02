@@ -16,6 +16,18 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .schemas import (
+    AvailabilityInput,
+    DependencyInput,
+    DependencyType,
+    MilestoneInput,
+    ResourceInput,
+    ScenarioInput,
+    ScenarioKind,
+    TaskInput,
+    TaskUpdate,
+)
+
 
 class CyclicDependencyError(ValueError):
     pass
@@ -160,6 +172,10 @@ class PMStore:
         cost_per_hour: float | None = None, capacity_hours_per_day: float = 8.0,
         active: bool = True,
     ) -> dict:
+        ResourceInput(
+            project=project, name=name, user_sub=user_sub, cost_per_hour=cost_per_hour,
+            capacity_hours_per_day=capacity_hours_per_day, active=active,
+        )
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 """INSERT INTO resource (project, name, user_sub, cost_per_hour, capacity_hours_per_day, active)
@@ -228,6 +244,10 @@ class PMStore:
         self, resource_id: int, start_date: str, end_date: str, hours_per_day: float,
         reason: str | None = None,
     ) -> dict:
+        AvailabilityInput(
+            resource_id=resource_id, start_date=start_date, end_date=end_date,
+            hours_per_day=hours_per_day, reason=reason,
+        )
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 """INSERT INTO availability (resource_id, start_date, end_date, hours_per_day, reason)
@@ -251,6 +271,7 @@ class PMStore:
     # ------------------------------------------------------------------
 
     def add_milestone(self, project: str, name: str, target_date: str | None = None, status: str = "open") -> dict:
+        MilestoneInput(project=project, name=name, target_date=target_date, status=status)
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 "INSERT INTO milestone (project, name, target_date, status) VALUES (?, ?, ?, ?)",
@@ -271,6 +292,11 @@ class PMStore:
         priority: int = 3, milestone_id: int | None = None, status: str = "todo",
         percent_complete: float = 0.0,
     ) -> dict:
+        TaskInput(
+            project=project, title=title, backlog_id=backlog_id, estimate_hours=estimate_hours,
+            required_skill_id=required_skill_id, priority=priority, milestone_id=milestone_id,
+            status=status, percent_complete=percent_complete,
+        )
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 """INSERT INTO task
@@ -294,6 +320,7 @@ class PMStore:
 
     def update_task(self, task_id: int, **fields) -> dict:
         if fields:
+            TaskUpdate(**fields)  # rejects unknown field names and bad types/ranges
             columns = ", ".join(f"{k}=?" for k in fields)
             with self._lock, self._connect() as conn:
                 conn.execute(f"UPDATE task SET {columns} WHERE id=?", (*fields.values(), task_id))  # nosec B608 -- keys are hardcoded kwargs from call sites, not external input; values are bound
@@ -307,8 +334,11 @@ class PMStore:
             rows = conn.execute("SELECT * FROM task WHERE project=? ORDER BY id", (project,)).fetchall()
         return [dict(r) for r in rows]
 
-    def add_dependency(self, predecessor_id: int, successor_id: int, type: str = "FS", lag_days: float = 0.0) -> dict:
+    def add_dependency(
+        self, predecessor_id: int, successor_id: int, type: DependencyType = "FS", lag_days: float = 0.0,
+    ) -> dict:
         """Reject a dependency that would create a cycle in the task graph."""
+        DependencyInput(predecessor_id=predecessor_id, successor_id=successor_id, type=type, lag_days=lag_days)
         predecessor = self.get_task(predecessor_id)
         if predecessor is None:
             raise ValueError(f"no such task: {predecessor_id}")
@@ -342,8 +372,9 @@ class PMStore:
     # ------------------------------------------------------------------
 
     def add_scenario(
-        self, project: str, name: str, kind: str, *, parent_id: int | None = None, note: str | None = None,
+        self, project: str, name: str, kind: ScenarioKind, *, parent_id: int | None = None, note: str | None = None,
     ) -> dict:
+        ScenarioInput(project=project, name=name, kind=kind, parent_id=parent_id, note=note)
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 "INSERT INTO scenario (project, name, kind, parent_id, created, note) VALUES (?, ?, ?, ?, ?, ?)",

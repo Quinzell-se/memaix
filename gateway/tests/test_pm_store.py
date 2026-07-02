@@ -181,3 +181,81 @@ def test_actual_roundtrip(store):
     store.add_actual(t["id"], "2025-01-06", hours_logged=4.0, percent_complete=50.0)
     actuals = store.list_actuals(t["id"])
     assert actuals[0]["hours_logged"] == 4.0
+
+
+# ------------------------------------------------------------------
+# Pydantic-schema validation (DEVELOPMENT-PROPOSALS.md §10)
+# ------------------------------------------------------------------
+
+
+def test_add_resource_rejects_empty_name(store):
+    with pytest.raises(ValueError):
+        store.add_resource("acme", "  ")
+
+
+def test_add_resource_rejects_negative_cost(store):
+    with pytest.raises(ValueError):
+        store.add_resource("acme", "Anna", cost_per_hour=-5)
+
+
+def test_add_resource_rejects_zero_capacity(store):
+    with pytest.raises(ValueError):
+        store.add_resource("acme", "Anna", capacity_hours_per_day=0)
+
+
+def test_add_availability_rejects_bad_date_format(store):
+    r = store.add_resource("acme", "Anna")
+    with pytest.raises(ValueError):
+        store.add_availability(r["id"], "not-a-date", "2025-01-10", 4.0)
+
+
+def test_add_availability_rejects_end_before_start(store):
+    r = store.add_resource("acme", "Anna")
+    with pytest.raises(ValueError):
+        store.add_availability(r["id"], "2025-01-10", "2025-01-01", 4.0)
+
+
+def test_add_task_rejects_negative_estimate(store):
+    with pytest.raises(ValueError):
+        store.add_task("acme", "A", estimate_hours=-1)
+
+
+def test_add_task_rejects_percent_complete_out_of_range(store):
+    with pytest.raises(ValueError):
+        store.add_task("acme", "A", percent_complete=150)
+
+
+def test_update_task_rejects_unknown_field(store):
+    t = store.add_task("acme", "A")
+    with pytest.raises(ValueError):
+        store.update_task(t["id"], not_a_real_column="x")
+
+
+def test_update_task_rejects_percent_complete_out_of_range(store):
+    t = store.add_task("acme", "A")
+    with pytest.raises(ValueError):
+        store.update_task(t["id"], percent_complete=-10)
+
+
+def test_update_task_accepts_valid_fields(store):
+    t = store.add_task("acme", "A")
+    updated = store.update_task(t["id"], percent_complete=50.0, status="in-progress")
+    assert updated["percent_complete"] == 50.0
+    assert updated["status"] == "in-progress"
+
+
+def test_add_dependency_rejects_bad_type(store):
+    a = store.add_task("acme", "A")
+    b = store.add_task("acme", "B")
+    with pytest.raises(ValueError):
+        store.add_dependency(a["id"], b["id"], type="BOGUS")
+
+
+def test_add_scenario_rejects_bad_kind(store):
+    with pytest.raises(ValueError):
+        store.add_scenario("acme", "Plan", "not-a-real-kind")
+
+
+def test_add_milestone_rejects_bad_date_format(store):
+    with pytest.raises(ValueError):
+        store.add_milestone("acme", "Beta", target_date="not-a-date")
