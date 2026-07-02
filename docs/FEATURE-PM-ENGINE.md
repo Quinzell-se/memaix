@@ -85,12 +85,14 @@ Koppla `task.backlog_id` ↔ backlog-item så PM och backlog hänger ihop.
 ## 6. Agent-lager (LLM:ens roll)
 
 MCP-prompter som guidar assistenten att använda motorn rätt:
-- `pm_plan_session(project)` — dekomponera mål → uppgifter (föreslå estimat/beroenden),
+- ✅ `pm_plan_session(project)` — dekomponera mål → uppgifter (föreslå estimat/beroenden),
   fånga resurser/tillgänglighet i klarspråk → `resource_*`/`task_*`, kör `allocate`,
   **förklara** resultat och flagga risk. Owner committar.
-- `pm_whatif_session(project)` — hjälp användaren formulera en fråga ("om vi tappar
+- ✅ `pm_whatif_session(project)` — hjälp användaren formulera en fråga ("om vi tappar
   Anna 2 veckor"), översätt till `changes`, kör `whatif`, förklara diffen.
-- `pm_review(project)` (finns) — utöka med `variance`/`utilization`/kritisk linje.
+- ✅ **`pm_weekly_review(project)`** (den befintliga prompten `pm_review` syftade på — inget
+  verktyg med exakt det namnet fanns) utökad med `pm_report`/`pm_utilization` för
+  milstolpe/varians/RAID/utnyttjande från motorn, utöver sprint-burndownen den redan gav.
 
 LLM:en räknar aldrig; den översätter avsikt → verktygsanrop och resultat → språk.
 
@@ -164,9 +166,10 @@ radbrytningen) — aldrig testat tidigare eftersom inga befintliga tester round-
 RAID-fält genom markdown.
 
 ### Steg 6 — Agent-prompter
-`pm_plan_session`, `pm_whatif_session`; utöka `pm_review`. Prompterna instruerar
-LLM:en att **aldrig räkna själv** utan kalla motorn och förklara. **Test:** prompt-
-strängar innehåller determinismgräns-instruktionen och rätt verktygsordning.
+✅ `pm_plan_session`, `pm_whatif_session`; `pm_weekly_review` utökad. Prompterna
+instruerar LLM:en att **aldrig räkna själv** utan kalla motorn och förklara.
+**Test** (`tests/test_pm_agent_prompts.py`): prompt-strängar innehåller
+determinismgräns-instruktionen och rätt verktygsordning.
 
 ### Steg 7 — (valfritt) CP-SAT
 `pm/allocate_cpsat.py` bakom `pm`-extran; välj heuristik/CP-SAT via config. **Test**

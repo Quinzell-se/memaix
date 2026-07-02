@@ -1301,7 +1301,14 @@ def pm_weekly_review(project: str) -> str:
         "call pm_sprint_status on the active sprint, "
         "then pm_raid_list for open risks/issues, "
         "then pm_status_report to persist a snapshot. "
-        "Summarize blockers and burndown for the user."
+        "Summarize blockers and burndown for the user. "
+        "If the project also runs the deterministic PM engine (check with "
+        "scenario_list — a committed scenario means it does), also call "
+        "pm_report(project, kind='status') for milestone/variance/RAID rollup, "
+        "and pm_utilization for the committed scenario over the past week — "
+        "quote the engine's numbers (slippage days, utilization %, which tasks "
+        "are on the critical path per pm_variance's planned_finish) rather than "
+        "estimating them yourself."
     )
 
 
@@ -1470,6 +1477,58 @@ def pm_report(
     return _tool_call(
         "pm_report", project, t_pm_engine.pm_report, kind, audience, scenario_id, period_start, period_end,
         _pm=_get_pm(),
+    )
+
+
+@mcp.prompt()
+def pm_plan_session(project: str) -> str:
+    """Guide the AI through building a plan in the deterministic PM engine
+    (resources/tasks/dependencies -> allocate), for '{project}'."""
+    return (
+        f"You are running a planning session for project '{project}' using the "
+        "deterministic PM engine (resource_*/task_*/dependency_add/pm_allocate/"
+        "plan_commit) — NOT the markdown pm_* tools (pm_sprint_planning). "
+        "The engine computes dates and capacity; you never calculate a schedule, "
+        "a critical path, or a finish date yourself. "
+        "1) Ask the user for the goal and decompose it into tasks — propose "
+        "estimate_hours and dependencies for each, but let the user confirm or "
+        "correct them before calling task_add/dependency_add. "
+        "2) Capture who's available: call resource_add for each person, "
+        "resource_set_skill for any skills tasks require, and "
+        "resource_availability for known absences (vacation, part-time). "
+        "3) Call scenario_add, then pm_allocate(scenario_id) to run the engine. "
+        "4) Explain the result in plain language: what's on the critical path, "
+        "which tasks have zero slack, and flag anything the engine warned "
+        "about (missing estimate, no eligible resource for a skill) as an open "
+        "risk — never invent a date or assignment the engine didn't return. "
+        "5) Only an owner can call plan_commit to freeze the baseline — ask them "
+        "to review the allocation first."
+    )
+
+
+@mcp.prompt()
+def pm_whatif_session(project: str) -> str:
+    """Guide the AI through translating a plain-language "what if" question
+    into a pm_whatif() call and explaining the diff, for '{project}'."""
+    return (
+        f"Help the user explore a hypothetical change to project '{project}'s plan "
+        "using pm_whatif — it simulates changes in an isolated scenario and never "
+        "touches the committed plan. You never compute the consequence yourself; "
+        "the engine does. "
+        "1) Get the committed baseline scenario_id (scenario_list, kind='baseline' "
+        "or 'committed') to pass as base_scenario_id. "
+        "2) Translate the user's question (e.g. \"what if we lose Anna for 2 "
+        "weeks\", \"what if this task takes twice as long\") into a `changes` list: "
+        "each change is {entity: 'task'|'resource', entity_id, field, value} — "
+        "only estimate_hours/priority/required_skill_id (task) or active "
+        "(resource) are supported; ask the user for a concrete number/id if the "
+        "question doesn't map cleanly onto one of those. "
+        "3) Call pm_whatif(project, base_scenario_id, changes). "
+        "4) Explain the diff in plain language: which tasks' dates moved, "
+        "whether the critical path changed, and any new resource conflicts — "
+        "quote the engine's numbers, don't estimate your own. The whatif "
+        "scenario is disposable; nothing is committed unless the user "
+        "separately runs a real plan_commit on a real scenario."
     )
 
 
