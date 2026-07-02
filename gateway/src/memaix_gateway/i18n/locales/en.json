@@ -148,5 +148,13 @@
 
   "cap.automation.standing.title": "Set standing instructions",
   "cap.automation.standing.summary": "Guidance the assistant follows every session, like 'always write in Swedish'.",
-  "cap.automation.standing.examples": ["Always keep answers short", "What are my standing instructions?"]
+  "cap.automation.standing.examples": ["Always keep answers short", "What are my standing instructions?"],
+
+  "tour.greeting": "Nice to meet you! Based on what you told me, here's a few things I could take off your plate right now:",
+  "cap.lock.no_role": "You don't have access to this in any project yet — ask a project owner to add you.",
+  "cap.lock.no_mailbox": "No mailbox is configured for this yet — ask an admin to set one up.",
+  "cap.lock.no_calendar": "No calendar is configured for this yet — ask an admin to set one up.",
+  "cap.lock.no_vault": "No project vault is configured for this yet — ask an admin to set one up.",
+  "cap.lock.link_google": "Link your Google account to unlock this — run account_link('google').",
+  "cap.lock.link_microsoft": "Link your Microsoft account to unlock this — run account_link('microsoft')."
 }

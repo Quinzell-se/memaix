@@ -44,7 +44,7 @@ Grunden att bygga tryggt på.
 Gör det säkert att låta agenten göra mer — *innan* den blir proaktiv.
 - ✅ **#3 Utkorg** — [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) (backend+MCP+board-API klart; board.html-panel kvarstår)
 - ✅ **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) (v1: memory_write/append, calendar_create, backlog_add, board_move; fältnivå-undo för backlog_set_status/score/comment/calendar_update kräver pre-image-fångst och är kvar)
-- ✅ **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (L1–L3 kvarstår)
+- ✅ **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (L1–L3 klart i Fas 3, se nedan)
 - ✅ **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
 
 **Varför nu:** utkorg + ångra gör autonomin trygg; registret är billigt och allt
@@ -64,7 +64,7 @@ indexet färskt; degraderar till FTS5 utan embedder.
 ## Fas 3 — Proaktivitet 📋
 - ✅ **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) (store/kanaler/BriefBuilder/leverans/scheduler/MCP-yta klart; live kalender-fusion i sökningen och FreeBusy/iCal-brief-täckning kvarstår)
 - ✅ **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) (motor + internal/webhook-triggers + standing instructions klart; live mail-poll och schedule-cron-triggers kvarstår — `rule_test` täcker dry-run för alla triggertyper under tiden)
-- 📋 **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
+- ✅ **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (`build_tour` i onboarding, `capabilities`/`memaix_help`/`memaix://capabilities`, `next_suggestion`-knuffar klart; board-panelen (§8) är ren frontend-polish och kvarstår, som outkorgens board.html-panel)
 
 **Beroenden:** #1 bygger den generiska schemaläggaren som #4 återanvänder; #4:s
 utgående åtgärder går **alltid** via Utkorgen (#3); guiden visar nu riktiga

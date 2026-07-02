@@ -27,7 +27,10 @@ def full_catalog():
     clear_registry()
     catalog.register_defaults()
     yield
+    # Restore rather than leave empty — other test modules (and server.py
+    # itself) assume the registry reflects the real catalog once populated.
     clear_registry()
+    catalog.register_defaults()
 
 
 def test_every_tool_is_covered_or_internal(full_catalog):

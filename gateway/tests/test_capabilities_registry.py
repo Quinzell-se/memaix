@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from memaix_gateway.acl import Acl
+from memaix_gateway.capabilities import catalog
 from memaix_gateway.capabilities.registry import (
     Capability,
     all_capabilities,
@@ -21,7 +22,10 @@ def _isolated_registry():
     """Each test gets a clean registry so tests don't leak into each other."""
     clear_registry()
     yield
+    # Restore the real catalog rather than leave the global registry empty —
+    # other test modules (and server.py itself) assume it reflects reality.
     clear_registry()
+    catalog.register_defaults()
 
 
 @pytest.fixture()

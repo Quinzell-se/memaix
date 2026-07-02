@@ -148,5 +148,13 @@
 
   "cap.automation.standing.title": "Sätt stående instruktioner",
   "cap.automation.standing.summary": "Vägledning assistenten följer varje session, som \"skriv alltid på svenska\".",
-  "cap.automation.standing.examples": ["Håll svaren korta", "Vilka är mina stående instruktioner?"]
+  "cap.automation.standing.examples": ["Håll svaren korta", "Vilka är mina stående instruktioner?"],
+
+  "tour.greeting": "Kul att lära känna dig! Utifrån det du berättade kan jag ta det här av dig direkt:",
+  "cap.lock.no_role": "Du har inte åtkomst till det här i något projekt än — be en projektägare lägga till dig.",
+  "cap.lock.no_mailbox": "Ingen mejlkorg är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_calendar": "Ingen kalender är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_vault": "Inget projektvalv är konfigurerat för det här än — be en admin sätta upp ett.",
+  "cap.lock.link_google": "Länka ditt Google-konto för att låsa upp det här — kör account_link('google').",
+  "cap.lock.link_microsoft": "Länka ditt Microsoft-konto för att låsa upp det här — kör account_link('microsoft')."
 }

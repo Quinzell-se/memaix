@@ -44,6 +44,7 @@ _search_embedder = None
 _search_embedder_loaded = False
 _notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
 _rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
+_nudge_state: "NudgeState | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -283,6 +284,97 @@ def _get_rules():
     return _rules_store
 
 
+def _get_nudge_state():
+    global _nudge_state
+    if _nudge_state is None:
+        from .capabilities.nudges import NudgeState
+        db_path = Path(os.environ.get("MEMAIX_NUDGE_DB", "/tmp/memaix-nudges.db"))
+        _nudge_state = NudgeState.for_path(db_path)
+    return _nudge_state
+
+
+def _get_accounts(user: str) -> list:
+    try:
+        return _get_token_store().list_accounts(user)
+    except Exception:
+        return []
+
+
+def _translator_for_config(cfg: dict):
+    from .i18n import get_translator
+    locale = cfg.get("memaix", {}).get("server", {}).get("locale", "en")
+    return get_translator(locale)
+
+
+_LOCK_REASON_KEYS = {
+    "no_role": "cap.lock.no_role",
+    "no_mailbox": "cap.lock.no_mailbox",
+    "no_calendar": "cap.lock.no_calendar",
+    "no_vault": "cap.lock.no_vault",
+    "link_google": "cap.lock.link_google",
+    "link_microsoft": "cap.lock.link_microsoft",
+}
+
+
+def _lock_reason_text(t, reason: str) -> str:
+    return t(_LOCK_REASON_KEYS.get(reason, reason))
+
+
+def _capability_summary(cap, t) -> dict:
+    return {"key": cap.key, "area": cap.area, "title": t(cap.title_key), "summary": t(cap.summary_key)}
+
+
+def _capability_detail(cap, t) -> dict:
+    detail = _capability_summary(cap, t)
+    detail["tools"] = list(cap.tools)
+    detail["examples"] = t(cap.example_prompts_key)
+    return detail
+
+
+def _capabilities_data(area: str | None = None) -> dict:
+    """ACL/account-filtered capability data for the `capabilities` tool,
+    `memaix_help` prompt, and `memaix://capabilities` resource — the single
+    place these three surfaces read from (docs/FEATURE-DISCOVERABILITY.md §6)."""
+    from .capabilities.registry import available_for, group_by_area
+
+    user = _user()
+    acl = _get_acl()
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, locked = available_for(acl, user, _get_accounts(user), cfg)
+
+    if area is None:
+        grouped = group_by_area(available)
+        areas = [
+            {"area": a, "capabilities": [_capability_summary(c, t) for c in caps]}
+            for a, caps in grouped.items()
+        ]
+        locked_out = [
+            {
+                "area": entry["capability"].area,
+                "title": t(entry["capability"].title_key),
+                "reason": entry["reason"],
+                "hint": _lock_reason_text(t, entry["reason"]),
+            }
+            for entry in locked
+        ]
+        return {"areas": areas, "locked": locked_out}
+
+    return {
+        "area": area,
+        "capabilities": [_capability_detail(c, t) for c in available if c.area == area],
+        "locked": [
+            {
+                "title": t(entry["capability"].title_key),
+                "reason": entry["reason"],
+                "hint": _lock_reason_text(t, entry["reason"]),
+            }
+            for entry in locked
+            if entry["capability"].area == area
+        ],
+    }
+
+
 def _index_internal_event_backlog_set_status(tail, kwargs, result):
     # tail = (id, status, expected_version) — see backlog_set_status's _tool_call site.
     if not isinstance(result, dict) or result.get("conflict"):
@@ -405,10 +497,23 @@ def onboarding_complete(profile_content: str) -> dict:
     shared_vault = _get_acl().resource("shared", "vault")
     if not shared_vault:
         raise RuntimeError("shared vault not configured")
-    return _audited(
+    result = _audited(
         user, "shared", "onboarding_complete",
         t_onboarding.complete_onboarding, user, Path(shared_vault), profile_content,
     )
+    result["tour"] = _build_tour_for_user(user, profile_content)
+    return result
+
+
+def _build_tour_for_user(user: str, profile_text: str) -> dict:
+    """Rank the user's now-available capabilities against their profile text
+    and return a short guided tour — see docs/FEATURE-DISCOVERABILITY.md §5."""
+    from .capabilities.registry import available_for
+
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, _locked = available_for(_get_acl(), user, _get_accounts(user), cfg)
+    return t_onboarding.build_tour(user, profile_text, available, t)
 
 
 @mcp.tool()
@@ -850,6 +955,74 @@ def standing_instructions_resource() -> str:
     resources at session start."""
     user = _user()
     return _get_rules().get_standing(user) or ""
+
+
+@mcp.tool()
+def capabilities(area: str | None = None) -> dict:
+    """List what Memaix can do for you right now, grouped by outcome area
+    (memory, mail, calendar, backlog, pm, brief, search, automation, undo,
+    outbox). Call with no area for a grouped overview; pass an area (e.g.
+    'mail') to drill down into its capabilities with example prompts. Result
+    is filtered to what you can actually use given your role, linked
+    accounts, and project resources — locked capabilities are shown with a
+    hint on how to unlock them."""
+    return _capabilities_data(area)
+
+
+@mcp.prompt()
+def memaix_help(area: str = "") -> str:
+    """Explain what Memaix can do: an overview grouped by outcome, or (given
+    an area) a drill-down with example prompts and an offer to act now."""
+    data = _capabilities_data(area or None)
+    lines: list[str] = []
+    if "areas" in data:
+        lines += ["# Vad kan jag göra?", "", "Här är det jag kan hjälpa till med just nu:"]
+        for entry in data["areas"]:
+            titles = ", ".join(c["title"] for c in entry["capabilities"])
+            lines.append(f"- **{entry['area']}**: {titles}")
+        if data["locked"]:
+            lines += ["", "Låst just nu:"]
+            lines += [f"- {l['title']} — {l['hint']}" for l in data["locked"]]
+        lines += ["", "Fråga om ett specifikt område (t.ex. \"mail\") för konkreta exempel."]
+    else:
+        lines += [f"# {data['area']}", ""]
+        for cap in data["capabilities"]:
+            lines.append(f"## {cap['title']}")
+            lines.append(cap["summary"])
+            examples = cap["examples"] if isinstance(cap["examples"], list) else []
+            lines += [f"- \"{ex}\"" for ex in examples]
+            lines.append("")
+        if data["locked"]:
+            lines += ["Låst just nu:"]
+            lines += [f"- {l['title']} — {l['hint']}" for l in data["locked"]]
+        lines += ["", "Vill du att jag gör något av detta nu?"]
+    return "\n".join(lines)
+
+
+@mcp.resource("memaix://capabilities")
+def capabilities_resource() -> dict:
+    """Same ACL/account-filtered overview as the `capabilities` tool, for
+    clients that read resources at session start."""
+    return _capabilities_data(None)
+
+
+@mcp.tool()
+def next_suggestion(last_tool: str) -> dict:
+    """After calling `last_tool`, ask whether there's one natural next
+    capability worth mentioning. Sparse and rate-limited — never suggests a
+    locked capability, and returns {} most of the time by design."""
+    from .capabilities.registry import available_for
+    from .capabilities.nudges import suggest
+    import time
+
+    user = _user()
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, _locked = available_for(_get_acl(), user, _get_accounts(user), cfg)
+    result = suggest(user, last_tool, available, _get_nudge_state(), now=time.time())
+    if result is None:
+        return {}
+    return {"capability_key": result["capability_key"], "title": t(result["title_key"])}
 
 
 @mcp.tool()

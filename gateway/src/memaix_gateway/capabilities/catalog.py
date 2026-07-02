@@ -16,7 +16,12 @@ from .registry import Capability, register
 # covered contextually by calendar_setup's auth_required flow rather than as
 # a standalone capability (see docs/FEATURE-DISCOVERABILITY.md §9).
 INTERNAL_TOOLS: frozenset[str] = frozenset(
-    {"whoami", "onboarding_complete", "account_link", "account_list", "account_unlink"}
+    {
+        "whoami", "onboarding_complete", "account_link", "account_list", "account_unlink",
+        # Discoverability's own meta-surface (docs/FEATURE-DISCOVERABILITY.md §9) —
+        # these describe/surface capabilities, they aren't a "job to be done" themselves.
+        "capabilities", "next_suggestion",
+    }
 )
 
 
