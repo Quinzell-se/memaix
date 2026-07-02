@@ -41,6 +41,7 @@ Läs i den ordning som passar din roll.
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
+0. [USER-MANUAL.md](USER-MANUAL.md) — **användarmanual**: installation, konfiguration, verktygskatalog, säkerhetsmodell och vanliga arbetsflöden i ett dokument. Börja här om du vill *använda* Memaix.
 1. [INSTALL.md](INSTALL.md) — installation (automatisk + manuell).
    · [QUICK-INSTALL.md](QUICK-INSTALL.md) — **ett kommando i terminalen** (curl … | sh).
    · [EXPOSE.md](EXPOSE.md) — alla sätt att exponera Memaix: Cloudflare Tunnel, Caddy, Tailscale, ngrok, underkatalog.
