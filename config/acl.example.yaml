@@ -50,6 +50,18 @@ projects:
     #   url: "https://cloud.example.com/remote.php/dav/calendars/acme/tasks/"
     #   user: "acme@example.com"
     #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #
+    # Deck (FEATURE-NEXTCLOUD-BACKEND.md) — enables deck_sync (owner only,
+    # two-way sync against the project's backlog). 'url' is the Nextcloud
+    # base URL (not a DAV path — Deck is its own REST API), plus which
+    # board/stack to sync. 'type' defaults to 'nextcloud' (the only adapter
+    # registered today).
+    # deck:
+    #   url: "https://cloud.example.com"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #   board_id: 1
+    #   stack_id: 2
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true

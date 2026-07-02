@@ -110,6 +110,10 @@
   "cap.backlog.decide.summary": "Flytta ett backlog-item till en ny status (endast ägare).",
   "cap.backlog.decide.examples": ["Godkänn det här backlog-itemet"],
 
+  "cap.backlog.deck_sync.title": "Synka med Nextcloud Deck",
+  "cap.backlog.deck_sync.summary": "Tvåvägssynk mellan en Nextcloud Deck-tavla och backloggen — nya kort blir backlog-items, och ändringar på båda håll hålls i synk (senast ändrad vinner vid konflikt). Endast ägare.",
+  "cap.backlog.deck_sync.examples": ["Synka backloggen med vår Deck-tavla", "Hämta in nya Deck-kort"],
+
   "cap.pm.methodology.title": "Sätta projektmetodik",
   "cap.pm.methodology.summary": "Konfigurera metodik och sprintkapacitet (endast ägare).",
   "cap.pm.methodology.examples": ["Sätt det här projektet till Scrum med 2-veckors sprintar"],
@@ -172,6 +176,7 @@
   "cap.lock.no_contacts": "Ingen adressbok är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_files": "Ingen Nextcloud-filkoppling är konfigurerad för det här än — be en admin sätta upp en.",
   "cap.lock.no_tasks": "Ingen Nextcloud-uppgiftslista är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_deck": "Ingen Nextcloud Deck-tavla är konfigurerad för det här än — be en admin sätta upp en.",
 
   "cap.contacts.search.title": "Slå upp en kontakt",
   "cap.contacts.search.summary": "Sök i din länkade adressbok (t.ex. Nextcloud) på namn, mejl, organisation eller telefonnummer.",

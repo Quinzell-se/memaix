@@ -110,6 +110,10 @@
   "cap.backlog.decide.summary": "Move a backlog item to a new status (owner only).",
   "cap.backlog.decide.examples": ["Approve this backlog item"],
 
+  "cap.backlog.deck_sync.title": "Sync with Nextcloud Deck",
+  "cap.backlog.deck_sync.summary": "Two-way sync between a Nextcloud Deck board and the backlog — new cards become backlog items, and changes on either side are kept in sync (most-recently-changed wins on conflict). Owner only.",
+  "cap.backlog.deck_sync.examples": ["Sync the backlog with our Deck board", "Pull in any new Deck cards"],
+
   "cap.pm.methodology.title": "Set project methodology",
   "cap.pm.methodology.summary": "Configure methodology and sprint capacity (owner only).",
   "cap.pm.methodology.examples": ["Set this project to Scrum with 2-week sprints"],
@@ -172,6 +176,7 @@
   "cap.lock.no_contacts": "No address book is configured for this yet — ask an admin to set one up.",
   "cap.lock.no_files": "No Nextcloud files connection is configured for this yet — ask an admin to set one up.",
   "cap.lock.no_tasks": "No Nextcloud task list is configured for this yet — ask an admin to set one up.",
+  "cap.lock.no_deck": "No Nextcloud Deck board is configured for this yet — ask an admin to set one up.",
 
   "cap.contacts.search.title": "Look up a contact",
   "cap.contacts.search.summary": "Search your linked address book (e.g. Nextcloud) by name, email, organization, or phone number.",

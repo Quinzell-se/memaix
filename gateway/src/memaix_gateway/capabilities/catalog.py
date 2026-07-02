@@ -186,6 +186,15 @@ def register_defaults() -> None:
             needs_role="owner", needs_resource="vault",
             tags=("backlog", "godkänn", "approve"),
         ),
+        Capability(
+            key="backlog.deck_sync", area="backlog",
+            title_key="cap.backlog.deck_sync.title",
+            summary_key="cap.backlog.deck_sync.summary",
+            tools=("deck_sync",),
+            example_prompts_key="cap.backlog.deck_sync.examples",
+            needs_role="owner", needs_resource="deck",
+            tags=("deck", "nextcloud", "backlog", "sync", "kanban"),
+        ),
         # ------------------------------------------------------------------
         # pm
         # ------------------------------------------------------------------

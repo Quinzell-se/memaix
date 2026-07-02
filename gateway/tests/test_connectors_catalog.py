@@ -43,6 +43,13 @@ def acl():
                     "user": "acme@example.com",
                     "password_ref": "env:NC_TASKS_PW",
                 },
+                "deck": {
+                    "url": "https://nc.example.com",
+                    "user": "acme@example.com",
+                    "password_ref": "env:NC_DECK_PW",
+                    "board_id": 1,
+                    "stack_id": 2,
+                },
             }
         },
     )
@@ -150,6 +157,24 @@ def test_tasks_and_calendar_are_independent_caldav_resources(registry, acl, monk
     monkeypatch.setattr(t_tasks, "CalDavTasksAdapter", lambda url, user, password: "tasks-adapter")
     assert registry.get(acl, _FakeTokenStore(), "acme", "calendar", "alice") == "calendar-adapter"
     assert registry.get(acl, _FakeTokenStore(), "acme", "tasks", "alice") == "tasks-adapter"
+
+
+def test_catalog_registers_nextcloud_for_deck(registry, acl, monkeypatch):
+    monkeypatch.setenv("NC_DECK_PW", "d3ck")
+    seen = {}
+
+    class _Sentinel:
+        def __init__(self, url, user, password):
+            seen["url"] = url
+            seen["user"] = user
+            seen["password"] = password
+
+    import memaix_gateway.connectors.adapters.deck_nextcloud as t_deck
+
+    monkeypatch.setattr(t_deck, "DeckAdapter", _Sentinel)
+    result = registry.get(acl, _FakeTokenStore(), "acme", "deck", "alice")
+    assert isinstance(result, _Sentinel)
+    assert seen == {"url": "https://nc.example.com", "user": "acme@example.com", "password": "d3ck"}
 
 
 def test_files_capability_does_not_read_vault_key(registry):

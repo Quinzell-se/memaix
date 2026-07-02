@@ -338,6 +338,7 @@ _LOCK_REASON_KEYS = {
     "no_contacts": "cap.lock.no_contacts",
     "no_files": "cap.lock.no_files",
     "no_tasks": "cap.lock.no_tasks",
+    "no_deck": "cap.lock.no_deck",
     "link_google": "cap.lock.link_google",
     "link_microsoft": "cap.lock.link_microsoft",
 }
@@ -1603,6 +1604,27 @@ def nc_tasks_complete(project: str, id: str) -> dict:
     backend = _get_nc_tasks(project, user)
     return _audited(
         user, project, "nc_tasks_complete", t_nc_tasks.nc_tasks_complete, acl, user, project, id, _tasks=backend,
+    )
+
+
+@mcp.tool()
+def deck_sync(project: str) -> dict:
+    """Two-way sync between the project's linked Nextcloud Deck stack and its
+    backlog. New cards become backlog items; when only one side changed since
+    the last sync that side wins, and when both changed it's reported as a
+    conflict (most-recently-changed side wins). Owner only — it mutates both
+    stores. Only title/description are synced (v1 scope)."""
+    from .connectors.registry import default_registry
+    from .nextcloud.sync import deck_sync as _run_deck_sync
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    deck_cfg = acl.resource(project, "deck") or {}
+    backend = default_registry().get(acl, _get_token_store(), project, "deck", user)
+    return _audited(
+        user, project, "deck_sync", _run_deck_sync, acl, user, project,
+        _deck=backend, board_id=deck_cfg.get("board_id"), stack_id=deck_cfg.get("stack_id"),
     )
 
 

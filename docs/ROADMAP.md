@@ -100,7 +100,14 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   `nc_tasks_list/add/complete`. Egen `tasks:`-resurs, skild från `calendar:`
   trots att båda defaultar till `type: caldav` — en uppgiftslista och en
   händelsekalender är oftast olika CalDAV-collections. *Nedprioriterat på
-  användarens begäran:* Talk (notiskanal). **Kvar:** Deck-/Notes-synk,
+  användarens begäran:* Talk (notiskanal). ✅ **Deck-synk**: `connectors/
+  adapters/deck_nextcloud.py` (Decks JSON-REST-API, inte ett öppet DAV-
+  protokoll) + `nextcloud/sync.py::deck_sync` — nya Deck-kort blir backlog-
+  items (id-koppling `deck_card_id` i frontmatter); drift sedan senaste synk
+  (`deck_synced_at`-baslinje) upptäcks per sida; ändrar bara en sida vinner
+  den sidan, ändrar båda blir det en **konflikt** som loggas och löses med
+  "senast ändrad vinner". v1 synkar bara titel+beskrivning (inte etiketter/
+  förfallodatum/tilldelning — en uttalad avgränsning). **Kvar:** Notes-synk,
   dokumentgenerering.
 - 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
