@@ -29,6 +29,7 @@ from .tools import email as t_email
 from .tools import calendar as t_cal
 from .tools import account as t_account
 from .tools import contacts as t_contacts
+from .tools import nc_files as t_nc_files
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools import pm_engine as t_pm_engine
@@ -216,16 +217,26 @@ def _index_files_write(acl, user, project, tail, kwargs, result):
     return ("file", path, path, content)
 
 
+def _index_nc_files_write(acl, user, project, tail, kwargs, result):
+    # Distinct source_type from local files ("nc_file" vs "file") so a
+    # search_all citation tells you unambiguously which backend it lives in.
+    path, content = tail[0], tail[1]
+    return ("nc_file", path, path, content)
+
+
 # Search-index coverage is intentionally scoped to the writes named in
 # FEATURE-SEMANTIC-SEARCH.md's acceptance criteria (memory_write/append,
 # backlog_add, files_write) — field-level backlog edits (score/comment/
 # set_status) don't change the searchable text meaningfully enough to
 # justify a full item re-read on every call; reindex via search_reindex.
+# nc_files_write (FEATURE-NEXTCLOUD-BACKEND.md §4) follows the same rule as
+# files_write once it exists.
 SEARCH_INDEX_HANDLERS = {
     "memory_write": _index_memory_write,
     "memory_append": _index_memory_append,
     "backlog_add": _index_backlog_add,
     "files_write": _index_files_write,
+    "nc_files_write": _index_nc_files_write,
 }
 
 
@@ -324,6 +335,7 @@ _LOCK_REASON_KEYS = {
     "no_calendar": "cap.lock.no_calendar",
     "no_vault": "cap.lock.no_vault",
     "no_contacts": "cap.lock.no_contacts",
+    "no_files": "cap.lock.no_files",
     "link_google": "cap.lock.link_google",
     "link_microsoft": "cap.lock.link_microsoft",
 }
@@ -1497,6 +1509,58 @@ def contacts_get(project: str, id: str) -> dict:
     backend = default_registry().get(acl, _get_token_store(), project, "contacts", user)
     return _audited(
         user, project, "contacts_get", t_contacts.contacts_get, acl, user, project, id, _contacts=backend,
+    )
+
+
+def _get_nc_files(project: str, user: str):
+    from .connectors.registry import default_registry
+
+    return default_registry().get(_get_acl(), _get_token_store(), project, "files", user)
+
+
+@mcp.tool()
+def nc_files_list(project: str, path: str = "/") -> list:
+    """List files/directories in the project's linked Nextcloud (WebDAV) files —
+    separate from files_list, which is the local vault."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(user, project, "nc_files_list", t_nc_files.nc_files_list, acl, user, project, path, _files=backend)
+
+
+@mcp.tool()
+def nc_files_read(project: str, path: str) -> str:
+    """Read a file from the project's linked Nextcloud (WebDAV) files."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(user, project, "nc_files_read", t_nc_files.nc_files_read, acl, user, project, path, _files=backend)
+
+
+@mcp.tool()
+def nc_files_write(project: str, path: str, content: str) -> str:
+    """Write a file to the project's linked Nextcloud (WebDAV) files — indexed
+    for search_all like a local vault file."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_files_write", t_nc_files.nc_files_write, acl, user, project, path, content, _files=backend,
+    )
+
+
+@mcp.tool()
+def nc_files_search(project: str, query: str, path: str = "/") -> list:
+    """Search the project's linked Nextcloud (WebDAV) files by content (skips large/binary files)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_files_search", t_nc_files.nc_files_search, acl, user, project, query, path, _files=backend,
     )
 
 

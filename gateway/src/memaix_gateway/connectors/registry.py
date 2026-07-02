@@ -22,18 +22,22 @@ from typing import Callable
 DEFAULT_TYPES: dict[str, str] = {
     "mail": "imap",
     "calendar": "caldav",
-    "files": "local",
     "contacts": "carddav",
+    "files": "webdav",
 }
 
 # Capability name -> the acl.yaml resource key it actually reads today.
-# 'mail' and 'files' predate this framework under different resource names
-# ('mailbox', 'vault'); keeping the capability name generic (matching the
-# design doc) while mapping it to the real key avoids renaming every
-# project's acl.yaml.
+# 'mail' predates this framework under a different resource name
+# ('mailbox'); keeping the capability name generic (matching the design
+# doc) while mapping it to the real key avoids renaming every project's
+# acl.yaml. 'files' has no such legacy — it's a brand-new resource key
+# ('files' in acl.yaml), deliberately NOT aliased to 'vault': the local
+# vault (tools/files.py) isn't behind this framework and has a completely
+# different resource shape (a bare path string, not a {type, url, ...}
+# dict) — see FEATURE-NEXTCLOUD-BACKEND.md, this is an *additional* files
+# source (nc_files_* tools), not a replacement for the vault.
 RESOURCE_KEYS: dict[str, str] = {
     "mail": "mailbox",
-    "files": "vault",
 }
 
 

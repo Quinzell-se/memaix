@@ -85,12 +85,18 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   statisk CalDAV) som förtjänar en egen fokuserad migrering; samt en första
   ny extern adapter (Microsoft Graph) som bevis på pluggbarhet.
 - 🔨 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
-  *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**: `connectors/adapters/contacts_carddav.py`
-  + `contacts_search`/`contacts_get`-verktyg, registrerat i förmåge-registret. Vald
-  som första skiva eftersom den är ny funktionalitet (inget existerande beteende att
-  riskera), till skillnad från Files/WebDAV som skulle ersätta lokal-valvet i
-  `files_*`. **Kvar:** Files (WebDAV) + indexeringshook, Talk (notiskanal), Tasks
-  (VTODO), Deck-/Notes-synk, dokumentgenerering.
+  *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**:
+  `connectors/adapters/contacts_carddav.py` + `contacts_search`/`contacts_get`.
+  ✅ **Files (WebDAV)**: `connectors/adapters/files_webdav.py` (PROPFIND/GET/PUT,
+  path-traversal blockerad via `paths.validate_relative_path`) + nya
+  `nc_files_list/read/write/search`-verktyg + indexeringshook (`nc_files_write` →
+  sökbar via `search_all` under en egen `source_type='nc_file'`, skild från lokala
+  `file` så källhänvisningen alltid visar rätt backend). Medveten designbeslut: en
+  **egen** `files:`-resurs i acl.yaml, inte samma som `vault:` — vaulten är en ren
+  sökväg-sträng som hela kodbasen (minne/backlog/PM/onboarding/...) redan förutsätter,
+  medan Nextcloud-filer är en *tillkommande* källa nås via nya verktyg, aldrig genom
+  att koppla om `files_*`. **Kvar:** Talk (notiskanal), Tasks (VTODO), Deck-/
+  Notes-synk, dokumentgenerering.
 - 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
   ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från

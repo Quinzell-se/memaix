@@ -33,6 +33,11 @@ def acl():
                     "user": "acme@example.com",
                     "password_ref": "env:NC_PW",
                 },
+                "files": {
+                    "url": "https://nc.example.com/dav/files/acme/",
+                    "user": "acme@example.com",
+                    "password_ref": "env:NC_FILES_PW",
+                },
             }
         },
     )
@@ -83,6 +88,39 @@ def test_catalog_registers_carddav_for_contacts(registry, acl, monkeypatch):
         "user": "acme@example.com",
         "password": "s3cret",
     }
+
+
+def test_catalog_registers_webdav_for_files(registry, acl, monkeypatch):
+    monkeypatch.setenv("NC_FILES_PW", "f1les")
+    seen = {}
+
+    class _Sentinel:
+        def __init__(self, url, user, password):
+            seen["url"] = url
+            seen["user"] = user
+            seen["password"] = password
+
+    import memaix_gateway.connectors.adapters.files_webdav as t_files
+
+    monkeypatch.setattr(t_files, "WebDavFilesAdapter", _Sentinel)
+    result = registry.get(acl, _FakeTokenStore(), "acme", "files", "alice")
+    assert isinstance(result, _Sentinel)
+    assert seen == {
+        "url": "https://nc.example.com/dav/files/acme/",
+        "user": "acme@example.com",
+        "password": "f1les",
+    }
+
+
+def test_files_capability_does_not_read_vault_key(registry):
+    """'files' must resolve against the new 'files' resource key, never 'vault'
+    — the local vault has a completely different (bare string) shape."""
+    acl = Acl(
+        users={"alice": {"grants": {"acme": "owner"}}},
+        projects={"acme": {"vault": "/srv/vaults/acme"}},  # no 'files' resource configured
+    )
+    with pytest.raises(ValueError, match="no files configured"):
+        registry.get(acl, _FakeTokenStore(), "acme", "files", "alice")
 
 
 def test_default_registry_is_a_lazy_singleton():

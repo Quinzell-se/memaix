@@ -11,8 +11,10 @@ from __future__ import annotations
 import numpy as np
 
 _ROLES = ("reader", "collaborator", "owner")
-_NEED_FOR_SOURCE: dict[str, str] = {"memory": "reader", "file": "collaborator", "backlog": "reader"}
-_SOURCE_TYPES = ("memory", "file", "backlog")
+_NEED_FOR_SOURCE: dict[str, str] = {
+    "memory": "reader", "file": "collaborator", "backlog": "reader", "nc_file": "collaborator",
+}
+_SOURCE_TYPES = ("memory", "file", "backlog", "nc_file")
 
 
 def _rank(role: str | None) -> int:
