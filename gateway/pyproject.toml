@@ -34,6 +34,12 @@ dev = [
 search = [
     "sentence-transformers>=2.7",
 ]
+# Optional CP-SAT allocator (FEATURE-PM-ENGINE.md Byggordning steg 7). Without
+# it, pm/allocate_cpsat.py raises a clear ImportError and the heuristic
+# allocator (pm/allocate.py) remains the default.
+pm = [
+    "ortools>=9.9",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

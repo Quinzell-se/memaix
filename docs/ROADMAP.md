@@ -127,7 +127,7 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   frontmatter/metadata-plats lever länken+baslinjen i en egen liten
   `NotesLinkStore` (SQLite) istället för i filen själv. Nya Nextcloud-
   anteckningar blir `notes/<slug>.md`. **Kvar:** dokumentgenerering.
-- 🔨 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
+- ✅ **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
   *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
   ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från
   PM-DATA-MODEL.md, cykel-avvisning på `dependency`), `pm/schedule.py`
@@ -152,9 +152,19 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
   kritiskhet per uppgift, ändrad resurstilldelning, och förskjutna
   milstolpar. Detta är den kontrollerade "vad händer om"-vägen — i
   kontrast mot att redigera schemat direkt för hand, vilket fortfarande
-  inte går (se ovan). **Kvar:** CP-SAT-allokering (uttryckligen valfritt i
-  byggspecen), agent-prompter (`pm_plan_session`/`pm_whatif_session`),
-  generisk `pm_report(kind, audience)`.
+  inte går (se ovan).
+  ✅ **PM v2**: `pm_report(kind, audience)` — rollup av milstolpar/varians/RAID/
+  utnyttjande, inget nyberäknat (hittade och fixade i förbifarten en
+  `_parse_raid`-regexbugg som läckte tomma fälts värden in i nästa fält).
+  Agent-prompter `pm_plan_session`/`pm_whatif_session` (+ `pm_weekly_review`
+  utökad) som guidar LLM:en genom motorn utan att den någonsin räknar
+  själv. `pm/allocate_cpsat.py` — valfri OR-Tools CP-SAT-allokerare bakom
+  `pm`-extran, vald via `memaix.yaml`'s `pm.allocator: heuristic|cpsat`;
+  samma kritiska-linje-lager som heuristiken, löser bara
+  resurstilldelningen som en makespan-minimerande optimering (intervall-
+  variabler + `NoOverlap` per resurs) istället för girig placering — smalare
+  v1-omfång än heuristiken (hel-dag resurs-exklusiv upptagning, inga
+  tillgänglighetsundantag), uttalat i modulens docstring.
 
 **Varför sist:** störst värde när kärnan är stabil, sökbar och säker. PM-motorn
 kan dock byggas parallellt med fas 2–3 eftersom den är fristående.

@@ -21,6 +21,22 @@ from ..pm.report import variance as _run_variance
 from ..pm.whatif import whatif as _run_whatif
 
 
+def _resolve_allocator(cfg: dict):
+    """`memaix.yaml`'s `pm.allocator: heuristic|cpsat` (default heuristic)
+    selects pm/allocate.py's greedy heuristic or pm/allocate_cpsat.py's
+    CP-SAT optimizer (FEATURE-PM-ENGINE.md Byggordning steg 7/8). The
+    ortools import only happens when cpsat is actually requested, so a
+    default (heuristic) install never needs the optional dependency."""
+    allocator_name = cfg.get("memaix", {}).get("pm", {}).get("allocator", "heuristic")
+    if allocator_name == "cpsat":
+        from ..pm.allocate_cpsat import allocate_cpsat
+
+        return allocate_cpsat
+    if allocator_name != "heuristic":
+        raise ValueError(f"unknown pm.allocator: {allocator_name!r}; valid: 'heuristic', 'cpsat'")
+    return _run_allocate
+
+
 def _owned_task(pm, project: str, task_id: int) -> dict:
     task = pm.get_task(task_id)
     if task is None or task["project"] != project:
@@ -129,13 +145,19 @@ def scenario_list(acl: Acl, user_id: str, project: str, *, _pm) -> list[dict]:
     return _pm.list_scenarios(project)
 
 
-def pm_allocate(acl: Acl, user_id: str, project: str, scenario_id: int, project_start: str | None = None, *, _pm) -> dict:
+def pm_allocate(
+    acl: Acl, user_id: str, project: str, scenario_id: int, project_start: str | None = None, *, _pm, _cfg=None,
+) -> dict:
     acl.enforce(user_id, project, "owner")
     _owned_scenario(_pm, project, scenario_id)
     from datetime import date as _date
 
+    from .. import config
+
+    cfg = _cfg if _cfg is not None else config.load()
+    allocator = _resolve_allocator(cfg)
     start = _date.fromisoformat(project_start) if project_start else None
-    return _run_allocate(_pm, scenario_id, project_start=start)
+    return allocator(_pm, scenario_id, project_start=start)
 
 
 _WHATIF_CHANGE_FIELDS = {
@@ -146,7 +168,7 @@ _WHATIF_CHANGE_FIELDS = {
 
 def pm_whatif(
     acl: Acl, user_id: str, project: str, base_scenario_id: int, changes: list[dict],
-    project_start: str | None = None, *, _pm,
+    project_start: str | None = None, *, _pm, _cfg=None,
 ) -> dict:
     """Simulate `changes` against `base_scenario_id` in a fresh scenario,
     without touching the base. Each change is {entity: 'task'|'resource',
@@ -168,8 +190,12 @@ def pm_whatif(
 
     from datetime import date as _date
 
+    from .. import config
+
+    cfg = _cfg if _cfg is not None else config.load()
+    allocator = _resolve_allocator(cfg)
     start = _date.fromisoformat(project_start) if project_start else None
-    return _run_whatif(_pm, base_scenario_id, changes, project_start=start)
+    return _run_whatif(_pm, base_scenario_id, changes, project_start=start, allocator=allocator)
 
 
 def pm_utilization(

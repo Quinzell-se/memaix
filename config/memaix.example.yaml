@@ -64,8 +64,14 @@ auth:
 
 # PM planning engine (FEATURE-PM-ENGINE.md) — resource_add/task_add/pm_allocate/
 # pm_utilization/pm_variance/plan_commit. Own SQLite DB (MEMAIX_PM_DB env var,
-# default /tmp/memaix-pm.db); no config needed today — v1 is the heuristic
-# allocator only (no `pm.allocator` switch yet; CP-SAT is future work).
+# default /tmp/memaix-pm.db).
+# pm:
+#   allocator: "heuristic"  # 'heuristic' (default, no extra deps) | 'cpsat'
+#                           # (optimizes for shortest project finish date via
+#                           # OR-Tools; requires the optional dependency:
+#                           #   pip install "memaix-gateway[pm]"
+#                           # pm_allocate/pm_whatif raise a clear ImportError
+#                           # if 'cpsat' is selected without it installed)
 
 onboarding:
   enabled: true

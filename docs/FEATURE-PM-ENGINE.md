@@ -172,8 +172,22 @@ instruerar LLM:en att **aldrig räkna själv** utan kalla motorn och förklara.
 determinismgräns-instruktionen och rätt verktygsordning.
 
 ### Steg 7 — (valfritt) CP-SAT
-`pm/allocate_cpsat.py` bakom `pm`-extran; välj heuristik/CP-SAT via config. **Test**
-hoppas om `ortools` saknas (`pytest.importorskip`).
+✅ `pm/allocate_cpsat.py`, bakom `pm`-extran (`pip install "memaix-gateway[pm]"`);
+`tools/pm_engine.py`'s `_resolve_allocator` väljer heuristik/CP-SAT via
+`memaix.yaml`'s `pm.allocator` (default `heuristic`, aldrig importerar `ortools`
+om inte `cpsat` faktiskt valts). Samma uppdelning som heuristiken:
+`schedule.compute_schedule()` ger fortfarande den resurs-agnostiska kritiska
+linjen oförändrad — CP-SAT löser bara VEM+NÄR som en optimering (minimerar
+makespan) istället för en girig placering, via OR-Tools intervall-variabler +
+`NoOverlap` per resurs. v1-omfång smalare än heuristikens, uttalat: hel-dag
+resurs-exklusiv upptagning (ingen delad dags-kapacitet mellan flera små
+uppgifter, till skillnad från heuristiken), tillgänglighetsundantag omodellerade
+(samma förenkling som `schedule.py`'s bas-CPM redan gör), ren
+makespan-minimering (kostnadsminimering/resursutjämning är fortsatt
+"Framtida arbete", inte v1). **Test** (`tests/test_pm_allocate_cpsat.py`,
+`tests/test_pm_allocator_config.py`): hoppas om `ortools` saknas
+(`pytest.importorskip`) — inte installerat i CI, samma konvention som
+`search`-extrans `sentence-transformers`.
 
 ### Steg 8 — Config + docs
 `memaix.example.yaml`: `pm.allocator: heuristic|cpsat`. Registrera doket i
@@ -183,13 +197,17 @@ hoppas om `ortools` saknas (`pytest.importorskip`).
 `cd gateway && python -m pytest -q` + `python3 scripts/check-docs-index.py`.
 
 ### Acceptanskriterier (speglar PM-PLANNING-ENGINE.md)
-- [ ] Resurser modelleras med kapacitet, tillgänglighet och kompetens.
-- [ ] Allokering respekterar kapacitet + kompetens + beroenden, deterministiskt.
-- [ ] Kritisk linje beräknas exakt (forward/backward pass); cykler avvisas.
-- [ ] What-if visar konsekvens (kritisk linje/milstolpe/konflikter) diffad mot baseline, utan att röra committed plan.
-- [ ] Uppföljning visar varians plan vs utfall; utnyttjandegrad mot kapacitet.
-- [ ] All beräkning i kod; LLM endast gränssnitt; `plan_commit` kräver owner och loggas.
-- [ ] Saknade estimat/tillgänglighet flaggas som osäkerhet — inga gissade datum; hela sviten + docs-index grön.
+- [x] Resurser modelleras med kapacitet, tillgänglighet och kompetens.
+- [x] Allokering respekterar kapacitet + kompetens + beroenden, deterministiskt
+      (både heuristiken och CP-SAT-alternativet).
+- [x] Kritisk linje beräknas exakt (forward/backward pass); cykler avvisas.
+- [x] What-if visar konsekvens (kritisk linje/milstolpe/konflikter) diffad mot baseline, utan att röra committed plan.
+- [x] Uppföljning visar varians plan vs utfall; utnyttjandegrad mot kapacitet; `pm_report` buntar
+      ihop bådadera plus milstolpar/RAID för valfri publik.
+- [x] All beräkning i kod; LLM endast gränssnitt (agent-prompterna instruerar detta explicit);
+      `plan_commit` kräver owner och loggas.
+- [x] Saknade estimat/tillgänglighet flaggas som osäkerhet — inga gissade datum; hela sviten (748
+      tester) + docs-index grön.
 
 ---
 

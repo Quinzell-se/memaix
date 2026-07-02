@@ -21,11 +21,18 @@ from datetime import date
 from .allocate import allocate
 
 
-def whatif(store, base_scenario_id: int, changes: list[dict], *, project_start: date | None = None) -> dict:
+def whatif(
+    store, base_scenario_id: int, changes: list[dict], *, project_start: date | None = None, allocator=None,
+) -> dict:
     """Simulate `changes` (scenario_change-shaped dicts: entity/entity_id/
     field/value) against `base_scenario_id` without touching it. Returns a
     diff: {whatif_scenario_id, base_scenario_id, warnings, schedule_changes,
-    resource_changes, milestone_changes}."""
+    resource_changes, milestone_changes}.
+
+    `allocator` defaults to the heuristic (pm/allocate.py); pass
+    pm/allocate_cpsat.py's allocate_cpsat to run what-if through CP-SAT
+    instead (tools/pm_engine.py selects it from config)."""
+    run_allocate = allocator or allocate
     base = store.get_scenario(base_scenario_id)
     if base is None:
         raise ValueError(f"no such scenario: {base_scenario_id}")
@@ -39,7 +46,7 @@ def whatif(store, base_scenario_id: int, changes: list[dict], *, project_start: 
             whatif_scenario["id"], change["entity"], change["entity_id"], change["field"], change["value"],
         )
 
-    result = allocate(store, whatif_scenario["id"], project_start=project_start)
+    result = run_allocate(store, whatif_scenario["id"], project_start=project_start)
 
     tasks_by_id = {t["id"]: t for t in store.list_tasks(project)}
     base_schedule = {r["task_id"]: r for r in store.list_schedule(base_scenario_id)}
