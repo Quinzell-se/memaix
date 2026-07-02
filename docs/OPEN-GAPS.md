@@ -97,9 +97,19 @@ snabbåtgärder, glanceable brief.
 
 ## 🟢 Programmatiskt — tekniska hål
 
-### 13. Idempotens för skrivande åtgärder
+### 13. ✅ Idempotens för skrivande åtgärder
 AI:n retrear ett verktygsanrop (nätverksglapp) → **dubbla** kalenderhändelser/mejl? Reell bugg.
 - **Åtgärd:** **idempotensnycklar** för alla skrivande verktyg (skapa-en-gång).
+- **Status:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad körning per
+  (användare, verktyg, idempotency_key); ett upprepat anrop med samma nyckel returnerar det cachade
+  resultatet istället för att köra på nytt. Inbyggd i `server.py`'s `_audited`-knutpunkt (samma
+  ställe som audit/timeline/sökindex redan hakar in), så alla verktyg som går via `_tool_call`
+  eller `_audited` kan slå på det utan egen kod. Trådat genom de verktyg vars sidoeffekt är extern
+  och dyr att ångra: `email_send`, `email_create_draft`, `calendar_create`, `calendar_update`,
+  `nc_tasks_add`. Naturligt idempotenta skrivningar (överskriv-på-sökväg som `files_write`/
+  `memory_write`/`nc_files_write`, uppsert-på-id) och lågrisk-dubbletter (`backlog_add` i egen
+  git-vault) fick avsiktligt ingen nyckel — se `safety/idempotency.py`'s modul-docstring för
+  omfångsmotiveringen.
 
 ### 14. Teststrategi för den deterministiska motorn
 Eval-sviten testar *LLM:ens verktygsanrop* — men **kritisk linje-matematiken måste vara bevisat

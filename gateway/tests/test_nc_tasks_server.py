@@ -12,6 +12,7 @@ from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
 from memaix_gateway.notify.store import NotifyStore
 from memaix_gateway.rules.store import RulesStore
+from memaix_gateway.safety.idempotency import IdempotencyStore
 from memaix_gateway.search.store import EmbeddingStore
 from memaix_gateway.timeline.store import ActionsStore
 import memaix_gateway.connectors.registry as registry_mod
@@ -58,6 +59,7 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_search_embedder_loaded", True)
     monkeypatch.setattr(server, "_notify_store", NotifyStore.for_path(tmp_path / "notify.db"))
     monkeypatch.setattr(server, "_rules_store", RulesStore.for_path(tmp_path / "rules.db"))
+    monkeypatch.setattr(server, "_idempotency_store", IdempotencyStore.for_path(tmp_path / "idem.db"))
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
 
@@ -107,3 +109,19 @@ def test_nc_tasks_missing_resource_raises_value_error(wired, monkeypatch):
     monkeypatch.setattr(server, "_acl", acl2)
     with pytest.raises(ValueError, match="no tasks configured"):
         server.nc_tasks_list("other")
+
+
+def test_nc_tasks_add_idempotency_key_prevents_duplicate(wired):
+    _, _, backend = wired
+    first = server.nc_tasks_add("proj", "Call supplier", idempotency_key="retry-1")
+    second = server.nc_tasks_add("proj", "Call supplier", idempotency_key="retry-1")
+    assert second == first
+    # Backend only saw one add() call — not a second task created.
+    assert list(backend.tasks.keys()) == ["t1", "new-id"]
+
+
+def test_nc_tasks_add_without_key_is_not_deduped(wired):
+    server.nc_tasks_add("proj", "Call supplier")
+    server.nc_tasks_add("proj", "Call supplier")
+    tools = [e["tool"] for e in server._get_audit().tail(5)]
+    assert tools.count("nc_tasks_add") == 2

@@ -51,6 +51,7 @@ _rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
 _nudge_state: "NudgeState | None" = None  # type: ignore[name-defined]
 _pm_store: "PMStore | None" = None  # type: ignore[name-defined]
 _notes_link_store: "NotesLinkStore | None" = None  # type: ignore[name-defined]
+_idempotency_store: "IdempotencyStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -154,20 +155,36 @@ def _rl(user: str, project: str) -> None:
         raise RuntimeError("rate_limited: project quota exceeded")
 
 
-def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
+def _audited(user: str, project: str, tool: str, fn, *args, idempotency_key: str | None = None, **kwargs):
     """Call fn(*args, **kwargs), log result to audit, re-raise on error.
 
     Every tool call funnels through here (whether via _tool_call or the
     older direct-_audited pattern used by calendar_*), which makes this the
     single choke point for the undo/timeline recording hook below — args is
     always (acl, user, project, *tail) by convention (see FEATURE-UNDO-TIMELINE.md).
+
+    idempotency_key (docs/OPEN-GAPS.md #13): if given and a prior call with
+    the same (user, tool, key) already succeeded, its cached result is
+    returned without re-running fn — so a retried email_send/calendar_create/
+    nc_tasks_add can't repeat the external side effect. A replay skips
+    fn() entirely (no re-check of ACL/rate-limit beyond what already ran
+    above this call, no duplicate timeline/search-index recording) since
+    those already happened for the original call; only the audit trail gets
+    a new "idempotent replay" entry so retries stay visible.
     """
+    if idempotency_key:
+        cached = _get_idempotency().get(user, tool, idempotency_key)
+        if cached is not None:
+            _get_audit().log(user, project, tool, True, "idempotent replay")
+            return cached
     try:
         result = fn(*args, **kwargs)
         _get_audit().log(user, project, tool, True)
         _maybe_record_timeline(user, project, tool, args[3:], kwargs, result)
         _maybe_index_for_search(user, project, tool, args[3:], kwargs, result)
         _maybe_publish_internal_event(user, project, tool, args[3:], kwargs, result)
+        if idempotency_key and isinstance(result, dict):
+            _get_idempotency().record(user, tool, idempotency_key, result)
         return result
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
@@ -308,6 +325,15 @@ def _get_pm():
         db_path = Path(os.environ.get("MEMAIX_PM_DB", "/tmp/memaix-pm.db"))
         _pm_store = PMStore.for_path(db_path)
     return _pm_store
+
+
+def _get_idempotency():
+    global _idempotency_store
+    if _idempotency_store is None:
+        from .safety.idempotency import IdempotencyStore
+        db_path = Path(os.environ.get("MEMAIX_IDEMPOTENCY_DB", "/tmp/memaix-idempotency.db"))
+        _idempotency_store = IdempotencyStore.for_path(db_path)
+    return _idempotency_store
 
 
 def _get_nudge_state():
@@ -459,7 +485,9 @@ def _maybe_index_for_search(user: str, project: str, tool: str, tail: tuple, kwa
         logger.warning("search indexing failed for tool %r", tool, exc_info=True)
 
 
-def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kwargs):
+def _tool_call(
+    tool: str, project: str, fn, *tail, need: str | None = None, idempotency_key: str | None = None, **kwargs,
+):
     """Single entry point for a project-scoped tool call.
 
     Resolves the caller's identity, applies rate limiting, optionally enforces
@@ -476,7 +504,7 @@ def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kw
     acl = _get_acl()
     if need is not None:
         acl.enforce(user, project, need)
-    return _audited(user, project, tool, fn, acl, user, project, *tail, **kwargs)
+    return _audited(user, project, tool, fn, acl, user, project, *tail, idempotency_key=idempotency_key, **kwargs)
 
 
 mcp = FastMCP("memaix")
@@ -1608,14 +1636,20 @@ def nc_tasks_list(project: str) -> list:
 
 
 @mcp.tool()
-def nc_tasks_add(project: str, title: str, due: str | None = None, notes: str | None = None) -> dict:
-    """Add a task to the project's linked Nextcloud task list."""
+def nc_tasks_add(
+    project: str, title: str, due: str | None = None, notes: str | None = None, idempotency_key: str | None = None,
+) -> dict:
+    """Add a task to the project's linked Nextcloud task list.
+
+    Pass idempotency_key (same value on retry) to avoid creating a duplicate
+    task if the call is retried after e.g. a network timeout."""
     user = _user()
     _rl(user, project)
     acl = _get_acl()
     backend = _get_nc_tasks(project, user)
     return _audited(
-        user, project, "nc_tasks_add", t_nc_tasks.nc_tasks_add, acl, user, project, title, due, notes, _tasks=backend,
+        user, project, "nc_tasks_add", t_nc_tasks.nc_tasks_add, acl, user, project, title, due, notes,
+        _tasks=backend, idempotency_key=idempotency_key,
     )
 
 
@@ -1712,20 +1746,31 @@ def email_create_draft(
     body: str,
     cc: str | None = None,
     in_reply_to: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
-    """Save a draft to the mailbox Drafts folder."""
+    """Save a draft to the mailbox Drafts folder.
+
+    Pass idempotency_key (same value on retry) to avoid creating a second
+    draft if the call is retried after e.g. a network timeout."""
     return _tool_call(
         "email_create_draft", project, t_email.email_create_draft,
-        to, subject, body, cc, in_reply_to,
+        to, subject, body, cc, in_reply_to, idempotency_key=idempotency_key,
     )
 
 
 @mcp.tool()
-def email_send(project: str, to: str, subject: str, body: str, cc: str | None = None) -> dict:
-    """Send an email (requires owner + allow_send feature flag)."""
+def email_send(
+    project: str, to: str, subject: str, body: str, cc: str | None = None, idempotency_key: str | None = None,
+) -> dict:
+    """Send an email (requires owner + allow_send feature flag).
+
+    Pass idempotency_key (same value on retry) to avoid sending a duplicate
+    if the call is retried after e.g. a network timeout — a retry with the
+    same key returns the original result (including a queued outbox
+    action_id) instead of sending/queuing again."""
     return _tool_call(
         "email_send", project, t_email.email_send,
-        to, subject, body, cc,
+        to, subject, body, cc, idempotency_key=idempotency_key,
     )
 
 
@@ -1773,8 +1818,12 @@ def calendar_create(
     attendees: list[str] | None = None,
     location: str | None = None,
     description: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
-    """Create a calendar event."""
+    """Create a calendar event.
+
+    Pass idempotency_key (same value on retry) to avoid creating a duplicate
+    event if the call is retried after e.g. a network timeout."""
     user = _user()
     _rl(user, project)
     try:
@@ -1783,14 +1832,18 @@ def calendar_create(
             user, project, "calendar_create",
             t_cal.calendar_create,
             _get_acl(), user, project, title, start, end, attendees, location, description, _dav=dav,
+            idempotency_key=idempotency_key,
         )
     except CalendarAuthRequired as e:
         return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
-def calendar_update(project: str, id: str, **fields) -> dict:
-    """Update fields on an existing calendar event."""
+def calendar_update(project: str, id: str, idempotency_key: str | None = None, **fields) -> dict:
+    """Update fields on an existing calendar event.
+
+    Pass idempotency_key (same value on retry) to avoid re-applying the
+    same update twice if the call is retried after e.g. a network timeout."""
     user = _user()
     _rl(user, project)
     # Reject any leading-underscore key from the client: those names are
@@ -1803,7 +1856,7 @@ def calendar_update(project: str, id: str, **fields) -> dict:
         return _audited(
             user, project, "calendar_update",
             t_cal.calendar_update,
-            _get_acl(), user, project, id, _dav=dav, **fields,
+            _get_acl(), user, project, id, _dav=dav, idempotency_key=idempotency_key, **fields,
         )
     except CalendarAuthRequired as e:
         return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}

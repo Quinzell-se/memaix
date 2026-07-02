@@ -162,7 +162,13 @@ kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
 - **Skala:** Redis-backend bakom rate-limit/state-gränssnittet när fler workers behövs (#6).
 - **Datarobusthet:** pydantic-schema för backlog/PM-items (#10, nästa steg).
 - **Tidszoner:** normalisera all tid till UTC, visa i användarens tz (OPEN-GAPS #16) — berör brief, kalender, PM.
-- **Idempotens:** idempotensnycklar för alla skrivande verktyg (OPEN-GAPS #13) — delvis löst i #1/#3/#4.
+- ✅ **Idempotens:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad
+  körning per (användare, verktyg, idempotency_key) och är inbyggd i `server.py`'s `_audited`-
+  knutpunkt — ett upprepat anrop (t.ex. AI:n retrear efter nätverksglapp) returnerar det cachade
+  resultatet istället för att upprepa sidoeffekten. Trådat genom `email_send`,
+  `email_create_draft`, `calendar_create`, `calendar_update`, `nc_tasks_add` — verktygen med en
+  extern, dyr-att-ångra sidoeffekt (OPEN-GAPS #13). Naturligt idempotenta skrivningar
+  (överskriv-på-sökväg, uppsert-på-id) och lågrisk-dubbletter (`backlog_add`) behöver ingen nyckel.
 
 ## Rekommenderad MVP-lansering
 **Fas 0–2 + #1** ger säker autonomi, minne och en morgonbrief — en meningsfull
