@@ -42,6 +42,7 @@ _timeline_store: "ActionsStore | None" = None  # type: ignore[name-defined]
 _search_store: "EmbeddingStore | None" = None  # type: ignore[name-defined]
 _search_embedder = None
 _search_embedder_loaded = False
+_notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -239,6 +240,36 @@ def _get_search_embedder():
         _search_embedder = make_embedder(search_cfg)
         _search_embedder_loaded = True
     return _search_embedder
+
+
+def _get_notify():
+    global _notify_store
+    if _notify_store is None:
+        from .notify.store import NotifyStore
+        db_path = Path(os.environ.get("MEMAIX_NOTIFY_DB", "/tmp/memaix-notify.db"))
+        _notify_store = NotifyStore.for_path(db_path)
+    return _notify_store
+
+
+def _brief_tools_for_user() -> dict:
+    """Concrete tool functions the BriefBuilder uses to gather content —
+    built here (not in notify/brief.py) so that module stays free of any
+    server.py/tools.* import at module scope."""
+
+    def calendar_events(acl, u, project, day_start, day_end):
+        dav = _resolve_calendar_dav(project, u)
+        if dav is None:
+            return []
+        return t_cal.calendar_list(
+            acl, u, project, day_start.isoformat(), day_end.isoformat(), _dav=dav
+        )
+
+    return {
+        "calendar_events": calendar_events,
+        "email_list": t_email.email_list,
+        "backlog_list": t_backlog.backlog_list,
+        "pm_raid_list": t_pm.pm_raid_list,
+    }
 
 
 def _maybe_index_for_search(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
@@ -516,6 +547,142 @@ def search_status() -> dict:
         "semantic_enabled": _get_search_embedder() is not None,
         "chunks_by_project": _get_search_store().count_by_project(visible),
     }
+
+
+# ------------------------------------------------------------------
+# Brief tools — proactive daily brief & notifications (FEATURE-PROACTIVE-BRIEF.md)
+# ------------------------------------------------------------------
+
+_KNOWN_CHANNEL_TYPES = {"email", "webhook", "ntfy"}
+
+
+def _validate_brief_time(brief_time: str) -> None:
+    import re
+    if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", brief_time or ""):
+        raise ValueError(f"brief_time must be HH:MM (24h), got {brief_time!r}")
+
+
+def _validate_timezone(tz_name: str) -> None:
+    from zoneinfo import ZoneInfo
+    try:
+        ZoneInfo(tz_name)
+    except Exception as exc:
+        raise ValueError(f"unknown timezone: {tz_name!r}") from exc
+
+
+def _validate_channels(channels: list[dict] | None) -> None:
+    for spec in channels or []:
+        if spec.get("type") not in _KNOWN_CHANNEL_TYPES:
+            raise ValueError(
+                f"unknown channel type {spec.get('type')!r}; must be one of {sorted(_KNOWN_CHANNEL_TYPES)}"
+            )
+
+
+@mcp.tool()
+def brief_configure(
+    enabled: bool,
+    brief_time: str = "07:00",
+    timezone: str | None = None,
+    channels: list[dict] | None = None,
+    quiet_hours: dict | None = None,
+    projects: list[str] | None = None,
+) -> dict:
+    """Configure your daily brief: schedule (HH:MM in your timezone), delivery
+    channels (email/webhook/ntfy), optional quiet hours, and which projects
+    to cover (default: all you can see). timezone defaults to
+    memaix.brief.default_timezone in config, falling back to UTC."""
+    user = _user()
+    cfg = config.load()
+    timezone = timezone or cfg.get("memaix", {}).get("brief", {}).get("default_timezone", "UTC")
+    _validate_brief_time(brief_time)
+    _validate_timezone(timezone)
+    _validate_channels(channels)
+
+    from datetime import datetime, timezone as _tz
+    store = _get_notify()
+    prefs = store.set_prefs(
+        user, now_iso=datetime.now(_tz.utc).isoformat(),
+        enabled=enabled, brief_time=brief_time, timezone=timezone,
+        channels=channels, projects=projects,
+        quiet_start=(quiet_hours or {}).get("start"), quiet_end=(quiet_hours or {}).get("end"),
+    )
+
+    from .notify.scheduler import next_brief_epoch
+    next_epoch = next_brief_epoch(prefs, datetime.now(_tz.utc))
+    store.upsert_schedule(user, "daily", next_epoch)
+
+    return {
+        "ok": True, "prefs": prefs,
+        "next_run": datetime.fromtimestamp(next_epoch, tz=_tz.utc).isoformat(),
+    }
+
+
+@mcp.tool()
+def brief_status() -> dict:
+    """Show your current brief configuration and next/last scheduled run."""
+    user = _user()
+    store = _get_notify()
+    prefs = store.get_prefs(user)
+    if prefs is None:
+        return {"configured": False}
+
+    from datetime import datetime, timezone as _tz
+    schedule = store.get_schedule(user, "daily")
+    next_run = (
+        datetime.fromtimestamp(schedule["next_run"], tz=_tz.utc).isoformat() if schedule else None
+    )
+    last_run = (
+        datetime.fromtimestamp(schedule["last_run"], tz=_tz.utc).isoformat()
+        if schedule and schedule.get("last_run") else None
+    )
+    return {"configured": True, "prefs": prefs, "next_run": next_run, "last_run": last_run}
+
+
+def _build_brief_now() -> dict:
+    user = _user()
+    acl = _get_acl()
+    store = _get_notify()
+    prefs = store.get_prefs(user) or {
+        "timezone": "UTC", "brief_time": "07:00", "projects": [], "channels": [],
+    }
+    from datetime import datetime, timezone as _tz
+    from .notify.brief import build
+    return build(acl, user, config.load(), prefs, now=datetime.now(_tz.utc), tools=_brief_tools_for_user())
+
+
+@mcp.tool()
+def brief_preview() -> dict:
+    """Build today's brief right now and return it, without sending it —
+    the connector's 'fetch it when I open the app' path."""
+    return _build_brief_now()
+
+
+@mcp.tool()
+def brief_send_now() -> dict:
+    """Build and deliver your brief immediately via your configured channels.
+    Ignores quiet hours and the once-per-day duplicate guard — this is an
+    explicit request, so it always sends."""
+    user = _user()
+    acl = _get_acl()
+    store = _get_notify()
+    prefs = store.get_prefs(user)
+    if not prefs:
+        return {"ok": False, "error": "brief not configured — call brief_configure first"}
+
+    from datetime import datetime, timezone as _tz
+    from .notify.deliver import deliver
+    result = deliver(
+        store, acl, config.load(), user, prefs,
+        now=datetime.now(_tz.utc), force=True, tools=_brief_tools_for_user(),
+    )
+    _get_audit().log(user, "shared", "brief_send", bool(result.get("ok")), "")
+    return result
+
+
+@mcp.prompt()
+def daily_brief() -> str:
+    """Deliver today's brief for the calling user (fetch-on-open path)."""
+    return _build_brief_now()["markdown"]
 
 
 @mcp.tool()
@@ -1348,6 +1515,39 @@ def build_http_app():
     starlette_app.router.routes.insert(
         0, _Route("/.well-known/oauth-protected-resource", protected_resource_handler)
     )
+
+    # Start the proactive-brief scheduler (FEATURE-PROACTIVE-BRIEF.md §7).
+    # Runs as a background asyncio task inside the same process as the HTTP
+    # server; a single worker deployment is assumed (see docs's multi-worker
+    # note — the schedule table's compare-and-set claim keeps a second worker
+    # from double-sending, but only one worker needs to run the loop at all).
+    # Starlette dropped add_event_handler(); wrap the router's lifespan context
+    # manager instead so our task starts/stops alongside FastMCP's own lifespan.
+    if cfg.get("memaix", {}).get("brief", {}).get("enabled", True):
+        import contextlib
+
+        _original_lifespan = starlette_app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def _lifespan_with_scheduler(app):
+            import asyncio
+            from .notify.deliver import deliver as _deliver_brief
+            from .notify.scheduler import scheduler_loop
+
+            def _deliver_for_user(user, prefs, now):
+                _deliver_brief(
+                    _get_notify(), _get_acl(), config.load(), user, prefs,
+                    now=now, tools=_brief_tools_for_user(),
+                )
+
+            task = asyncio.create_task(scheduler_loop(_get_notify(), _deliver_for_user))
+            try:
+                async with _original_lifespan(app) as state:
+                    yield state
+            finally:
+                task.cancel()
+
+        starlette_app.router.lifespan_context = _lifespan_with_scheduler
 
     # Wrap with CORS so claude.ai browser requests aren't blocked.
     app = CORSMiddleware(

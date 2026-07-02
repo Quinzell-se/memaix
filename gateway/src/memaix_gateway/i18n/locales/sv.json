@@ -136,5 +136,9 @@
 
   "cap.search.ask.title": "Fråga över allt på en gång",
   "cap.search.ask.summary": "Sök i minne, filer, backlog och mejl samtidigt — med källhänvisningar du kan lita på.",
-  "cap.search.ask.examples": ["Vad lovade vi kunden om deadline?", "Hitta allt om budgeten"]
+  "cap.search.ask.examples": ["Vad lovade vi kunden om deadline?", "Hitta allt om budgeten"],
+
+  "cap.brief.daily.title": "Få en daglig brief",
+  "cap.brief.daily.summary": "En schemalagd sammanfattning av kalender, mejl, backlog-ändringar och öppna risker, levererad till en kanal du väljer.",
+  "cap.brief.daily.examples": ["Sätt upp en daglig brief åt mig kl 07", "Skicka min brief nu"]
 }

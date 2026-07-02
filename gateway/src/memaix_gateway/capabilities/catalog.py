@@ -256,4 +256,16 @@ def register_defaults() -> None:
             needs_role="reader", needs_resource="vault",
             tags=("sök", "fråga", "search", "rag"),
         ),
+        # ------------------------------------------------------------------
+        # brief (FEATURE-PROACTIVE-BRIEF.md)
+        # ------------------------------------------------------------------
+        Capability(
+            key="brief.daily", area="brief",
+            title_key="cap.brief.daily.title",
+            summary_key="cap.brief.daily.summary",
+            tools=("brief_configure", "brief_status", "brief_preview", "brief_send_now"),
+            example_prompts_key="cap.brief.daily.examples",
+            needs_role="reader", needs_resource=None,
+            tags=("brief", "morgonbrief", "notiser", "notifications"),
+        ),
     )

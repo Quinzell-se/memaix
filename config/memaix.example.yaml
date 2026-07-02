@@ -36,6 +36,13 @@ auth:
 #   default_mode: "auto"   # 'auto' (default) | 'review' — global fallback when a
 #                          # project doesn't set its own acl.yaml `outbox:` mode.
 
+# brief:
+#   enabled: true                  # global switch for the scheduler (default true);
+#                                  # each user still opts in separately via brief_configure
+#   default_timezone: "Europe/Stockholm"
+#   send_when_empty: true          # send even when there's nothing new to report
+#   max_mail: 5                    # unread messages shown per project
+
 # search:
 #   embedder: "local"      # 'local' | 'none' (default) — 'none' means search_all()
 #                          # still works via lexical (FTS5) search, just without

@@ -15,6 +15,7 @@ from memaix_gateway import server
 from memaix_gateway.acl import AccessDenied, Acl
 from memaix_gateway.outbox.queue import ActionQueue
 from memaix_gateway.safety.audit import AuditLog
+from memaix_gateway.notify.store import NotifyStore
 from memaix_gateway.search.embedder import FakeEmbedder
 from memaix_gateway.search.store import EmbeddingStore
 from memaix_gateway.timeline.store import ActionsStore
@@ -39,6 +40,7 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_search_store", EmbeddingStore.for_path(tmp_path / "index.db"))
     monkeypatch.setattr(server, "_search_embedder", None)
     monkeypatch.setattr(server, "_search_embedder_loaded", True)  # skip config.load(); no embedder by default
+    monkeypatch.setattr(server, "_notify_store", NotifyStore.for_path(tmp_path / "notify.db"))
     monkeypatch.setenv("MEMAIX_USER", "alice")
     server._rate_limiter._windows.clear()
     return vault, acl
@@ -336,3 +338,106 @@ def test_indexing_hook_failure_does_not_break_the_write(wired, monkeypatch):
     monkeypatch.setattr(server, "_get_search_store", boom)
     result = server.memory_write("proj", "notes/x.md", "hello")
     assert result["path"] == "notes/x.md"  # the actual write still succeeded
+
+
+# ------------------------------------------------------------------
+# Brief tools (FEATURE-PROACTIVE-BRIEF.md)
+# ------------------------------------------------------------------
+
+
+def test_brief_configure_then_status_reflects_settings(wired):
+    result = server.brief_configure(
+        enabled=True, brief_time="08:30", timezone="Europe/Stockholm",
+        channels=[{"type": "ntfy", "topic": "t"}],
+    )
+    assert result["ok"] is True
+    assert result["next_run"]
+
+    status = server.brief_status()
+    assert status["configured"] is True
+    assert status["prefs"]["brief_time"] == "08:30"
+    assert status["prefs"]["timezone"] == "Europe/Stockholm"
+    assert status["next_run"] is not None
+
+
+def test_brief_status_unconfigured(wired):
+    assert server.brief_status() == {"configured": False}
+
+
+def test_brief_configure_uses_config_default_timezone(wired, monkeypatch):
+    monkeypatch.setattr(
+        server.config, "load",
+        lambda: {"memaix": {"brief": {"default_timezone": "Europe/Stockholm"}}},
+    )
+    result = server.brief_configure(enabled=True)
+    assert result["prefs"]["timezone"] == "Europe/Stockholm"
+
+
+def test_brief_configure_explicit_timezone_overrides_config_default(wired, monkeypatch):
+    monkeypatch.setattr(
+        server.config, "load",
+        lambda: {"memaix": {"brief": {"default_timezone": "Europe/Stockholm"}}},
+    )
+    result = server.brief_configure(enabled=True, timezone="UTC")
+    assert result["prefs"]["timezone"] == "UTC"
+
+
+def test_brief_configure_rejects_bad_time(wired):
+    with pytest.raises(ValueError):
+        server.brief_configure(enabled=True, brief_time="25:99")
+
+
+def test_brief_configure_rejects_bad_timezone(wired):
+    with pytest.raises(ValueError):
+        server.brief_configure(enabled=True, timezone="Not/AZone")
+
+
+def test_brief_configure_rejects_unknown_channel_type(wired):
+    with pytest.raises(ValueError):
+        server.brief_configure(enabled=True, channels=[{"type": "carrier-pigeon"}])
+
+
+def test_brief_preview_returns_content_without_sending(wired):
+    server.memory_write("proj", "notes/a.md", "hello")
+    content = server.brief_preview()
+    assert "markdown" in content
+    assert isinstance(content["markdown"], str)
+
+
+def test_daily_brief_prompt_matches_preview_markdown(wired):
+    prompt_text = server.daily_brief()
+    preview = server.brief_preview()
+    assert prompt_text == preview["markdown"]
+
+
+def test_brief_send_now_requires_configuration_first(wired):
+    result = server.brief_send_now()
+    assert result == {"ok": False, "error": "brief not configured — call brief_configure first"}
+
+
+def test_brief_send_now_delivers_via_configured_channel(wired, monkeypatch):
+    server.brief_configure(enabled=True, brief_time="07:00", timezone="UTC")
+
+    sent = []
+    monkeypatch.setattr(
+        "memaix_gateway.notify.deliver.build_channels",
+        lambda specs, **kw: [type("C", (), {"send": staticmethod(lambda s, m, t: sent.append((s, m, t)))})()],
+    )
+    result = server.brief_send_now()
+    assert result["ok"] is True
+    assert len(sent) == 1
+
+
+def test_brief_send_now_ignores_quiet_hours(wired, monkeypatch):
+    server.brief_configure(
+        enabled=True, brief_time="07:00", timezone="UTC",
+        quiet_hours={"start": "00:00", "end": "23:59"},  # always quiet
+    )
+    sent = []
+    monkeypatch.setattr(
+        "memaix_gateway.notify.deliver.build_channels",
+        lambda specs, **kw: [type("C", (), {"send": staticmethod(lambda s, m, t: sent.append(1))})()],
+    )
+    result = server.brief_send_now()
+    assert result["ok"] is True
+    assert sent == [1]

@@ -62,7 +62,7 @@ störst hävstång. Bara `frontmatter` (klart) som beroende.
 indexet färskt; degraderar till FTS5 utan embedder.
 
 ## Fas 3 — Proaktivitet 📋
-- 📋 **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md)
+- ✅ **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) (store/kanaler/BriefBuilder/leverans/scheduler/MCP-yta klart; live kalender-fusion i sökningen och FreeBusy/iCal-brief-täckning kvarstår)
 - 📋 **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md)
 - 📋 **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
 

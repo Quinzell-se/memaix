@@ -136,5 +136,9 @@
 
   "cap.search.ask.title": "Ask across everything",
   "cap.search.ask.summary": "Search memory, files, backlog and mail at once — with source citations you can trust.",
-  "cap.search.ask.examples": ["What did we promise the client about the deadline?", "Find anything about the budget"]
+  "cap.search.ask.examples": ["What did we promise the client about the deadline?", "Find anything about the budget"],
+
+  "cap.brief.daily.title": "Get a daily brief",
+  "cap.brief.daily.summary": "A scheduled summary of your calendar, mail, backlog changes and open risks, delivered to a channel you choose.",
+  "cap.brief.daily.examples": ["Set up a daily brief for me at 7am", "Send me my brief now"]
 }
