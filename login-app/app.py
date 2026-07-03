@@ -14,16 +14,15 @@ Säkra standarder:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 import sys
-from urllib.parse import urlencode
 
 import requests
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+import auth
 
 sys.path.insert(0, "/app/i18n_pkg")
 try:
@@ -50,65 +49,24 @@ ALLOWED_USERS: set[str] = set(
 _SHARED_HASH = os.environ.get("MEMAIX_LOGIN_PASSWORD_HASH", "")
 
 # Per-user hashes from acl.yaml (users.<id>.password_hash). Loaded at startup.
-_PER_USER_HASHES: dict[str, str] = {}
-
 _ACL_PATH = os.environ.get("MEMAIX_ACL_CONFIG", "/app/config/acl.yaml")
-
-
-def _load_per_user_hashes() -> None:
-    try:
-        import yaml
-        with open(_ACL_PATH) as f:
-            acl = yaml.safe_load(f) or {}
-        for uid, udata in (acl.get("users") or {}).items():
-            h = (udata or {}).get("password_hash", "")
-            if h:
-                _PER_USER_HASHES[uid] = h
-    except Exception:
-        pass  # acl.yaml missing or unparseable — fall back to shared hash
-
-
-_load_per_user_hashes()
+_PER_USER_HASHES: dict[str, str] = auth.load_per_user_hashes(_ACL_PATH)
 
 app = FastAPI(title="Memaix login")
 templates = Jinja2Templates(directory="/app/templates")
 
 
-def _pbkdf2_check(provided: str, stored_hash: str) -> bool:
-    if not stored_hash or ":" not in stored_hash:
-        return False
-    salt_hex, key_hex = stored_hash.split(":", 1)
-    salt = bytes.fromhex(salt_hex)
-    derived = hashlib.pbkdf2_hmac("sha256", provided.encode(), salt, 200_000)
-    return hmac.compare_digest(derived.hex(), key_hex)
-
-
-def _password_hash_for(user: str) -> str:
-    """Resolve the password hash for *user*.
-
-    Per-user hashes come from two converging conventions — acl.yaml
-    (`users.<id>.password_hash`, loaded at startup) and the env variable
-    `MEMAIX_LOGIN_PASSWORD_HASH_<USER>` (same convention the board UI uses),
-    with the env taking precedence so a single deploy config drives both.
-
-    The shared `MEMAIX_LOGIN_PASSWORD_HASH` is honoured ONLY when exactly one
-    user is allowed. Otherwise it is ignored: since this app mints an OAuth
-    identity with subject=username, a shared password that authenticated any
-    user would let one holder log in *as another allowed user* (impersonation).
-    """
-    env_per_user = os.environ.get(f"MEMAIX_LOGIN_PASSWORD_HASH_{user.upper()}")
-    if env_per_user:
-        return env_per_user
-    acl_per_user = _PER_USER_HASHES.get(user)
-    if acl_per_user:
-        return acl_per_user
-    if len(ALLOWED_USERS) == 1:
-        return _SHARED_HASH
-    return ""
-
-
 def _verify_password(user: str, provided: str) -> bool:
-    return _pbkdf2_check(provided, _password_hash_for(user))
+    """Verify a login password. Security logic lives in auth.py (unit-tested);
+    this wires it to the app's runtime config (allowed users, shared/per-user
+    hashes)."""
+    return auth.verify_password(
+        user,
+        provided,
+        allowed_users=ALLOWED_USERS,
+        per_user_hashes=_PER_USER_HASHES,
+        shared_hash=_SHARED_HASH,
+    )
 
 
 def _hydra_get(path: str, challenge_name: str, challenge: str) -> dict:

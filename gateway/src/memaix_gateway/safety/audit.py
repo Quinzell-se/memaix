@@ -152,12 +152,15 @@ class AuditLog:
             conditions.append("ts >= ?")
             params.append(since)
 
+        # `where` is assembled only from constant fragments ("user = ?", ...) —
+        # no caller value is ever interpolated into the SQL text; every value
+        # is bound through a `?` placeholder in `params`. Safe against injection.
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params.extend([limit, offset])
 
         with self._lock:
             rows = self._conn.execute(
-                f"SELECT id, ts, user, project, tool, ok, detail"
+                f"SELECT id, ts, user, project, tool, ok, detail"  # nosec B608 -- fixed column list + placeholder-only WHERE
                 f" FROM audit {where} ORDER BY id DESC LIMIT ? OFFSET ?",
                 params,
             ).fetchall()
