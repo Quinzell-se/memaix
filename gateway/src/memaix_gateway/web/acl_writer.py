@@ -68,6 +68,18 @@ class AclWriter:
             projects[project][key] = value
             self._write_atomic(data)
 
+    def set_top_level(self, key: str, value: Any) -> None:
+        """Set — eller med value=None: ta bort — en toppnivåsektion. Används
+        för memaix.yaml:s model-block (admin_llm); acl.yaml-mutationer har
+        egna metoder ovan."""
+        with self._lock:
+            data = self._load()
+            if value is None:
+                data.pop(key, None)
+            else:
+                data[key] = value
+            self._write_atomic(data)
+
     # ------------------------------------------------------------------
     # IO
     # ------------------------------------------------------------------

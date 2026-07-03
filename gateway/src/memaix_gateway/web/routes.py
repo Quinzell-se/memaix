@@ -314,6 +314,7 @@ def _onboarding_missing(acl, user: str, projects: list[str]) -> bool:
 # friends from this module, so they must load after those are defined.
 from .api import accounts as _api_accounts  # noqa: E402
 from .api import admin as _api_admin  # noqa: E402
+from .api import admin_llm as _api_admin_llm  # noqa: E402
 from .api import admin_write as _api_admin_write  # noqa: E402
 from .api import brief as _api_brief  # noqa: E402
 from .api import memory as _api_memory  # noqa: E402
@@ -340,6 +341,8 @@ web_routes = [
     Route("/app/api/admin/users/{uid}", _api_admin_write.api_admin_set_disabled, methods=["PATCH"]),
     Route("/app/api/admin/users/{uid}/grants", _api_admin_write.api_admin_set_grants, methods=["PATCH"]),
     Route("/app/api/admin/projects/{project}", _api_admin_write.api_admin_set_project_field, methods=["PATCH"]),
+    Route("/app/api/admin/llm", _api_admin_llm.api_admin_llm_get, methods=["GET"]),
+    Route("/app/api/admin/llm", _api_admin_llm.api_admin_llm_set, methods=["PUT"]),
     # Outbox — approver-scoped (FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md, Fas C)
     Route("/app/api/outbox", _api_outbox.api_outbox_list, methods=["GET"]),
     Route("/app/api/outbox/{id}", _api_outbox.api_outbox_get, methods=["GET"]),

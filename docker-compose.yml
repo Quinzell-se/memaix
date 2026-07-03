@@ -10,7 +10,9 @@ services:
     environment:
       MEMAIX_TRANSPORT: http
     volumes:
-      - ./config:/app/config:ro            # brand.yaml, memaix.yaml, acl.yaml
+      # rw: /app/admin skriver acl.yaml (AclWriter/MFA) och memaix.yaml:s
+      # model-block (AI-valet) atomiskt med backup-rotation; :ro bröt de flödena.
+      - ./config:/app/config               # brand.yaml, memaix.yaml, acl.yaml
       - ./vaults:/srv/vaults               # git-versionerade minnesvaults
     ports:
       - "127.0.0.1:8080:8080"

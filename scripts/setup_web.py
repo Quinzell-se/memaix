@@ -52,6 +52,10 @@ _TOGGLE_JS = """
 function trk(){var t=document.querySelector('input[name=track]:checked').value;
 document.getElementById('remote').style.display=(t==='1')?'none':'block';}
 document.querySelectorAll('input[name=track]').forEach(function(r){r.onchange=trk});trk();
+function ai(){var v=document.querySelector('input[name=llm_choice]:checked').value;
+document.getElementById('ai-api').style.display=(v==='api')?'block':'none';
+document.getElementById('ai-endpoint').style.display=(v==='endpoint')?'block':'none';}
+document.querySelectorAll('input[name=llm_choice]').forEach(function(r){r.onchange=ai});ai();
 """
 
 
@@ -96,7 +100,35 @@ def _form(values: dict, errors: list) -> bytes:
 <label>Bekräfta lösenord <input type="password" name="password2" value=""></label>
 </fieldset>
 
-<fieldset><h2>4 · Valfritt <small>(bra defaultvärden)</small></h2>
+<fieldset><h2>4 · Vilken AI driver Memaix?</h2>
+<label><input type="radio" name="llm_choice" value="byo" checked> Min egen AI
+  <small>— Claude/ChatGPT/Mistral-appen ansluter till Memaix (BYO, default)</small></label>
+<label><input type="radio" name="llm_choice" value="api"> API-nyckel
+  <small>— Claude, ChatGPT, Gemini eller OpenRouter; betala per token</small></label>
+<label><input type="radio" name="llm_choice" value="endpoint"> Egen LLM-server
+  <small>— på ditt lokala nät eller en molninstans (Ollama/vLLM/OpenAI-kompatibel)</small></label>
+<div id="ai-api" style="display:none">
+<label>Leverantör
+  <select name="llm_provider_api">
+    <option value="anthropic">Claude (Anthropic)</option>
+    <option value="openai">ChatGPT (OpenAI)</option>
+    <option value="google">Gemini (Google)</option>
+    <option value="openrouter">OpenRouter — en nyckel, alla leverantörer</option>
+    <option value="mistral">Mistral</option>
+  </select></label>
+<label>Modellnamn <input type="text" name="llm_model_api"
+  placeholder="claude-sonnet-4-5 / gpt-… / gemini-…"></label>
+<label>API-nyckel <input type="password" name="llm_api_key"></label>
+</div>
+<div id="ai-endpoint" style="display:none">
+<label>Endpoint-URL <input type="text" name="llm_endpoint"
+  placeholder="http://192.168.1.20:11434 eller https://din-molninstans:8000"></label>
+<label>Modellnamn <input type="text" name="llm_model_endpoint"
+  placeholder="qwen3-coder:30b / mistral-small …"></label>
+</div>
+</fieldset>
+
+<fieldset><h2>5 · Valfritt <small>(bra defaultvärden)</small></h2>
 <label>Produktnamn <input type="text" name="name" value="{v.get('name','Memaix')}"></label>
 <label>Support-mejl <input type="email" name="support_email"
   value="{v.get('support_email','support@example.com')}"></label>
@@ -191,11 +223,24 @@ class Handler(BaseHTTPRequestHandler):
         if answers["track"] != engine.TRACK_TRIAL:
             answers["tunnel_provider"] = "cloudflare" if answers["tunnel_token"] else "none"
 
+        llm_choice = f.get("llm_choice", "byo")
+        if llm_choice == "api":
+            answers["llm_provider"] = f.get("llm_provider_api", "").strip()
+            answers["llm_model"] = f.get("llm_model_api", "").strip()
+            answers["llm_api_key"] = f.get("llm_api_key", "").strip()
+        elif llm_choice == "endpoint":
+            # Ollama-endpoints är vanligast lokalt; vLLM/annat är OpenAI-kompatibelt.
+            # Providern justeras enkelt i /app/admin efteråt — URL:en är det viktiga.
+            answers["llm_provider"] = "openai-compatible"
+            answers["llm_endpoint"] = f.get("llm_endpoint", "").strip()
+            answers["llm_model"] = f.get("llm_model_endpoint", "").strip()
+
         errors = engine.validate(answers)
         if f.get("password") != f.get("password2"):
             errors.insert(0, "Lösenorden matchar inte.")
         if errors:
-            safe = {k: v for k, v in answers.items() if k not in ("password", "tunnel_token")}
+            safe = {k: v for k, v in answers.items()
+                    if k not in ("password", "tunnel_token", "llm_api_key")}
             self._send(200, _form(safe, errors))
             return
 

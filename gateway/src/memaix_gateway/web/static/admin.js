@@ -129,6 +129,71 @@
     document.getElementById('admin-system').append(
       table(['', t('web_admin_check'), t('web_admin_detail')], rows));
   } catch (e) { toast(e.message, 'error'); }
+
+  // --- AI-modell (CHOOSE-YOUR-LLM.md; skriver memaix.yaml model-block) ------
+  try {
+    const llm = await api('GET', '/app/api/admin/llm');
+    const box = document.createElement('div');
+    box.className = 'llm-settings';
+    const h = document.createElement('h3');
+    h.textContent = t('web_admin_llm_title');
+    box.append(h);
+
+    const field = (labelKey, el) => {
+      const label = document.createElement('label');
+      label.textContent = t(labelKey) + ' ';
+      label.append(el);
+      label.style.display = 'block';
+      label.style.margin = '.5rem 0';
+      box.append(label);
+      return el;
+    };
+
+    const provider = document.createElement('select');
+    llm.providers.forEach((p) => {
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = p === 'byo' ? t('web_admin_llm_byo') : p;
+      if (p === llm.provider) o.selected = true;
+      provider.append(o);
+    });
+    field('web_admin_llm_provider', provider);
+
+    const name = field('web_admin_llm_model', document.createElement('input'));
+    name.value = llm.name || '';
+    name.placeholder = 'claude-sonnet-4-5 / gpt-… / gemini-…';
+    const endpoint = field('web_admin_llm_endpoint', document.createElement('input'));
+    endpoint.value = llm.endpoint || '';
+    endpoint.placeholder = 'http://192.168.x.x:11434 (lokalt nät eller molninstans)';
+    const key = field('web_admin_llm_key', document.createElement('input'));
+    key.type = 'password';
+    key.placeholder = llm.has_key ? t('web_admin_llm_key_kept') : 'sk-…';
+
+    const sync = () => {
+      const p = provider.value;
+      const isByo = p === 'byo';
+      const isEndpoint = ['openai-compatible', 'ollama', 'vllm'].includes(p);
+      [name, endpoint, key].forEach((el) => { el.parentElement.hidden = isByo; });
+      endpoint.parentElement.hidden = isByo || (!isEndpoint && !llm.endpoint);
+    };
+    provider.addEventListener('change', sync);
+    sync();
+
+    const save = document.createElement('button');
+    save.className = 'btn btn-primary';
+    save.textContent = t('web_admin_llm_save');
+    save.addEventListener('click', async () => {
+      try {
+        const body = { provider: provider.value, name: name.value, endpoint: endpoint.value };
+        if (key.value) body.api_key = key.value;
+        await api('PUT', '/app/api/admin/llm', body);
+        key.value = '';
+        toast(t('web_admin_llm_saved'), 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    box.append(save);
+    document.getElementById('admin-system').append(box);
+  } catch (e) { toast(e.message, 'error'); }
 })();
 
 // --- MFA + write operations (Fas D) -----------------------------------------

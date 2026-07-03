@@ -5,6 +5,7 @@ docs/BUSINESS-CASE.md
 .env
 config/*.yaml
 !config/*.example.yaml
+config/secrets/
 cloudflared/*
 !cloudflared/config.example.yml
 

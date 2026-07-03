@@ -198,6 +198,35 @@ def run_wizard() -> None:
         else:
             print("  ✗ Lösenordet måste vara minst 8 tecken.")
 
+    # ── Vilken AI? (WIZARD.md fråga 4 / CHOOSE-YOUR-LLM.md) ──────────────────
+    llm_provider, llm_model, llm_endpoint, llm_api_key = "byo", "", "", ""
+    llm_choice = choose(
+        "Vilken AI ska driva Memaix?",
+        [
+            ("Min egen AI",     "Claude/ChatGPT/Mistral-appen ansluter (BYO) — inget mer"),
+            ("API-nyckel",      "Claude, ChatGPT, Gemini eller OpenRouter — betala per token"),
+            ("Egen LLM-server", "lokalt nät eller molninstans (Ollama/vLLM/OpenAI-kompatibel)"),
+        ],
+    )
+    if llm_choice == 2:
+        prov = choose(
+            "Leverantör?",
+            [
+                ("Claude (Anthropic)", "bäst agentiskt"),
+                ("ChatGPT (OpenAI)",   ""),
+                ("Gemini (Google)",    ""),
+                ("OpenRouter",         "en nyckel, alla leverantörer"),
+                ("Mistral",            "billigast frontier"),
+            ],
+        )
+        llm_provider = ("anthropic", "openai", "google", "openrouter", "mistral")[prov - 1]
+        llm_model = ask("Modellnamn")
+        llm_api_key = ask("API-nyckel", secret=True)
+    elif llm_choice == 3:
+        llm_provider = "openai-compatible"
+        llm_endpoint = ask("Endpoint-URL (t.ex. http://192.168.1.20:11434)")
+        llm_model = ask("Modellnamn (t.ex. qwen3-coder:30b)")
+
     # ── Projekt ────────────────────────────────────────────────────────────────
     print()
     hr()
@@ -210,6 +239,7 @@ def run_wizard() -> None:
     print(f"  URL:       {public_url}")
     print(f"  Tunnel:    {tunnel_provider}")
     print(f"  Admin:     {admin_user}")
+    print(f"  AI:        {llm_provider}" + (f" · {llm_model}" if llm_model else " (din egen AI-app)"))
     print(f"  Projekt:   {project_name}")
     hr()
     confirm = ask("Generera config och starta? [j/n]", "j")
@@ -232,6 +262,10 @@ def run_wizard() -> None:
         "admin_user": admin_user,
         "password": pw1,
         "project_name": project_name,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_endpoint": llm_endpoint,
+        "llm_api_key": llm_api_key,
     }
     errors = engine.validate(answers)
     if errors:

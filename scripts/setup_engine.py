@@ -26,6 +26,11 @@ from pathlib import Path
 
 TRACK_TRIAL, TRACK_SELFHOST, TRACK_MANAGED = 1, 2, 3
 
+# CHOOSE-YOUR-LLM.md: BYO = inget model-block; API-leverantörer kräver nyckel;
+# endpoint-lägen (LLM på lokala nätet ELLER egen molninstans) kräver bas-URL.
+LLM_API_PROVIDERS = ("anthropic", "openai", "google", "openrouter", "mistral")
+LLM_ENDPOINT_PROVIDERS = ("openai-compatible", "ollama", "vllm")
+
 _USERNAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
 _PROJECT_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 
@@ -51,6 +56,10 @@ def defaults() -> dict:
         "admin_user": "admin",
         "password": "",
         "project_name": "shared",
+        "llm_provider": "byo",
+        "llm_model": "",
+        "llm_endpoint": "",
+        "llm_api_key": "",
     }
 
 
@@ -71,6 +80,19 @@ def validate(a: dict) -> list[str]:
     if a["track"] in (TRACK_SELFHOST, TRACK_MANAGED):
         if not a["domain"] or "." not in a["domain"] or "/" in a["domain"]:
             errors.append("Self-host kräver en domän (t.ex. mcp.företag.se).")
+
+    provider = a.get("llm_provider", "byo")
+    if provider != "byo":
+        if provider not in LLM_API_PROVIDERS + LLM_ENDPOINT_PROVIDERS:
+            errors.append("Okänd AI-leverantör.")
+        elif not a.get("llm_model"):
+            errors.append("AI-valet kräver ett modellnamn.")
+        elif provider in LLM_API_PROVIDERS and not a.get("llm_api_key"):
+            errors.append(f"AI-leverantören {provider} kräver en API-nyckel.")
+        elif provider in LLM_ENDPOINT_PROVIDERS and not str(
+            a.get("llm_endpoint", "")
+        ).startswith(("http://", "https://")):
+            errors.append("Lokal/egen LLM kräver en endpoint-URL (http(s)://…).")
     return errors
 
 
@@ -102,6 +124,18 @@ def write_config(a: dict, root: Path) -> dict:
         f'logo_path: ""\n'
     )
 
+    model_block = ""
+    if a.get("llm_provider", "byo") != "byo":
+        model_block = (
+            f'\nmodel:\n'
+            f'  provider: {a["llm_provider"]}\n'
+            f'  name: "{a["llm_model"]}"\n'
+        )
+        if a.get("llm_api_key"):
+            model_block += "  api_key_ref: LLM_API_KEY\n"
+        if a.get("llm_endpoint"):
+            model_block += f'  endpoint: "{a["llm_endpoint"]}"\n'
+
     (config / "memaix.yaml").write_text(
         f'server:\n'
         f'  bind: "0.0.0.0:8080"\n'
@@ -113,6 +147,7 @@ def write_config(a: dict, root: Path) -> dict:
         f'\n'
         f'onboarding:\n'
         f'  enabled: true\n'
+        f'{model_block}'
     )
 
     projects = {project: f"/srv/vaults/{project}"}
@@ -153,6 +188,8 @@ def write_config(a: dict, root: Path) -> dict:
         f"NEXTCLOUD_ADMIN_PASSWORD={secrets.token_hex(16)}",
         "NEXTCLOUD_PUBLIC_HOST=",
     ]
+    if a.get("llm_api_key"):
+        env_lines.append(f"LLM_API_KEY={a['llm_api_key']}")
     env_path = root / ".env"
     env_path.write_text("\n".join(env_lines) + "\n")
     env_path.chmod(0o600)
@@ -163,6 +200,7 @@ def write_config(a: dict, root: Path) -> dict:
         "tunnel_provider": a["tunnel_provider"],
         "admin_user": admin,
         "project_name": project,
+        "llm_provider": a.get("llm_provider", "byo"),
         "written": ["config/brand.yaml", "config/memaix.yaml", "config/acl.yaml", ".env"],
     }
 

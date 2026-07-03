@@ -22,6 +22,11 @@ du väljer. Den här guiden tar dig till rätt väg på 30 sekunder. Bakgrund: `
 
 ## Modell-config (för server-side lägen 2/3/5)
 BYO AI (läge 1) behöver **inget** av detta — modellen bor i din AI-app. För server-side lägen:
+
+> Du behöver normalt inte skriva blocket för hand: **setup-wizarden** (frågan "Vilken AI?")
+> skriver det vid installation, och **/app/admin → System → AI-modell** ändrar det i drift
+> (admin + MFA; nyckeln lagras som `file:`-ref i `config/secrets/`, aldrig i YAML).
+
 ```yaml
 # config/memaix.yaml
 model:
