@@ -15,7 +15,13 @@ import re
 from pathlib import Path
 
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from starlette.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from starlette.routing import Route
 
 from ..board.routes import _board_html_with_locale, _check_cookie, _config_locale
@@ -123,6 +129,32 @@ _BOARD_DARK_STYLE = (
     "<style>:root{--bg:#0f1117;--surface:#1a1d27;--border:#2d3044;"
     "--text:#e2e8f0;--muted:#94a3b8;--card-shadow:0 1px 3px rgba(0,0,0,.5)}</style>"
 )
+
+
+class BrowserRootRedirect:
+    """ASGI wrapper: send browsers landing on "/" to the web UI at /app.
+
+    The MCP endpoint is mounted at root so claude.ai finds it at the connector
+    URL directly (server.py::build_http_app), which means a human typing the
+    bare domain into a browser gets the MCP 401 JSON. Only the narrowest
+    browser signature is diverted — GET "/" with no Authorization header and
+    text/html in Accept. MCP/API clients never send text/html (streamable
+    HTTP GET uses text/event-stream), so they pass through untouched.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"] == "/" and scope["method"] == "GET":
+            headers = {
+                k.decode("latin-1").lower(): v.decode("latin-1")
+                for k, v in scope.get("headers", [])
+            }
+            if "authorization" not in headers and "text/html" in headers.get("accept", ""):
+                await RedirectResponse("/app", status_code=302)(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 # ------------------------------------------------------------------
