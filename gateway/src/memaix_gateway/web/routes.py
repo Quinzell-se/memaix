@@ -106,6 +106,21 @@ async def app_index(request: Request) -> HTMLResponse:
     )
 
 
+async def app_login(request: Request) -> HTMLResponse:
+    """GET /app/login — standalone login page (no shell wrapper).
+
+    Cookie-based login for the web UI; redirects to ?next= on success.
+    Distinct from /login which is the Hydra OAuth flow for MCP clients.
+    """
+    locale = _locale(request)
+    from ..i18n import _load
+    strings = _load(locale)
+    inject = f"<script>window.I18N={json.dumps(strings, ensure_ascii=False)};</script>"
+    raw = _read_page("login")
+    html = raw.replace("<!--MEMAIX_I18N-->", inject, 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
 async def app_page(request: Request) -> Response:
     page = request.path_params["page"]
     if page not in _KNOWN_PAGES:
@@ -238,6 +253,7 @@ from .api import timeline as _api_timeline  # noqa: E402
 
 web_routes = [
     Route("/app", app_index, methods=["GET"]),
+    Route("/app/login", app_login, methods=["GET"]),
     Route("/app/api/me", api_me, methods=["GET"]),
     # Search / brief / timeline (FEATURE-WEB-UI-PHASE2.md, Fas D)
     Route("/app/api/search", _api_search.api_search, methods=["GET"]),
