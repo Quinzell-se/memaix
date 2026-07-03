@@ -153,3 +153,36 @@ async def api_admin_llm_set(request: Request) -> JSONResponse:
         "ok": True, "provider": provider, "name": name,
         "endpoint": endpoint, "has_key": bool(key_ref),
     })
+
+
+async def api_admin_llm_test(request: Request) -> JSONResponse:
+    """POST /app/api/admin/llm/test — minimalt riktigt anrop mot SPARAT AI-val.
+
+    Svaret är hemlighetsfritt (LLMError saneras i klientlagret). Körs i
+    trådpool så gatewayns event-loop inte blockeras av leverantörslatens."""
+    ok, err = _require_admin_mfa(request)
+    if err:
+        return err
+    user, _acl = ok
+
+    import anyio
+
+    from ... import config
+    from ...llm import LLMClient, LLMError, LLMNotConfigured
+
+    try:
+        client = LLMClient.from_config(config.load())
+        result = await anyio.to_thread.run_sync(client.test)
+    except LLMNotConfigured:
+        return JSONResponse(
+            {"error": "inget AI-val sparat (BYO) — spara ett val först"}, status_code=400
+        )
+    except LLMError as exc:
+        _audit().log(user, "-", "admin_test_llm", False, str(exc)[:200])
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+    _audit().log(
+        user, "-", "admin_test_llm", True,
+        f"{result['provider']}/{result['model']} {result['latency_ms']}ms",
+    )
+    return JSONResponse(result)

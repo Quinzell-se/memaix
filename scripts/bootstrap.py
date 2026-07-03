@@ -450,6 +450,35 @@ def run_doctor() -> None:
         except Exception:
             check("Hydra svarar på :4444", False, "docker compose logs hydra")
 
+        # AI-valet (FEATURE-LLM-ENGINE.md Fas 1): refen ska gå att lösa och en
+        # egen endpoint ska vara nåbar. Fullt leverantörsanrop görs via
+        # admin-UI:ts "Testa anslutning" (kräver admin + MFA).
+        model = cfg.get("model") or {}
+        if model.get("provider"):
+            label = f"AI-val: {model['provider']}/{model.get('name', '?')}"
+            ref = model.get("api_key_ref", "")
+            if ref:
+                if ref.startswith("file:"):
+                    # Containersökväg /app/config/... ↔ värdens ./config/...
+                    host_path = Path(ref[5:].replace("/app/config", str(CONFIG), 1))
+                    check(f"{label} — nyckelfil finns", host_path.exists(),
+                          f"saknas: {host_path} — spara om nyckeln i /app/admin")
+                else:
+                    key_name = ref.split(":", 1)[-1]
+                    check(f"{label} — nyckel i .env", bool(env_get(key_name)),
+                          f"{key_name} saknas i .env")
+            endpoint = model.get("endpoint", "")
+            if endpoint:
+                try:
+                    req = urllib.request.Request(endpoint, method="GET")
+                    urllib.request.urlopen(req, timeout=3)
+                    check(f"{label} — endpoint nåbar", True)
+                except urllib.error.HTTPError:
+                    check(f"{label} — endpoint nåbar", True)  # svarar, om än med felkod
+                except Exception:
+                    check(f"{label} — endpoint nåbar", False,
+                          f"ingen kontakt med {endpoint} — kör LLM-servern?")
+
     if ok:
         print("\n  Allt grönt.\n")
     else:

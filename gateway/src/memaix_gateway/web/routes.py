@@ -343,6 +343,7 @@ web_routes = [
     Route("/app/api/admin/projects/{project}", _api_admin_write.api_admin_set_project_field, methods=["PATCH"]),
     Route("/app/api/admin/llm", _api_admin_llm.api_admin_llm_get, methods=["GET"]),
     Route("/app/api/admin/llm", _api_admin_llm.api_admin_llm_set, methods=["PUT"]),
+    Route("/app/api/admin/llm/test", _api_admin_llm.api_admin_llm_test, methods=["POST"]),
     # Outbox — approver-scoped (FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md, Fas C)
     Route("/app/api/outbox", _api_outbox.api_outbox_list, methods=["GET"]),
     Route("/app/api/outbox/{id}", _api_outbox.api_outbox_get, methods=["GET"]),

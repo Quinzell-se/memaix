@@ -309,6 +309,8 @@
   "web_admin_filter": "Filtrera",
   "web_admin_more": "Hämta fler",
   "web_admin_grants": "Behörigheter",
+  "web_admin_llm_test": "Testa anslutning",
+  "web_admin_llm_testing": "Testar …",
   "web_admin_llm_title": "AI-modell",
   "web_admin_llm_provider": "Leverantör",
   "web_admin_llm_byo": "Egen AI (BYO — Claude/ChatGPT-appen driver Memaix)",
