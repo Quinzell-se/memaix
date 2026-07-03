@@ -55,6 +55,31 @@ def test_is_admin_flag():
     assert acl.is_admin("nonexistent") is False
 
 
+def test_disabled_user_denied_everything():
+    """Kill-switch: a disabled user is denied every project, at every level."""
+    acl = Acl(
+        users={
+            "alice": {"grants": {"acme": "owner"}, "disabled": True},
+            "root": {"admin": True, "disabled": True},
+        },
+        projects={"acme": {"vault": "/tmp/acme"}},
+    )
+    assert acl.is_disabled("alice") is True
+    with pytest.raises(AccessDenied, match="disabled"):
+        acl.enforce("alice", "acme", "reader")
+    # Even a disabled admin is locked out (lockout-prevention is a write-path
+    # concern, not enforce's — enforce fails closed).
+    with pytest.raises(AccessDenied, match="disabled"):
+        acl.enforce("root", "acme", "owner")
+
+
+def test_not_disabled_by_default():
+    acl = _acl()
+    assert acl.is_disabled("alice") is False
+    # Sanity: a non-disabled user with a grant still passes.
+    acl.enforce("alice", "acme", "owner")
+
+
 def test_unknown_project_errors_even_for_admin():
     """Ordering fix: admin acting on a typo'd/nonexistent project gets a clear
     failure, not a silent pass that masks the mistake."""

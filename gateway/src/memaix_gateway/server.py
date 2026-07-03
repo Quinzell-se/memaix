@@ -64,6 +64,18 @@ def _get_acl() -> Acl:
     return _acl
 
 
+def reload_acl() -> Acl:
+    """Drop the cached Acl and rebuild it from disk.
+
+    `_get_acl()` caches the Acl in a module global, so a rewrite of acl.yaml
+    (e.g. the admin UI's AclWriter, or a manual edit) is otherwise invisible to
+    the running gateway until restart. Any code path that mutates acl.yaml MUST
+    call this afterwards so the change takes effect immediately."""
+    global _acl
+    _acl = None
+    return _get_acl()
+
+
 def _get_token_store():
     global _token_store
     if _token_store is None:

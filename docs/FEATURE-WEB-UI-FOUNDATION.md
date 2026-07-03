@@ -67,6 +67,13 @@ och inställningslänkar finns i user-menyn i topbaren.
    `/app/api/*` triggar `window.location = '/login?next=' + encodeURIComponent(location.pathname)`.
    Login-appen (Hydra/OAuth) påverkas inte.
 
+   > **Reconciliation 2026-07:** `_require_user` återanvänder board:ens redan
+   > befintliga signerade cookie (`board/routes.py::_check_cookie` — HMAC-signerad
+   > med `HYDRA_SYSTEM_SECRET`, fail-closed). Ingen `SessionMiddleware` och ingen
+   > server-side session store införs — cookien är stateless och delas med `/board`.
+   > `/app/*` och `/board` är samma session. Full kontraktsdefinition i
+   > FEATURE-WEB-UI-MVP.md (§`_require_user`).
+
 7. **Board-logiken i `board/routes.py` berörs minimalt.** Boards API-routes
    (`/board/api/*`) behålls orörda. Enda förändringen: `/board`-sidroute returnerar
    301 istället för `board.html`. Board-UI:t `board.html` wrappas in i
@@ -454,11 +461,19 @@ async def api_me(request: Request) -> JSONResponse:
     """
     GET /app/api/me — returnerar användarinfo + roller + projektstatus.
     401 om ej autentiserad.
-    Hämtar: Acl.from_config(), visible_projects(), is_admin(), grants().
+    Hämtar: _get_acl(), visible_projects(), is_admin(), grants().
     Hämtar needs_relink från TokenStore om MEMAIX_TOKEN_DB är satt.
     pending_outbox alltid 0 i Fas A.
     """
 ```
+
+> **Reconciliation 2026-07 — Acl-konvention (gäller ALLA `/app`-routes i alla
+> faser):** Specarna skriver ofta `Acl.from_config()` utan argument, men den
+> faktiska signaturen är `Acl.from_config(cfg: dict)` och tar acl-underträdet
+> (`config.load()["acl"]`). Använd i stället `server._get_acl()` i webb-routes —
+> den bygger och **cachar** Acl och kan tömmas via `server.reload_acl()` (som
+> admin-skrivvägen i Fas D behöver). Läs alltså `_get_acl()` där specarnas
+> kod-exempel säger `Acl.from_config()`.
 
 ### `board_redirect` — kontrakt
 

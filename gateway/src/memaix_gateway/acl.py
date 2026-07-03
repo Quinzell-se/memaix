@@ -50,8 +50,18 @@ class Acl:
         """Return True if the user has the global admin flag set in acl.yaml."""
         return bool(self.users.get(user_id, {}).get("admin", False))
 
+    def is_disabled(self, user_id: str) -> bool:
+        """Return True if the user is disabled (kill-switch, users.<id>.disabled)."""
+        return bool(self.users.get(user_id, {}).get("disabled", False))
+
     def enforce(self, user_id: str, project: str, need: str = "reader") -> None:
         """Raise AccessDenied unless `user_id` has at least `need` on `project`."""
+        # Kill-switch: a disabled user is denied everything, admin included. This
+        # is the boundary the admin UI's per-user disable toggle relies on; the
+        # lockout-prevention guard (can't disable yourself / the last admin) lives
+        # in the write path, not here — enforce must fail closed regardless.
+        if self.is_disabled(user_id):
+            raise AccessDenied(f"{user_id} is disabled")
         # Unknown project is an error for everyone, including admin — an admin
         # acting on a typo'd/nonexistent project should get a clear failure, not
         # a silent pass that masks the mistake.
