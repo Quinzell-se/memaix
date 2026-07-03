@@ -1,9 +1,13 @@
-# Setup-wizarden — steg för steg (`make init`)
+# Setup-wizarden — steg för steg (`./setup.sh` eller `make init`)
 
 Den följbara frågesekvensen som tar en nedladdare från `git clone` till körande. **Minimal,
 progressiv, default på varje fråga.** Bara det valda spåret frågas. Wizarden **genererar all config +
 hemligheter** — du redigerar ingen YAML. Bäraren (webb vs CLI): `SETUP-UI.md`. Förenklingsprincip:
 `SETUP-SIMPLIFICATION.md`.
+
+> **Status:** två bärare finns — `./setup.sh`/`.\setup.ps1` (lokal webb, rekommenderad) och
+> `make init` (CLI). Båda kör `scripts/setup_engine.py`. Frågorna 4 (AI-val) och 6 (backends)
+> nedan är ännu inte implementerade i någon bärare; backends läggs till efteråt (docs/BACKENDS.md).
 
 ## Principer
 - **Progressiv disclosure** — bara frågor som det valda spåret behöver.

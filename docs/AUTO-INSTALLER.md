@@ -9,8 +9,8 @@ svart-låda, idempotent (kör om utan att förstöra).
 | Fas | Vad | Status |
 |---|---|---|
 | **A. Bootstrap** | Hemligheter, containrar, Nextcloud-provisionering från `acl.yaml`, vault-seed | ✅ Klar (`scripts/bootstrap.py`) |
-| **B. Doctor / verify** | Efter-install-koll: NC-användare finns, app-lösenord giltiga, kalendrar skapade, vaults git-init, gateway frisk, OAuth-metadata nåbar. Full spec: [DOCTOR.md](DOCTOR.md) | 🔜 Nästa |
-| **C. Wizard** | `memaix init` — guidad CLI som ställer frågor (brand, domän, projekt, personer, backends) och skriver config-filerna. Ingen YAML för hand. Fullt flöde: [WIZARD.md](WIZARD.md) | Planerad |
+| **B. Doctor / verify** | Efter-install-koll: NC-användare finns, app-lösenord giltiga, kalendrar skapade, vaults git-init, gateway frisk, OAuth-metadata nåbar. Full spec: [DOCTOR.md](DOCTOR.md) | ✅ Grundversion (`make doctor` / `bootstrap.py --doctor`); levande-tjänst-koller växer per backend |
+| **C. Wizard** | Startskript (`setup.sh` / `setup.ps1`) → **lokal webb-wizard** (`scripts/setup_web.py`), plus CLI (`make init`). Samma motor: `scripts/setup_engine.py`. Flöde: [WIZARD.md](WIZARD.md), bärare/säkerhet: [SETUP-UI.md](SETUP-UI.md) | ✅ Första version (webb + CLI) |
 | **D. Tunnel-automation** | Valfri Cloudflare-API-integration (operatör ger API-token) → skapar tunnel + DNS automatiskt. Bobrs instruktioner | Planerad |
 | **E. Livscykel** | `memaix update` (se [UPDATE.md](UPDATE.md)), backup/restore (se [BACKUP.md](BACKUP.md)), avinstallation | Planerad |
 | **F. Backend-adaptrar** | Utöver Nextcloud: rena IMAP/CalDAV/WebDAV + adaptrar för Google Workspace / M365 där kunden redan har dem (se [BACKENDS.md](BACKENDS.md)). Installern upptäcker och konfigurerar | Planerad |
@@ -26,11 +26,12 @@ svart-låda, idempotent (kör om utan att förstöra).
 
 ## Komponenter
 ```
+setup.sh / setup.ps1 # startskript: token + webb-wizard + stack + doctor  [klar]
 scripts/
-  bootstrap.py     # orkestrering (Fas A)            [klar]
-  doctor.py        # verifiering (Fas B)             [nästa]
-  wizard.py        # config-generator (Fas C)        [planerad]
-  adapters/        # backend-adaptrar (Fas F)        [planerad]
+  bootstrap.py     # orkestrering + CLI-wizard + --doctor (Fas A/B/C)  [klar]
+  setup_engine.py  # config-generator, delad motor (Fas C)  [klar]
+  setup_web.py     # lokal webb-wizard, enbart stdlib (Fas C)  [klar]
+  adapters/        # backend-adaptrar (Fas F)            [planerad]
 Makefile           # operatörens framsida (install / doctor / update / up / down)
 .github/workflows/ # bygg + publicera gateway-image
 ```

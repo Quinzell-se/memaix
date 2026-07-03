@@ -136,6 +136,7 @@ def run_wizard() -> None:
 
     # ── Domän & tunnel ────────────────────────────────────────────────────────
     public_url = "http://localhost:8080"
+    domain = ""
     tunnel_token = ""
     tunnel_provider = "none"
 
@@ -196,7 +197,6 @@ def run_wizard() -> None:
             print("  ✗ Lösenorden matchar inte — försök igen.")
         else:
             print("  ✗ Lösenordet måste vara minst 8 tecken.")
-    password_hash = _pbkdf2_hash(pw1)
 
     # ── Projekt ────────────────────────────────────────────────────────────────
     print()
@@ -217,82 +217,35 @@ def run_wizard() -> None:
         print("Avbrutet.")
         sys.exit(0)
 
-    # ── Skriv config ───────────────────────────────────────────────────────────
+    # ── Skriv config (setup_engine — samma motor som webb-wizarden) ──────────
     print("\nGenererar config och hemligheter …")
-    CONFIG.mkdir(exist_ok=True)
+    import setup_engine as engine
 
-    # brand.yaml
-    (CONFIG / "brand.yaml").write_text(
-        f'name: "{name}"\n'
-        f'tagline: "Bring your own AI. Own your memory."\n'
-        f'support_email: "{support_email}"\n'
-        f'primary_color: "#4f46e5"\n'
-        f'logo_path: ""\n'
-    )
-
-    # memaix.yaml
-    issuer = public_url.rstrip("/") + "/"
-    (CONFIG / "memaix.yaml").write_text(
-        f'server:\n'
-        f'  bind: "0.0.0.0:8080"\n'
-        f'  public_url: "{public_url}"\n'
-        f'\n'
-        f'auth:\n'
-        f'  issuer: "{issuer}"\n'
-        f'  resource_server_url: "{issuer}"\n'
-        f'\n'
-        f'onboarding:\n'
-        f'  enabled: true\n'
-    )
-
-    # acl.yaml
-    vault_path = f'/srv/vaults/{project_name}'
-    (CONFIG / "acl.yaml").write_text(
-        f'users:\n'
-        f'  {admin_user}:\n'
-        f'    oauth_subjects:\n'
-        f'      - {admin_user}\n'
-        f'    grants:\n'
-        f'      {project_name}: owner\n'
-        f'      shared: owner\n'
-        f'\n'
-        f'projects:\n'
-        f'  {project_name}:\n'
-        f'    vault: {vault_path}\n'
-        f'    allow_send: false\n'
-        f'  shared:\n'
-        f'    vault: /srv/vaults/shared\n'
-        f'    allow_send: false\n'
-    )
-
-    # .env
-    env_lines = [
-        "# Genererat av make init — ändra inte för hand",
-        f"CLOUDFLARE_TUNNEL_TOKEN={tunnel_token}",
-        f"HYDRA_DB_PASSWORD={secrets.token_hex(32)}",
-        f"HYDRA_SYSTEM_SECRET={secrets.token_hex(32)}",
-        f"HYDRA_PUBLIC_URL={issuer}",
-        f"HYDRA_LOGIN_URL={public_url.rstrip('/')}/login",
-        f"HYDRA_CONSENT_URL={public_url.rstrip('/')}/consent",
-        f"TOKEN_MASTER_KEY={_fernet_key()}",
-        f"MEMAIX_ALLOWED_USERS={admin_user}",
-        f"MEMAIX_LOGIN_PASSWORD_HASH={password_hash}",
-        "NEXTCLOUD_ADMIN_USER=admin",
-        f"NEXTCLOUD_ADMIN_PASSWORD={secrets.token_hex(16)}",
-        "NEXTCLOUD_PUBLIC_HOST=",
-    ]
-    ENV.write_text("\n".join(env_lines) + "\n")
-    ENV.chmod(0o600)
-
-    print("  ✓ config/brand.yaml")
-    print("  ✓ config/memaix.yaml")
-    print("  ✓ config/acl.yaml")
-    print("  ✓ .env  (hemligheter genererade, chmod 600)")
+    answers = {
+        **engine.defaults(),
+        "track": track,
+        "name": name,
+        "support_email": support_email,
+        "domain": domain,
+        "tunnel_provider": tunnel_provider,
+        "tunnel_token": tunnel_token,
+        "admin_user": admin_user,
+        "password": pw1,
+        "project_name": project_name,
+    }
+    errors = engine.validate(answers)
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        sys.exit(1)
+    summary = engine.write_config(answers, ROOT)
+    for written in summary["written"]:
+        print(f"  ✓ {written}")
+    print("     (.env: hemligheter genererade, chmod 600)")
 
     # ── Seed vaults ────────────────────────────────────────────────────────────
-    import yaml as _yaml
-    acl = _yaml.safe_load((CONFIG / "acl.yaml").read_text()) or {}
-    seed_vaults(acl)
+    for pname in engine.seed_vaults(ROOT, [project_name]):
+        print(f"  ✓ seedade vault {pname}")
 
     # ── Starta stack ───────────────────────────────────────────────────────────
     if track == 1:
@@ -403,24 +356,9 @@ def provision_nextcloud(acl: dict) -> None:
 
 
 def seed_vaults(acl: dict) -> None:
-    tpl = ROOT / "vault-template"
-    vaults = ROOT / "vaults"
-    for pname in list(acl.get("projects", {})) + ["shared"]:
-        dest = vaults / pname
-        if dest.exists():
-            continue
-        dest.mkdir(parents=True)
-        src = tpl / ("shared" if pname == "shared" else "PROJECT-TEMPLATE")
-        if src.exists():
-            sh("cp", "-r", f"{src}/.", str(dest))
-        sh("git", "-C", str(dest), "init", "-q")
-        sh("git", "-C", str(dest), "add", "-A")
-        try:
-            sh("git", "-C", str(dest), "commit", "-qm", "seed", env={**os.environ,
-               "GIT_AUTHOR_NAME": "memaix", "GIT_AUTHOR_EMAIL": "memaix@localhost",
-               "GIT_COMMITTER_NAME": "memaix", "GIT_COMMITTER_EMAIL": "memaix@localhost"})
-        except subprocess.CalledProcessError:
-            pass  # tom vault, inget att commita
+    import setup_engine as engine
+
+    for pname in engine.seed_vaults(ROOT, list(acl.get("projects", {}))):
         print(f"  ✓ seedade vault {pname}")
 
 
