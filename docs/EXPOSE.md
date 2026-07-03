@@ -27,6 +27,34 @@ eller från din enhet (Claude Desktop, lokal klient). Här är alla rimliga alte
 [Cloudflare edge] → [cloudflared daemon i Docker] → [Caddy :80] → [gateway :8080]
 ```
 
+### 1b — Lokalt hanterad tunnel (rekommenderas för drift)
+
+Token-läget ovan är **fjärrhanterat**: cloudflared läser ingress-reglerna från
+Cloudflares API **vid uppstart** — inte live. Konfig-versionerna där har en
+`source`: `cloudflare` betyder satt via dashboard/API, `local` betyder satt
+från en config-fil. Om senaste versionen saknar hostname-regler (t.ex. en
+oavsiktlig `source: local`-version som ersatte dashboard-reglerna) svarar
+tunneln **503 på allt** — trots att den rapporterar sig som *healthy*.
+
+Stadigare: låt ingress-reglerna vara en fil i din deploy, som en omstart
+aldrig kan nolla:
+
+1. `cloudflared tunnel login` (skapar `cert.pem`)
+2. `cloudflared tunnel create memaix` (skapar `<UUID>.json`)
+3. Kopiera `cloudflared/config.example.yml` → `cloudflared/config.yml`,
+   fyll i UUID + hostname; lägg `<UUID>.json` i samma katalog.
+4. `cloudflared tunnel route dns memaix mcp.dindomän.se`
+5. `docker compose --profile tunnel-local up -d`
+
+`cloudflared/` är gitignorerad (utom exempel-filen) — config + credentials är
+hemligheter.
+
+**Felsökning: tunneln "healthy" men allt svarar 503?** Ingress-reglerna är
+tomma. Fjärrhanterad tunnel: kontrollera konfig-versionerna under Zero Trust →
+Tunnels → din tunnel → status/konfiguration och återställ hostname-regeln
+(eller byt till 1b). Lokalt hanterad: verifiera `ingress:` i config.yml och
+starta om containern.
+
 ---
 
 ## Alternativ 2 — Egen domän + Caddy/nginx (befintlig server)

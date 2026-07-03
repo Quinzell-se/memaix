@@ -1,0 +1,31 @@
+# Cloudflare-tunnel — LOKALT hanterad konfiguration (rekommenderad för drift).
+#
+# Varför: en token-startad tunnel (`tunnel run --token …`) är FJÄRRHANTERAD —
+# cloudflared läser ingress-reglerna från Cloudflares API vid UPPSTART, inte
+# live. Om konfigurationsversionen i Cloudflare saknar hostname-regler (t.ex.
+# efter en oavsiktlig "source: local"-version som ersatte dashboard-reglerna)
+# svarar tunneln 503 på ALLT — trots att den rapporterar sig som healthy.
+#
+# Med den här filen är ingress-reglerna en fil i repot/containern: en omstart
+# kan aldrig nolla dem, och de versionshanteras med resten av deployen.
+#
+# Uppsättning (engångs):
+#   1. cloudflared tunnel login                      # skapar cert.pem
+#   2. cloudflared tunnel create memaix              # skapar <UUID>.json
+#   3. Lägg <UUID>.json bredvid den här filen (katalogen monteras i containern).
+#   4. cloudflared tunnel route dns memaix mcp.dindomän.se
+#   5. Kopiera den här filen till cloudflared/config.yml och fyll i UUID + hostname.
+#   6. docker compose --profile tunnel-local up -d
+#
+# OBS: config.yml och *.json innehåller tunnelhemligheter — de är gitignorerade;
+# committa aldrig annat än den här .example-filen.
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  # Memaix-endpointen — peka på Caddy i Docker-nätverket.
+  - hostname: mcp.dindomän.se
+    service: http://caddy:80
+  # Catch-all måste vara sist; allt annat avvisas.
+  - service: http_status:404
