@@ -118,3 +118,58 @@ class AuditLog:
             }
             for r in reversed(rows)
         ]
+
+    def query(
+        self,
+        user: str | None = None,
+        project: str | None = None,
+        tool: str | None = None,
+        ok: bool | None = None,
+        since: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Filtered query with optional WHERE clauses and pagination.
+
+        All filter parameters are optional and combinable.
+        Returns rows oldest-first within the matched set.
+        """
+        conditions: list[str] = []
+        params: list = []
+        if user is not None:
+            conditions.append("user = ?")
+            params.append(user)
+        if project is not None:
+            conditions.append("project = ?")
+            params.append(project)
+        if tool is not None:
+            conditions.append("tool = ?")
+            params.append(tool)
+        if ok is not None:
+            conditions.append("ok = ?")
+            params.append(int(ok))
+        if since is not None:
+            conditions.append("ts >= ?")
+            params.append(since)
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.extend([limit, offset])
+
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT id, ts, user, project, tool, ok, detail"
+                f" FROM audit {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+                params,
+            ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "ts": r["ts"],
+                "user": r["user"],
+                "project": r["project"],
+                "tool": r["tool"],
+                "ok": bool(r["ok"]),
+                "detail": r["detail"],
+            }
+            for r in reversed(rows)
+        ]

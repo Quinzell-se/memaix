@@ -24,6 +24,8 @@ services:
     image: memaix/login-app:latest
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - ./config/acl.yaml:/app/config/acl.yaml:ro
     profiles: ["hydra"]
 
   caddy:
