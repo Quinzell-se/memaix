@@ -148,14 +148,10 @@ def _timeline():
     return ActionsStore.for_path(db_path)
 
 
-# Same role map as server.py's _OUTBOX_APPROVAL_ROLE — approving/rejecting a
-# queued action requires the role the underlying tool itself enforces.
-_OUTBOX_APPROVAL_ROLE = {
-    "email_send": "owner",
-    "calendar_create": "collaborator",
-    "calendar_update": "collaborator",
-}
-
+# Role table + visibility filter live in outbox/policy.py (single source of
+# truth shared with server.py's MCP tools and the web-UI API).
+from ..outbox.policy import APPROVAL_ROLE as _OUTBOX_APPROVAL_ROLE  # noqa: E402
+from ..outbox.policy import can_approve as _can_approve  # noqa: E402
 
 # ------------------------------------------------------------------
 # Auth routes
@@ -447,7 +443,10 @@ async def api_outbox_list(request: Request) -> JSONResponse:
     projects = [project] if project else sorted(visible)
     projects = [p for p in projects if p in visible]
 
-    actions = _outbox().list(projects, status or None)
+    # Approver-scoped like the MCP outbox_list: a queued action's args carry
+    # the full email body/recipients, so only someone who could actually
+    # approve it may see it — a reader must not read pending email content.
+    actions = [a for a in _outbox().list(projects, status or None) if _can_approve(acl, user, a)]
     return JSONResponse({"actions": actions})
 
 

@@ -227,11 +227,23 @@ def _onboarding_missing(acl, user: str, projects: list[str]) -> bool:
 # Imported at the bottom on purpose: the api modules import _require_user &
 # friends from this module, so they must load after those are defined.
 from .api import accounts as _api_accounts  # noqa: E402
+from .api import admin as _api_admin  # noqa: E402
 from .api import memory as _api_memory  # noqa: E402
+from .api import outbox as _api_outbox  # noqa: E402
 
 web_routes = [
     Route("/app", app_index, methods=["GET"]),
     Route("/app/api/me", api_me, methods=["GET"]),
+    # Outbox — approver-scoped (FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md, Fas C)
+    Route("/app/api/outbox", _api_outbox.api_outbox_list, methods=["GET"]),
+    Route("/app/api/outbox/{id}", _api_outbox.api_outbox_get, methods=["GET"]),
+    Route("/app/api/outbox/{id}/approve", _api_outbox.api_outbox_approve, methods=["POST"]),
+    Route("/app/api/outbox/{id}/reject", _api_outbox.api_outbox_reject, methods=["POST"]),
+    # Admin read views (Fas C)
+    Route("/app/api/admin/users", _api_admin.api_admin_users, methods=["GET"]),
+    Route("/app/api/admin/projects", _api_admin.api_admin_projects, methods=["GET"]),
+    Route("/app/api/admin/audit", _api_admin.api_admin_audit, methods=["GET"]),
+    Route("/app/api/admin/system", _api_admin.api_admin_system, methods=["GET"]),
     # Memory explorer (FEATURE-WEB-UI-MVP.md §4.4)
     Route("/app/api/memory/notes", _api_memory.api_memory_notes, methods=["GET"]),
     Route("/app/api/memory/note", _api_memory.api_memory_note, methods=["GET"]),

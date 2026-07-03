@@ -37,6 +37,35 @@ def _allowlisted(recipient: str, allowlist: list[str]) -> bool:
     return False
 
 
+# Approving/rejecting a queued action requires the same role the underlying
+# tool itself enforces — a reader must never be able to approve an email_send.
+# Single source of truth for the MCP tools (server.py), the board API and the
+# web-UI API; do not fork this table.
+APPROVAL_ROLE: dict[str, str] = {
+    "email_send": "owner",
+    "calendar_create": "collaborator",
+    "calendar_update": "collaborator",
+}
+
+
+def approval_role(tool: str | None) -> str:
+    return APPROVAL_ROLE.get(tool or "", "owner")
+
+
+def can_approve(acl, user: str, action: dict) -> bool:
+    """True if the user holds the role required to approve this action. A queued
+    outgoing action's args include the full email body/recipients, so only
+    someone who could actually send it should see it — a reader must not read
+    another user's pending email content (docs/THREAT-MODEL.md)."""
+    from ..acl import AccessDenied
+
+    try:
+        acl.enforce(user, action.get("project") or "", approval_role(action.get("tool")))
+        return True
+    except AccessDenied:
+        return False
+
+
 def action_mode(cfg: dict | None, acl, project: str, tool: str, args: dict) -> str:
     """Return 'auto' or 'review' for this action on this project.
 

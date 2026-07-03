@@ -631,13 +631,11 @@ def account_unlink(provider: str, account: str) -> dict:
 # Outbox tools — approve/reject queued outgoing actions (SAFETY: FEATURE-APPROVAL-OUTBOX.md)
 # ------------------------------------------------------------------
 
-# Approving/rejecting a queued action requires the same role the underlying
-# tool itself enforces — a reader must never be able to approve an email_send.
-_OUTBOX_APPROVAL_ROLE: dict[str, str] = {
-    "email_send": "owner",
-    "calendar_create": "collaborator",
-    "calendar_update": "collaborator",
-}
+# Role table + visibility filter live in outbox/policy.py (single source of
+# truth shared with the board and web-UI APIs); these aliases keep the
+# server-local names stable.
+from .outbox.policy import APPROVAL_ROLE as _OUTBOX_APPROVAL_ROLE  # noqa: E402
+from .outbox.policy import can_approve as _can_approve_action  # noqa: E402
 
 
 def _outbox_action_or_404(outbox, action_id: str) -> dict:
@@ -645,19 +643,6 @@ def _outbox_action_or_404(outbox, action_id: str) -> dict:
     if action is None:
         raise FileNotFoundError(f"no such outbox action: {action_id!r}")
     return action
-
-
-def _can_approve_action(acl, user: str, action: dict) -> bool:
-    """True if the user holds the role required to approve this action. A queued
-    outgoing action's args include the full email body/recipients, so only
-    someone who could actually send it should see it — a reader must not read
-    another user's pending email content."""
-    need = _OUTBOX_APPROVAL_ROLE.get(action.get("tool") or "", "owner")
-    try:
-        acl.enforce(user, action.get("project") or "", need)
-        return True
-    except AccessDenied:
-        return False
 
 
 @mcp.tool()
