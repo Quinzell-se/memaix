@@ -42,12 +42,30 @@ services:
     profiles: ["hydra"]
 
   # Valfritt: Cloudflare-tunnel. Tar bort behovet av portöppning; ger auto-TLS.
+  #
+  # VARNING (driftlärdom): token-läget är FJÄRRHANTERAT — ingress-reglerna läses
+  # från Cloudflares API vid uppstart, inte live. Om konfig-versionen där saknar
+  # hostname-regler (t.ex. en oavsiktlig "source: local"-version som ersatte
+  # dashboard-reglerna) svarar tunneln 503 på allt, trots "healthy". Föredra
+  # tunnel-local-profilen nedan för drift.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on: [caddy]
     profiles: ["tunnel"]                   # aktivera med: docker compose --profile tunnel up -d
+
+  # Rekommenderad för drift: LOKALT hanterad tunnel. Ingress-reglerna ligger i
+  # ./cloudflared/config.yml (se config.example.yml för uppsättning) — en fil i
+  # deployen som en omstart eller en fjärrkonfig-version aldrig kan nolla.
+  cloudflared-local:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on: [caddy]
+    profiles: ["tunnel-local"]             # aktivera med: docker compose --profile tunnel-local up -d
 
   postgres:
     image: postgres:16-alpine

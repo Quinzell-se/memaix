@@ -31,6 +31,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
+/* The hidden attribute must always win: class rules that set display
+   (e.g. .nav-link{display:flex}) otherwise override the UA's [hidden] rule
+   and "hidden" elements stay visible. Caught by the e2e suite. */
+[hidden] { display: none !important; }
 body {
   font-family: var(--font);
   background: var(--bg);

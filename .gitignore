@@ -5,6 +5,8 @@ docs/BUSINESS-CASE.md
 .env
 config/*.yaml
 !config/*.example.yaml
+cloudflared/*
+!cloudflared/config.example.yml
 
 # Runtime data
 vaults/
