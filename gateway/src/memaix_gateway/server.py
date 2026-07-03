@@ -2524,6 +2524,11 @@ def build_http_app():
 
         starlette_app.router.lifespan_context = _lifespan_with_scheduler
 
+    # Browsers hitting the bare domain get the web UI, not the MCP 401 JSON.
+    from .web.routes import BrowserRootRedirect
+
+    starlette_app = BrowserRootRedirect(starlette_app)
+
     # Wrap with CORS so claude.ai browser requests aren't blocked.
     app = CORSMiddleware(
         app=starlette_app,

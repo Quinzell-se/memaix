@@ -143,3 +143,45 @@ def test_static_cache_headers_versioned_vs_bare(rig):
     bare = client.get("/app/static/app.js")
     assert bare.status_code == 200
     assert bare.headers["Cache-Control"] == "no-cache"
+
+
+def _root_redirect_client():
+    """BrowserRootRedirect wrapping a stand-in for the MCP app that answers
+    401 on everything, mirroring the real mount at "/"."""
+    from starlette.responses import JSONResponse as _JR
+
+    async def mcp_stub(scope, receive, send):
+        await _JR({"error": "invalid_token"}, status_code=401)(scope, receive, send)
+
+    return TestClient(
+        web_routes_mod.BrowserRootRedirect(mcp_stub), raise_server_exceptions=False
+    )
+
+
+def test_root_browser_redirects_to_app():
+    client = _root_redirect_client()
+    resp = client.get(
+        "/", headers={"Accept": "text/html,application/xhtml+xml"}, follow_redirects=False
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "/app"
+
+
+def test_root_mcp_clients_unaffected():
+    client = _root_redirect_client()
+    # Streamable-HTTP GET (SSE): Accept has no text/html
+    resp = client.get("/", headers={"Accept": "text/event-stream"}, follow_redirects=False)
+    assert resp.status_code == 401
+    # Authenticated client keeps 401-from-app even with a browser-ish Accept
+    resp = client.get(
+        "/",
+        headers={"Accept": "text/html", "Authorization": "Bearer x"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 401
+    # POST (MCP messages) never redirects
+    resp = client.post("/", headers={"Accept": "text/html"}, follow_redirects=False)
+    assert resp.status_code == 401
+    # Other paths pass through
+    resp = client.get("/anything", headers={"Accept": "text/html"}, follow_redirects=False)
+    assert resp.status_code == 401
