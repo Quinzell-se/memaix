@@ -38,6 +38,11 @@ Läs i den ordning som passar din roll.
    · [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md) — funktion #8: Nextcloud som förstklassig backend (design + byggspec).
    · [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md) — funktion #9: PM-planeringsmotor & agent (byggspec).
    · [ROADMAP.md](ROADMAP.md) — implementeringsroadmap: bygg-ordning, faser, beroenden.
+   · [WEB-UI-SPEC.md](WEB-UI-SPEC.md) — webb-UI helhetspec: IA, rollmatris, ASCII-mockups, komponentbibliotek, byggordning (Fable-genererad).
+   · [FEATURE-WEB-UI-FOUNDATION.md](FEATURE-WEB-UI-FOUNDATION.md) — MEX-022 Fas A: mörkt tema, app-shell, hem-dashboard (design + byggspec).
+   · [FEATURE-WEB-UI-MVP.md](FEATURE-WEB-UI-MVP.md) — MEX-022+023 MVP: board i shell, inställningar/konton, minnesutforskare, per-user-login (design + byggspec).
+   · [FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md](FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md) — MEX-024 Fas C: utkorg-UI, kortmodal med kommentarer/poäng, admin-läsvyer (design + byggspec).
+   · [FEATURE-WEB-UI-PHASE2.md](FEATURE-WEB-UI-PHASE2.md) — MEX-025 Fas D: global sökning, brief-inställningar, admin-skriv, MFA (design + byggspec).
 9. [CODE-WORKFLOW.md](CODE-WORKFLOW.md) — backlog → kod → merge; forge-agnostiskt (GitHub/GitLab/Forgejo).
 
 ## 🚀 Ska du installera och driva?
