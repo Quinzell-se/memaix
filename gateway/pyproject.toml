@@ -40,6 +40,12 @@ search = [
 pm = [
     "ortools>=9.9",
 ]
+# Browser end-to-end tests for the web UI (tests_e2e/ — not part of the
+# default unit run). Requires a Chromium: `python -m playwright install
+# chromium`, or the pre-provisioned /opt/pw-browsers fallback.
+e2e = [
+    "playwright>=1.45",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

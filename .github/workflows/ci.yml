@@ -43,6 +43,21 @@ jobs:
           pip freeze --exclude-editable > /tmp/audit-reqs.txt
           python -m pip_audit --strict --desc -r /tmp/audit-reqs.txt
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installera gateway + e2e-beroenden
+        run: pip install -e "gateway[dev,e2e]"
+      - name: Installera Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Webb-UI E2E (Playwright)
+        working-directory: gateway
+        run: python -m pytest -q tests_e2e
+
   sbom:
     runs-on: ubuntu-latest
     steps:
