@@ -8,8 +8,10 @@ no server-side session store (FEATURE-WEB-UI-FOUNDATION.md §2.6).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from starlette.requests import Request
@@ -68,6 +70,35 @@ def _read_page(page: str) -> str:
     return raw
 
 
+_ASSET_VERSIONS: dict[str, str] = {}
+_ASSET_REF = re.compile(r"/app/static/([A-Za-z0-9_.\-/]+)")
+
+
+def _asset_version(rel: str) -> str | None:
+    """Short content hash for static/{rel}, or None if the file is missing."""
+    if not _dev_mode() and rel in _ASSET_VERSIONS:
+        return _ASSET_VERSIONS[rel]
+    target = (_STATIC / rel).resolve()
+    if not target.is_relative_to(_STATIC.resolve()) or not target.is_file():
+        return None
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()[:12]
+    if not _dev_mode():
+        _ASSET_VERSIONS[rel] = digest
+    return digest
+
+
+def _version_assets(html: str) -> str:
+    """Rewrite /app/static/x → /app/static/x?v=<hash> so CDN/browser caches
+    can hold assets long-term yet pick up new code on the next page load
+    (pages themselves are served no-cache)."""
+
+    def sub(m: re.Match) -> str:
+        version = _asset_version(m.group(1))
+        return m.group(0) if version is None else f"{m.group(0)}?v={version}"
+
+    return _ASSET_REF.sub(sub, html)
+
+
 def _html_with_locale(page: str, locale: str) -> str:
     """Render pages/{page}.html inside the shell with i18n strings injected."""
     shell = _read_page("shell")
@@ -77,7 +108,7 @@ def _html_with_locale(page: str, locale: str) -> str:
 
     strings = _load(locale)
     inject = f"<script>window.I18N={json.dumps(strings, ensure_ascii=False)};</script>"
-    return html.replace("<!--MEMAIX_I18N-->", inject, 1)
+    return _version_assets(html.replace("<!--MEMAIX_I18N-->", inject, 1))
 
 
 def _locale(request: Request) -> str:
@@ -117,7 +148,7 @@ async def app_login(request: Request) -> HTMLResponse:
     strings = _load(locale)
     inject = f"<script>window.I18N={json.dumps(strings, ensure_ascii=False)};</script>"
     raw = _read_page("login")
-    html = raw.replace("<!--MEMAIX_I18N-->", inject, 1)
+    html = _version_assets(raw.replace("<!--MEMAIX_I18N-->", inject, 1))
     return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
@@ -151,7 +182,15 @@ async def app_static(request: Request) -> Response:
     if not target.is_relative_to(_STATIC.resolve()) or not target.is_file():
         return JSONResponse({"error": "not_found"}, status_code=404)
     media_type = _STATIC_TYPES.get(target.suffix, "application/octet-stream")
-    return FileResponse(target, media_type=media_type)
+    # Versioned URLs (?v=<hash>) are immutable; bare URLs must revalidate so
+    # a CDN in front (Cloudflare defaults to 4h for .js/.css) never pins an
+    # old asset after deploy.
+    cache = (
+        "public, max-age=31536000, immutable"
+        if request.query_params.get("v")
+        else "no-cache"
+    )
+    return FileResponse(target, media_type=media_type, headers={"Cache-Control": cache})
 
 
 async def board_redirect(request: Request) -> Response:
