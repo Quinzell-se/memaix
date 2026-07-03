@@ -121,3 +121,25 @@ def test_board_frame_serves_board_html_with_dark_override(rig):
     resp = client.get("/app/board/frame")
     assert resp.status_code == 200
     assert "--bg:#0f1117" in resp.text  # dark override injected
+
+
+def test_static_refs_are_versioned_in_pages(rig):
+    client, _ = rig
+    resp = client.get("/app")
+    assert resp.status_code == 200
+    import re
+
+    refs = re.findall(r"/app/static/[A-Za-z0-9_.\-/]+(?:\?v=([0-9a-f]+))?", resp.text)
+    assert refs, "shell should reference static assets"
+    assert all(v for v in refs), f"unversioned static refs found: {resp.text}"
+
+
+def test_static_cache_headers_versioned_vs_bare(rig):
+    client, _ = rig
+    versioned = client.get("/app/static/app.js?v=abc123")
+    assert versioned.status_code == 200
+    assert "immutable" in versioned.headers["Cache-Control"]
+
+    bare = client.get("/app/static/app.js")
+    assert bare.status_code == 200
+    assert bare.headers["Cache-Control"] == "no-cache"
