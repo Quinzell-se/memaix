@@ -143,3 +143,41 @@ def test_rejects_unknown_provider_and_bad_endpoint(rig):
         "provider": "ollama", "name": "x", "endpoint": "gopher://nej",
     })
     assert resp.status_code == 400
+
+
+def test_llm_test_endpoint(rig, monkeypatch):
+    client, root, audit, _ = rig
+    from starlette.routing import Route as _R
+    from starlette.applications import Starlette as _S
+    from starlette.testclient import TestClient as _TC
+    from memaix_gateway import llm as llm_pkg
+
+    class _FakeClient:
+        provider, model = "anthropic", "claude-sonnet-4-5"
+
+        def test(self):
+            return {"ok": True, "provider": "anthropic", "model": "claude-sonnet-4-5",
+                    "latency_ms": 42, "reply": "ok"}
+
+    monkeypatch.setattr(llm_pkg.LLMClient, "from_config", classmethod(lambda cls, cfg: _FakeClient()))
+    app = _S(routes=[_R("/app/api/admin/llm/test", mod.api_admin_llm_test, methods=["POST"])])
+    resp = _TC(app).post("/app/api/admin/llm/test")
+    assert resp.status_code == 200 and resp.json()["latency_ms"] == 42
+    assert any("admin_test_llm" in str(e) for e in audit.entries)
+
+
+def test_llm_test_endpoint_byo_400(rig, monkeypatch):
+    client, _, _, _ = rig
+    from starlette.routing import Route as _R
+    from starlette.applications import Starlette as _S
+    from starlette.testclient import TestClient as _TC
+    from memaix_gateway.llm import LLMNotConfigured
+    from memaix_gateway import llm as llm_pkg
+
+    def _raise(cls, cfg):
+        raise LLMNotConfigured()
+
+    monkeypatch.setattr(llm_pkg.LLMClient, "from_config", classmethod(_raise))
+    app = _S(routes=[_R("/app/api/admin/llm/test", mod.api_admin_llm_test, methods=["POST"])])
+    resp = _TC(app).post("/app/api/admin/llm/test")
+    assert resp.status_code == 400

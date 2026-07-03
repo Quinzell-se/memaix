@@ -191,7 +191,21 @@
         toast(t('web_admin_llm_saved'), 'success');
       } catch (e) { toast(e.message, 'error'); }
     });
-    box.append(save);
+
+    const test = document.createElement('button');
+    test.className = 'btn';
+    test.textContent = t('web_admin_llm_test');
+    test.addEventListener('click', async () => {
+      test.disabled = true;
+      test.textContent = t('web_admin_llm_testing');
+      try {
+        const r = await api('POST', '/app/api/admin/llm/test');
+        toast(`${r.provider}/${r.model} — ${r.latency_ms} ms ✓`, 'success');
+      } catch (e) { toast(e.message, 'error'); }
+      test.disabled = false;
+      test.textContent = t('web_admin_llm_test');
+    });
+    box.append(save, document.createTextNode(' '), test);
     document.getElementById('admin-system').append(box);
   } catch (e) { toast(e.message, 'error'); }
 })();
