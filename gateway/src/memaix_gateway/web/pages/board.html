@@ -1,0 +1,12 @@
+<iframe id="board-frame" class="board-frame" src="/app/board/frame" title="Board"></iframe>
+<script>
+// Forward the shell's project selection into the frame via query param.
+(() => {
+  const project = new URLSearchParams(location.search).get('project')
+        ?? localStorage.getItem('memaix_project');
+  if (project) {
+    const frame = document.getElementById('board-frame');
+    frame.src = '/app/board/frame?project=' + encodeURIComponent(project);
+  }
+})();
+</script>

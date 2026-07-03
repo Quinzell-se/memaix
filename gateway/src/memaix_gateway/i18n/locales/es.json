@@ -2,7 +2,6 @@
   "_locale": "es",
   "page_title_board": "Memaix Board",
   "page_title_login": "Memaix — Iniciar sesión",
-
   "login_heading": "Iniciar sesión",
   "login_subtitle": "Inicie sesión con sus credenciales de Memaix",
   "login_label_username": "Nombre de usuario",
@@ -12,7 +11,6 @@
   "login_error_credentials": "Nombre de usuario o contraseña incorrectos.",
   "login_error_server": "No se pudo conectar al servidor.",
   "login_error_session_expired": "Sesión expirada — inicie sesión de nuevo.",
-
   "board_btn_refresh": "Actualizar",
   "board_btn_logout": "Cerrar sesión",
   "board_no_projects": "Sin proyectos.",
@@ -26,9 +24,7 @@
   "board_moved_to": "Movido a",
   "board_no_activity": "Sin actividad aún.",
   "activity_heading": "Actividad",
-
   "time_just_now": "ahora mismo",
-
   "modal_label_id": "ID",
   "modal_label_version": "Versión",
   "modal_label_created": "Creado",
@@ -37,12 +33,34 @@
   "modal_label_value": "Valor: ",
   "modal_label_complexity": "Compl.: ",
   "modal_label_risk": "Riesgo: ",
-
   "col_inbox": "Bandeja de entrada",
   "col_triaged": "Clasificado",
   "col_evaluated": "Evaluado",
   "col_approved": "Aprobado",
   "col_in_dev": "En desarrollo",
   "col_done": "Completado",
-  "col_rejected": "Rechazado"
+  "col_rejected": "Rechazado",
+  "web_nav_home": "Home",
+  "web_nav_board": "Board",
+  "web_nav_outbox": "Outbox",
+  "web_nav_memory": "Memory",
+  "web_nav_settings": "Settings",
+  "web_nav_admin": "Admin",
+  "web_logout": "Log out",
+  "web_home_title": "Home",
+  "web_home_todo": "To do",
+  "web_home_todo_empty": "Nothing needs your attention.",
+  "web_home_projects": "My projects",
+  "web_home_activity": "Activity",
+  "web_todo_outbox": "actions await your approval",
+  "web_todo_outbox_go": "Go to outbox",
+  "web_todo_relink": "account needs to be reconnected",
+  "web_todo_relink_go": "Reconnect",
+  "web_todo_onboarding": "Onboarding profile is missing",
+  "web_todo_onboarding_go": "Complete",
+  "web_open_board": "Open board",
+  "web_cards": "cards",
+  "web_activity_empty": "No recent activity.",
+  "web_time_now": "just now",
+  "web_time_yesterday": "yesterday"
 }

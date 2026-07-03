@@ -2,7 +2,6 @@
   "_locale": "de",
   "page_title_board": "Memaix Board",
   "page_title_login": "Memaix — Anmelden",
-
   "login_heading": "Anmelden",
   "login_subtitle": "Melden Sie sich mit Ihren Memaix-Zugangsdaten an",
   "login_label_username": "Benutzername",
@@ -12,7 +11,6 @@
   "login_error_credentials": "Falscher Benutzername oder falsches Passwort.",
   "login_error_server": "Server nicht erreichbar.",
   "login_error_session_expired": "Sitzung abgelaufen — bitte erneut anmelden.",
-
   "board_btn_refresh": "Aktualisieren",
   "board_btn_logout": "Abmelden",
   "board_no_projects": "Keine Projekte.",
@@ -26,9 +24,7 @@
   "board_moved_to": "Verschoben nach",
   "board_no_activity": "Noch keine Aktivität.",
   "activity_heading": "Aktivität",
-
   "time_just_now": "gerade eben",
-
   "modal_label_id": "ID",
   "modal_label_version": "Version",
   "modal_label_created": "Erstellt",
@@ -37,12 +33,34 @@
   "modal_label_value": "Wert: ",
   "modal_label_complexity": "Kompl.: ",
   "modal_label_risk": "Risiko: ",
-
   "col_inbox": "Posteingang",
   "col_triaged": "Triagiert",
   "col_evaluated": "Bewertet",
   "col_approved": "Genehmigt",
   "col_in_dev": "In Entwicklung",
   "col_done": "Erledigt",
-  "col_rejected": "Abgelehnt"
+  "col_rejected": "Abgelehnt",
+  "web_nav_home": "Home",
+  "web_nav_board": "Board",
+  "web_nav_outbox": "Outbox",
+  "web_nav_memory": "Memory",
+  "web_nav_settings": "Settings",
+  "web_nav_admin": "Admin",
+  "web_logout": "Log out",
+  "web_home_title": "Home",
+  "web_home_todo": "To do",
+  "web_home_todo_empty": "Nothing needs your attention.",
+  "web_home_projects": "My projects",
+  "web_home_activity": "Activity",
+  "web_todo_outbox": "actions await your approval",
+  "web_todo_outbox_go": "Go to outbox",
+  "web_todo_relink": "account needs to be reconnected",
+  "web_todo_relink_go": "Reconnect",
+  "web_todo_onboarding": "Onboarding profile is missing",
+  "web_todo_onboarding_go": "Complete",
+  "web_open_board": "Open board",
+  "web_cards": "cards",
+  "web_activity_empty": "No recent activity.",
+  "web_time_now": "just now",
+  "web_time_yesterday": "yesterday"
 }

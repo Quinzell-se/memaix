@@ -2481,6 +2481,7 @@ def build_http_app():
     mcp.settings.streamable_http_path = "/"
 
     from .board.routes import board_routes
+    from .web.routes import web_routes
 
     custom_routes = [
         Route("/health", health_handler),
@@ -2490,6 +2491,7 @@ def build_http_app():
         Route("/link/{provider}/callback", link_callback),
         Route("/hooks/{token}", rule_webhook, methods=["POST"]),
         *board_routes,
+        *web_routes,
     ]
 
     mcp._custom_starlette_routes = custom_routes

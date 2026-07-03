@@ -11,11 +11,10 @@ import time
 from pathlib import Path
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from ..acl import AccessDenied, Acl
-from ..i18n import locale_from_request
 from ..safety.audit import AuditLog
 from . import store as s
 
@@ -169,17 +168,6 @@ def _config_locale() -> str:
         return config.load().get("memaix", {}).get("server", {}).get("locale", "en")
     except Exception:
         return "en"
-
-
-async def board_index(request: Request) -> HTMLResponse:
-    locale = locale_from_request(
-        request.headers.get("Accept-Language"),
-        _config_locale(),
-    )
-    return HTMLResponse(
-        _board_html_with_locale(locale),
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-    )
 
 
 async def board_login(request: Request) -> JSONResponse:
@@ -525,8 +513,10 @@ async def api_outbox_decide(request: Request) -> JSONResponse:
 # Route table
 # ------------------------------------------------------------------
 
+# NOTE: the /board page route moved to web/routes.py as a 301 → /app/board
+# (FEATURE-WEB-UI-FOUNDATION.md); the board UI itself is served embedded at
+# /app/board/frame. All /board/api/* and auth routes below are unchanged.
 board_routes = [
-    Route("/board",                 board_index,      methods=["GET"]),
     Route("/board/auth/login",      board_login,      methods=["POST"]),
     Route("/board/auth/logout",     board_logout,     methods=["POST"]),
     Route("/board/api/projects",    api_projects,     methods=["GET"]),
