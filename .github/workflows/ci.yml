@@ -34,9 +34,11 @@ jobs:
       - name: Beroende-sårbarheter (pip-audit)
         working-directory: gateway
         # Scans installed deps against the PyPI advisory DB (OPEN-GAPS #5).
+        # --skip-editable: the gateway itself is installed with `pip install -e`
+        # and isn't on PyPI — auditing it is impossible and fails --strict.
         run: |
           pip install pip-audit
-          python -m pip_audit --strict --desc
+          python -m pip_audit --strict --desc --skip-editable
 
   sbom:
     runs-on: ubuntu-latest
