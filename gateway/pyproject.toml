@@ -54,6 +54,15 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"memaix_gateway" = [
+    "web/pages/*.html",
+    "web/static/*.css",
+    "web/static/*.js",
+    "board/*.html",
+    "i18n/locales/*.json",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

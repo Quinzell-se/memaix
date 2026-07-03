@@ -9,7 +9,7 @@ async function api(method, path, body = null) {
   if (body !== null) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (res.status === 401) {
-    window.location = '/login?next=' + encodeURIComponent(location.pathname);
+    window.location = '/app/login?next=' + encodeURIComponent(location.pathname + location.search);
     return;
   }
   if (!res.ok) {
