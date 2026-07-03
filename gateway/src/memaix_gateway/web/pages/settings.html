@@ -9,6 +9,16 @@
       <button class="btn btn-primary" id="link-microsoft" data-i18n="web_settings_link_microsoft">Link Microsoft account</button>
     </div>
   </div>
+  <div class="card" id="brief">
+    <h2 data-i18n="web_brief_title">Daily brief</h2>
+    <div class="muted" id="brief-status"></div>
+    <form id="brief-form" class="settings-form">
+      <label><input type="checkbox" id="brief-enabled"> <span data-i18n="web_brief_enabled">Enabled</span></label>
+      <input type="time" id="brief-time" value="07:00">
+      <input type="text" id="brief-timezone" placeholder="Europe/Stockholm">
+      <button class="btn btn-primary" type="submit" data-i18n="web_save">Save</button>
+    </form>
+  </div>
   <div class="card" id="calendar-mode">
     <h2 data-i18n="web_settings_calendar">Calendar access</h2>
     <div class="muted" id="calendar-current"></div>

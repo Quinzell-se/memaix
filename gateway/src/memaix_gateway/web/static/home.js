@@ -93,3 +93,44 @@
     }
   } catch { /* activity unavailable — dashboard still renders */ }
 })();
+
+// --- Action timeline with undo (Fas D) --------------------------------------
+(async () => {
+  const feed = document.getElementById('timeline-feed');
+  if (!feed) return;
+  const me = await window.ME;
+  if (!me) return;
+
+  const render = async () => {
+    feed.textContent = '';
+    let actions = [];
+    try { actions = await api('GET', '/app/api/timeline?limit=20'); } catch { /* off */ }
+    document.getElementById('timeline-empty').hidden = actions.length > 0;
+    for (const action of actions) {
+      const row = document.createElement('div');
+      row.className = 'act-row';
+      const text = document.createElement('span');
+      text.textContent = `${action.summary ?? action.tool} · ${action.project} · ${relTime(action.ts ?? action.created_at ?? '')}`;
+      row.append(text);
+      if (action.reversible && action.status === 'done') {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = t('web_timeline_undo');
+        btn.addEventListener('click', async () => {
+          try {
+            const res = await api('POST', `/app/api/timeline/${encodeURIComponent(action.id)}/undo`);
+            toast(res.ok === false ? (res.error ?? t('web_timeline_undo_failed')) : t('web_timeline_undone'),
+                  res.ok === false ? 'error' : 'success');
+            render();
+          } catch (e) {
+            toast(e.status === 409 ? t('web_timeline_conflict') : e.message, 'error');
+            render();
+          }
+        });
+        row.append(btn);
+      }
+      feed.append(row);
+    }
+  };
+  render();
+})();

@@ -130,3 +130,99 @@
       table(['', t('web_admin_check'), t('web_admin_detail')], rows));
   } catch (e) { toast(e.message, 'error'); }
 })();
+
+// --- MFA + write operations (Fas D) -----------------------------------------
+(async () => {
+  const me = await window.ME;
+  if (!me || !me.is_admin) return;
+
+  const usersPane = document.getElementById('admin-users');
+  const bar = document.createElement('div');
+  bar.className = 'settings-actions';
+  usersPane.prepend(bar);
+
+  const mfaStatus = await api('GET', '/app/api/admin/mfa').catch(() => null);
+  if (!mfaStatus) return;
+
+  const codeInput = document.createElement('input');
+  codeInput.placeholder = '123456';
+  codeInput.maxLength = 6;
+  codeInput.className = 'mfa-code';
+
+  if (!mfaStatus.enrolled) {
+    const setupBtn = document.createElement('button');
+    setupBtn.className = 'btn btn-primary';
+    setupBtn.textContent = t('web_mfa_setup');
+    setupBtn.addEventListener('click', async () => {
+      try {
+        const start = await api('POST', '/app/api/admin/mfa/setup/start');
+        const box = document.createElement('div');
+        const p = document.createElement('p');
+        p.textContent = t('web_mfa_setup_help');
+        const uri = document.createElement('code');
+        uri.className = 'mono';
+        uri.textContent = start.otpauth_uri;
+        const secretLine = document.createElement('p');
+        secretLine.className = 'mono';
+        secretLine.textContent = `${t('web_mfa_secret')}: ${start.secret}`;
+        const input = document.createElement('input');
+        input.placeholder = '123456';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = t('web_mfa_confirm');
+        box.append(p, uri, secretLine, input, confirmBtn);
+        const m = modal(box);
+        confirmBtn.addEventListener('click', async () => {
+          try {
+            await api('POST', '/app/api/admin/mfa/setup', { code: input.value });
+            toast(t('web_mfa_enrolled'), 'success');
+            m.close();
+            location.reload();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    bar.append(setupBtn);
+    return; // write ops need enrollment first
+  }
+
+  if (!mfaStatus.verified) {
+    const verifyBtn = document.createElement('button');
+    verifyBtn.className = 'btn btn-primary';
+    verifyBtn.textContent = t('web_mfa_verify');
+    verifyBtn.addEventListener('click', async () => {
+      try {
+        await api('POST', '/app/api/admin/mfa/verify', { code: codeInput.value });
+        toast(t('web_mfa_verified'), 'success');
+        location.reload();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    bar.append(codeInput, verifyBtn);
+    return;
+  }
+
+  // MFA verified — enable kill-switch toggles on the users table.
+  const note = document.createElement('span');
+  note.className = 'muted';
+  note.textContent = t('web_mfa_active');
+  bar.append(note);
+
+  const users = await api('GET', '/app/api/admin/users').catch(() => []);
+  for (const u of users) {
+    if (u.id === me.user) continue;
+    const btn = document.createElement('button');
+    btn.className = u.disabled ? 'btn' : 'btn btn-danger';
+    btn.textContent = `${u.disabled ? t('web_admin_enable') : t('web_admin_disable')}: ${u.id}`;
+    btn.addEventListener('click', async () => {
+      try {
+        await api('PATCH', `/app/api/admin/users/${encodeURIComponent(u.id)}`,
+                  { disabled: !u.disabled });
+        toast(t('web_saved'), 'success');
+        location.reload();
+      } catch (e) {
+        toast(e.payload?.error === 'last_admin' ? t('web_admin_last_admin') : e.message, 'error');
+      }
+    });
+    bar.append(btn);
+  }
+})();

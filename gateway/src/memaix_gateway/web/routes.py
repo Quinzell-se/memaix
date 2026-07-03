@@ -228,12 +228,31 @@ def _onboarding_missing(acl, user: str, projects: list[str]) -> bool:
 # friends from this module, so they must load after those are defined.
 from .api import accounts as _api_accounts  # noqa: E402
 from .api import admin as _api_admin  # noqa: E402
+from .api import admin_write as _api_admin_write  # noqa: E402
+from .api import brief as _api_brief  # noqa: E402
 from .api import memory as _api_memory  # noqa: E402
+from .api import mfa as _api_mfa  # noqa: E402
 from .api import outbox as _api_outbox  # noqa: E402
+from .api import search as _api_search  # noqa: E402
+from .api import timeline as _api_timeline  # noqa: E402
 
 web_routes = [
     Route("/app", app_index, methods=["GET"]),
     Route("/app/api/me", api_me, methods=["GET"]),
+    # Search / brief / timeline (FEATURE-WEB-UI-PHASE2.md, Fas D)
+    Route("/app/api/search", _api_search.api_search, methods=["GET"]),
+    Route("/app/api/brief", _api_brief.api_brief_get, methods=["GET"]),
+    Route("/app/api/brief", _api_brief.api_brief_set, methods=["POST"]),
+    Route("/app/api/timeline", _api_timeline.api_timeline, methods=["GET"]),
+    Route("/app/api/timeline/{id}/undo", _api_timeline.api_timeline_undo, methods=["POST"]),
+    # MFA + admin write (Fas D — MFA-gated)
+    Route("/app/api/admin/mfa", _api_mfa.api_mfa_status, methods=["GET"]),
+    Route("/app/api/admin/mfa/setup/start", _api_mfa.api_mfa_setup_start, methods=["POST"]),
+    Route("/app/api/admin/mfa/setup", _api_mfa.api_mfa_setup_confirm, methods=["POST"]),
+    Route("/app/api/admin/mfa/verify", _api_mfa.api_mfa_verify, methods=["POST"]),
+    Route("/app/api/admin/users/{uid}", _api_admin_write.api_admin_set_disabled, methods=["PATCH"]),
+    Route("/app/api/admin/users/{uid}/grants", _api_admin_write.api_admin_set_grants, methods=["PATCH"]),
+    Route("/app/api/admin/projects/{project}", _api_admin_write.api_admin_set_project_field, methods=["PATCH"]),
     # Outbox — approver-scoped (FEATURE-WEB-UI-OUTBOX-AND-ADMIN.md, Fas C)
     Route("/app/api/outbox", _api_outbox.api_outbox_list, methods=["GET"]),
     Route("/app/api/outbox/{id}", _api_outbox.api_outbox_get, methods=["GET"]),

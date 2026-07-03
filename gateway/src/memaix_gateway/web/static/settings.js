@@ -94,3 +94,38 @@
     } catch (err) { toast(err.message, 'error'); }
   });
 })();
+
+// --- Daily brief (Fas D) ---------------------------------------------------
+(async () => {
+  const form = document.getElementById('brief-form');
+  if (!form) return;
+  const enabled = document.getElementById('brief-enabled');
+  const timeEl = document.getElementById('brief-time');
+  const tzEl = document.getElementById('brief-timezone');
+  const statusEl = document.getElementById('brief-status');
+
+  try {
+    const brief = await api('GET', '/app/api/brief');
+    if (brief.configured) {
+      enabled.checked = !!brief.prefs.enabled;
+      if (brief.prefs.brief_time) timeEl.value = brief.prefs.brief_time;
+      if (brief.prefs.timezone) tzEl.value = brief.prefs.timezone;
+      statusEl.textContent = brief.next_run
+        ? `${t('web_brief_next')}: ${new Date(brief.next_run).toLocaleString()}` : '';
+    }
+  } catch { /* not configured yet */ }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api('POST', '/app/api/brief', {
+        enabled: enabled.checked,
+        brief_time: timeEl.value,
+        timezone: tzEl.value || undefined,
+      });
+      statusEl.textContent = res.next_run
+        ? `${t('web_brief_next')}: ${new Date(res.next_run).toLocaleString()}` : '';
+      toast(t('web_saved'), 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+})();

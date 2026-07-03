@@ -285,3 +285,14 @@ body[data-collapsed="true"] .sidebar-foot { display: none; }
   padding: .4rem .5rem; background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px;
 }
+
+/* --- Search + MFA (Fas D) -------------------------------------------------- */
+.search-form { display: flex; gap: .5rem; margin-bottom: .8rem; }
+.search-form input {
+  flex: 1; padding: .5rem .7rem; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .7rem; }
+.search-hit { border-bottom: 1px solid var(--border); padding-bottom: .6rem; }
+.mfa-code { width: 90px; padding: .4rem .5rem; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; }
