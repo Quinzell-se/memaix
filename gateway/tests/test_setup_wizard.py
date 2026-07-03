@@ -170,3 +170,42 @@ def test_apply_writes_config_and_shuts_down(wizard):
     # Självavstängande: servertråden dör av sig själv efter lyckad installation
     thread.join(timeout=5)
     assert not thread.is_alive()
+
+
+def test_write_config_llm_api_provider(tmp_path):
+    a = _answers(llm_provider="anthropic", llm_model="claude-sonnet-4-5",
+                 llm_api_key="sk-ant-test")
+    engine.write_config(a, tmp_path)
+    cfg = yaml.safe_load((tmp_path / "config" / "memaix.yaml").read_text())
+    assert cfg["model"] == {
+        "provider": "anthropic", "name": "claude-sonnet-4-5", "api_key_ref": "LLM_API_KEY",
+    }
+    env = (tmp_path / ".env").read_text()
+    assert "LLM_API_KEY=sk-ant-test" in env
+    assert "sk-ant-test" not in (tmp_path / "config" / "memaix.yaml").read_text()
+
+
+def test_write_config_llm_endpoint_local_or_cloud(tmp_path):
+    a = _answers(llm_provider="openai-compatible", llm_model="qwen3-coder:30b",
+                 llm_endpoint="http://192.168.1.20:11434")
+    engine.write_config(a, tmp_path)
+    cfg = yaml.safe_load((tmp_path / "config" / "memaix.yaml").read_text())
+    assert cfg["model"]["endpoint"] == "http://192.168.1.20:11434"
+    assert "api_key_ref" not in cfg["model"]
+    assert "LLM_API_KEY" not in (tmp_path / ".env").read_text()
+
+
+def test_write_config_byo_no_model_block(tmp_path):
+    engine.write_config(_answers(), tmp_path)
+    cfg = yaml.safe_load((tmp_path / "config" / "memaix.yaml").read_text())
+    assert "model" not in cfg
+
+
+def test_validate_llm():
+    assert engine.validate(_answers(llm_provider="anthropic", llm_model="m"))       # nyckel saknas
+    assert engine.validate(_answers(llm_provider="ollama", llm_model="m"))          # endpoint saknas
+    assert engine.validate(_answers(llm_provider="skynet", llm_model="m"))          # okänd
+    assert not engine.validate(_answers(
+        llm_provider="google", llm_model="gemini-2.5-pro", llm_api_key="k"))
+    assert not engine.validate(_answers(
+        llm_provider="vllm", llm_model="m", llm_endpoint="https://gpu.moln.se:8000"))
