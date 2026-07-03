@@ -39,6 +39,17 @@ def _get_store(acl: Acl, project: str) -> MemoryStore:
 # ------------------------------------------------------------------
 
 
+def memory_list(acl: Acl, user_id: str, project: str) -> list[dict]:
+    """List all notes in the project vault. Returns [{path, mtime}] where
+    mtime is the store's updated_at timestamp (empty string if unknown)."""
+    acl.enforce(user_id, project, "reader")
+    store = _get_store(acl, project)
+    return [
+        {"path": note, "mtime": store.get_updated_at(note) or ""}
+        for note in store.list_all()
+    ]
+
+
 def memory_read(acl: Acl, user_id: str, project: str, note: str) -> dict:
     """Return {path, content} for a note.  Raises FileNotFoundError if absent."""
     acl.enforce(user_id, project, "reader")

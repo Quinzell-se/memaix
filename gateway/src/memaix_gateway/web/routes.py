@@ -224,9 +224,26 @@ def _onboarding_missing(acl, user: str, projects: list[str]) -> bool:
 # Route table (mounted in server.build_http_app beside board_routes)
 # ------------------------------------------------------------------
 
+# Imported at the bottom on purpose: the api modules import _require_user &
+# friends from this module, so they must load after those are defined.
+from .api import accounts as _api_accounts  # noqa: E402
+from .api import memory as _api_memory  # noqa: E402
+
 web_routes = [
     Route("/app", app_index, methods=["GET"]),
     Route("/app/api/me", api_me, methods=["GET"]),
+    # Memory explorer (FEATURE-WEB-UI-MVP.md §4.4)
+    Route("/app/api/memory/notes", _api_memory.api_memory_notes, methods=["GET"]),
+    Route("/app/api/memory/note", _api_memory.api_memory_note, methods=["GET"]),
+    Route("/app/api/memory/search", _api_memory.api_memory_search, methods=["GET"]),
+    Route("/app/api/memory/history", _api_memory.api_memory_history, methods=["GET"]),
+    Route("/app/api/memory/revert", _api_memory.api_memory_revert, methods=["POST"]),
+    # Accounts + calendar mode (FEATURE-WEB-UI-MVP.md §4.5)
+    Route("/app/api/accounts", _api_accounts.api_accounts_list, methods=["GET"]),
+    Route("/app/api/accounts/link/{provider}", _api_accounts.api_accounts_link, methods=["GET"]),
+    Route("/app/api/accounts/{provider}", _api_accounts.api_accounts_unlink, methods=["DELETE"]),
+    Route("/app/api/settings/calendar-mode", _api_accounts.api_calendar_mode_get, methods=["GET"]),
+    Route("/app/api/settings/calendar-mode", _api_accounts.api_calendar_mode_set, methods=["POST"]),
     Route("/app/board/frame", app_board_frame, methods=["GET"]),
     Route("/app/static/{path:path}", app_static, methods=["GET"]),
     Route("/app/{page:str}", app_page, methods=["GET"]),

@@ -216,3 +216,44 @@ body[data-collapsed="true"] .sidebar-foot { display: none; }
   .tab-bar .tab.active { color: var(--primary); }
   .board-frame { height: calc(100vh - var(--topbar-h) - var(--tab-h) - 2rem); }
 }
+
+/* --- Memory explorer (Fas B) ------------------------------------------- */
+.memory-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; }
+.memory-tree-card { display: flex; flex-direction: column; gap: .6rem; }
+#memory-search {
+  width: 100%; padding: .45rem .6rem; background: var(--surface-2);
+  color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+}
+.memory-tree { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 70vh; }
+.memory-tree li { padding: .2rem 0; }
+.memory-view-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.memory-view { line-height: 1.55; }
+.memory-view pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .7rem; overflow-x: auto; }
+.memory-view code { font-family: var(--mono); font-size: var(--text-xs); }
+
+/* Drawer (history) */
+.drawer {
+  position: fixed; right: 0; top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h)); width: 360px;
+  background: var(--surface); border-left: 1px solid var(--border);
+  overflow-y: auto; z-index: 200;
+  transform: translateX(100%); transition: transform .2s;
+}
+.drawer[open] { transform: translateX(0); }
+.drawer-header { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1rem; border-bottom: 1px solid var(--border); }
+.commit-list { list-style: none; margin: 0; padding: .5rem 1rem; display: flex; flex-direction: column; gap: .6rem; }
+.commit-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: .45rem; }
+.commit-msg { flex: 1 1 100%; }
+
+/* Settings */
+.settings-actions { display: flex; gap: .5rem; margin-top: .8rem; flex-wrap: wrap; }
+.settings-form { display: flex; flex-direction: column; gap: .6rem; margin-top: .6rem; }
+.settings-form input, .settings-form select {
+  padding: .45rem .6rem; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  .memory-layout { grid-template-columns: 1fr; }
+  .drawer { width: 100%; top: var(--topbar-h); }
+}

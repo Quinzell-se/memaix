@@ -1,0 +1,25 @@
+<h1 class="page-title" data-i18n="web_memory_title">Memory</h1>
+<div class="memory-layout">
+  <div class="card memory-tree-card">
+    <input type="search" id="memory-search" data-i18n-placeholder="web_memory_search" placeholder="Search notes…">
+    <ul id="memory-tree" class="memory-tree"></ul>
+    <div id="memory-empty" class="empty-state" hidden data-i18n="web_memory_empty">No notes yet.</div>
+  </div>
+  <div class="card memory-view-card">
+    <div class="memory-view-head">
+      <h2 id="memory-filename" class="mono"></h2>
+      <button class="btn" id="memory-history-btn" hidden data-i18n="web_memory_history">History</button>
+    </div>
+    <div id="memory-view" class="memory-view">
+      <div class="empty-state" data-i18n="web_memory_pick">Select a note to view it.</div>
+    </div>
+  </div>
+</div>
+<div id="history-drawer" class="drawer" hidden>
+  <div class="drawer-header">
+    <h3><span data-i18n="web_memory_history">History</span> — <span id="history-filename" class="mono"></span></h3>
+    <button class="btn" id="close-drawer">&#x2715;</button>
+  </div>
+  <ul id="history-list" class="commit-list"></ul>
+</div>
+<script src="/app/static/memory.js"></script>
