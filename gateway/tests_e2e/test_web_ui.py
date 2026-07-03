@@ -50,6 +50,44 @@ def test_wrong_password_rejected(page, base_url):
     assert resp.status == 401
 
 
+def test_login_page_full_ui_flow(context, page):
+    """The standalone /app/login page: wrong password shows the inline error,
+    right password logs in. Chromium treats 127.0.0.1 as a trustworthy origin,
+    so the Secure session cookie is accepted in a real page context and the
+    redirect lands authenticated."""
+    page.goto("/app/login?next=/app")
+    expect(page.locator(".login-card h1")).to_have_text("Memaix")
+
+    page.fill("#login-user", "alice")
+    page.fill("#login-pass", "wrong")
+    page.click("#login-btn")
+    expect(page.locator("#login-error")).not_to_have_text("")
+
+    # Input fields must be styled (regression: var(--background) didn't exist
+    # → transparent inputs on the dark card).
+    bg = page.eval_on_selector("#login-user", "el => getComputedStyle(el).backgroundColor")
+    assert bg not in ("rgba(0, 0, 0, 0)", "transparent")
+
+    page.fill("#login-pass", ALICE_PASSWORD)
+    page.click("#login-btn")
+    page.wait_for_url("**/app")
+    # Authenticated shell rendered — the page JS fetched /app/api/me with the
+    # freshly set cookie. (page.request's jar refuses Secure cookies over
+    # plain http, so assert through the browser context, not the API helper.)
+    expect(page.locator("#user-badge")).to_contain_text("alice")
+
+
+def test_login_page_next_param_open_redirect_guard(page):
+    """?next= must never leave the origin — an absolute/protocol-relative URL
+    collapses to its path."""
+    page.goto("/app/login?next=//evil.example.com/phish")
+    page.fill("#login-user", "alice")
+    page.fill("#login-pass", ALICE_PASSWORD)
+    page.click("#login-btn")
+    page.wait_for_url(lambda url: "evil.example.com" not in url)
+    assert "evil.example.com" not in page.url
+
+
 def test_shell_renders_dark_with_sidebar(alice_page):
     page = alice_page
     page.goto("/app")
