@@ -22,7 +22,26 @@ jobs:
       - name: Testsvit
         working-directory: gateway
         run: python -m pytest -q
-      # TODO: lägg till ruff/mypy/bandit som separata gate-steg.
+      - name: Lint (ruff)
+        working-directory: gateway
+        run: python -m ruff check src/memaix_gateway
+      - name: Typkontroll (mypy)
+        working-directory: gateway
+        run: python -m mypy src/memaix_gateway
+      - name: Säkerhetsanalys (bandit)
+        working-directory: gateway
+        run: python -m bandit -q -r src/memaix_gateway -c pyproject.toml
+      - name: Beroende-sårbarheter (pip-audit)
+        working-directory: gateway
+        # Scans installed deps against the PyPI advisory DB (OPEN-GAPS #5).
+        # Audit a freeze WITHOUT the editable gateway: the local package isn't
+        # on PyPI, and under --strict pip-audit errors on it both when trying
+        # to audit it AND when skipping it (--skip-editable still exits 1).
+        # Freezing with --exclude-editable keeps --strict for every real dep.
+        run: |
+          pip install pip-audit
+          pip freeze --exclude-editable > /tmp/audit-reqs.txt
+          python -m pip_audit --strict --desc -r /tmp/audit-reqs.txt
 
   sbom:
     runs-on: ubuntu-latest

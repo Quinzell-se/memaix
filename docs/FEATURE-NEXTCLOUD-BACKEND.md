@@ -84,11 +84,18 @@ En `ChatBackend` mot Nextcloud Talk (OCS):
 - **Notes-synk:** Nextcloud Notes ↔ `memory/`-noter; markdown åt båda håll.
 - Synk körs via schemaläggaren (#1) eller på begäran (`deck_sync`, `notes_sync`).
 
-## 8. Dokumentgenerering (Collabora/OnlyOffice)
+## 8. ✅ Dokumentgenerering (Collabora/OnlyOffice)
 
-Statusrapporter (#PM) och mötesnoteringar kan skrivas som riktiga `.odt/.docx` i
-Nextcloud via `files_write` + en mall; delas som Nextcloud-länk. Lågt prioriterat men
-högt upplevt värde för intressent-kommunikation.
+`nc_generate_report(project, path, kind, audience, ...)` — kör `pm_report()`
+(FEATURE-PM-ENGINE.md §5) och skriver resultatet som en riktig `.odt`-fil till
+projektets länkade Nextcloud-filer. `nextcloud/docgen.py`'s `render_odt` bygger
+filen för hand (zip + tre XML-filer: `mimetype`/`META-INF/manifest.xml`/
+`content.xml`) — ingen `python-docx`/`odfpy`-dependency för något så här smalt
+("en enkel mall", inte ett mallmotor-system). `WebDavFilesAdapter` fick en ny
+`write_binary(path, data: bytes)` — `write_file`s `content: str` hade tvingat en
+UTF-8-encode som förstört ODT:ns binära zip-data. Delning som Nextcloud-länk
+(nästa steg efter att filen finns) är inte byggt — ingen `share_link`-verktyg
+finns än; filen är åtkomlig genom att öppna den i Nextclouds egna filwebbläsare.
 
 ## 9. Säkerhet & integritet
 
@@ -157,8 +164,11 @@ verktyg (owner). **Test** (`tests/test_nc_sync.py`): nytt Deck-kort → backlog-
 ändring på båda håll → konflikt loggas, senast ändrad vinner.
 
 ### Steg 7 — Dokumentgenerering
-Mall → `.odt/.docx` (t.ex. via en enkel mall + `files_write` till WebDAV). **Test:**
-en statusrapport skrivs som fil i mockad WebDAV.
+✅ `nc_generate_report` — `pm_report()`-rollup → `.odt` (via
+`nextcloud/docgen.py::render_odt`, hand-byggd zip+XML) → `write_binary` till
+WebDAV. **Test** (`tests/test_docgen.py`, `tests/test_nc_docgen_server.py`):
+en statusrapport skrivs som fil i mockad WebDAV; innehållet är giltig,
+välformad XML; specialtecken XML-escapas korrekt.
 
 ### Steg 8 — Config + docs
 Utöka `acl.example.yaml` med Nextcloud-resurser (files/contacts/tasks/talk) och
@@ -169,12 +179,18 @@ Utöka `acl.example.yaml` med Nextcloud-resurser (files/contacts/tasks/talk) och
 `cd gateway && python -m pytest -q` + `python3 scripts/check-docs-index.py`.
 
 ### Acceptanskriterier
-- [ ] `files_*` fungerar mot Nextcloud WebDAV via connector-ramverket; filerna blir sökbara (#2).
-- [ ] `contacts_search` löser upp avsändare så brief/mail kan visa namn istället för adress.
-- [ ] `chat_post`/`chat_read` mot Talk fungerar; Talk kan väljas som notiskanal i briefen (#1).
-- [ ] Tasks (VTODO), Deck-synk och Notes-synk fungerar med konfliktregel och owner-styrning.
-- [ ] Per-user: varje användare når bara sitt eget Nextcloud-konto; credentials aldrig mot AI:n.
-- [ ] Utgående (chat/Deck/delning) går via Utkorgen (#3) i review-läge; path-traversal blockeras; hela sviten + docs-index grön.
+- [x] `files_*` fungerar mot Nextcloud WebDAV via connector-ramverket; filerna blir sökbara (#2)
+      (som `nc_files_*`, en *ytterligare* filkälla vid sidan av lokal vault, se §4/registry.py).
+- [x] `contacts_search` löser upp avsändare så brief/mail kan visa namn istället för adress.
+- [ ] `chat_post`/`chat_read` mot Talk — **medvetet nedprioriterat** (användarbeslut: "prioritera
+      ned talk"), inte glömt. Ingen `ChatBackend`-adapter finns än.
+- [x] Tasks (VTODO), Deck-synk och Notes-synk fungerar med konfliktregel (senast ändrad vinner)
+      och owner-styrning.
+- [x] Per-user: varje användare når bara sitt eget Nextcloud-konto; credentials aldrig mot AI:n.
+- [x] Path-traversal blockeras (`paths.validate_relative_path`, även på det nya `write_binary`);
+      hela sviten (767 tester) + docs-index grön. Utgående-via-Utkorgen gäller `chat`/delning, som
+      inte är byggda än (se ovan) — Deck-synk är en dubbelriktad synk, inte en enkelriktad utgående
+      åtgärd, så den routas inte genom Utkorgen (annan risk-profil, se `nextcloud/sync.py`).
 
 ---
 

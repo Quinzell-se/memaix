@@ -11,17 +11,16 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from collections import namedtuple
 from pathlib import Path
 from typing import Generator
 
 from . import config
-from .acl import Acl, AccessDenied
+from .acl import AccessDenied, Acl
 
 Check = namedtuple("Check", ["name", "status", "message"])
 
-_PASS = "PASS"
+_PASS = "PASS"  # nosec B105 -- status label, not a credential
 _WARN = "WARN"
 _FAIL = "FAIL"
 _SKIP = "SKIP"
@@ -92,7 +91,7 @@ def _check_hydra_reachable() -> Check:
         import urllib.request
         url = f"{issuer}/.well-known/openid-configuration"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 -- admin-configured issuer URL, doctor CLI only
             if resp.status == 200:
                 return Check(name, _PASS, f"reachable at {url}")
             return Check(name, _FAIL, f"unexpected status {resp.status}")
@@ -109,7 +108,7 @@ def _check_gateway_healthy() -> Check:
         import urllib.request
         url = f"{base_url.rstrip('/')}/health"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 -- admin-configured MEMAIX_HTTP_URL, doctor CLI only
             if resp.status == 200:
                 return Check(name, _PASS, f"healthy at {url}")
             return Check(name, _FAIL, f"unexpected status {resp.status}")

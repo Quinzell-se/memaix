@@ -97,9 +97,19 @@ snabbåtgärder, glanceable brief.
 
 ## 🟢 Programmatiskt — tekniska hål
 
-### 13. Idempotens för skrivande åtgärder
+### 13. ✅ Idempotens för skrivande åtgärder
 AI:n retrear ett verktygsanrop (nätverksglapp) → **dubbla** kalenderhändelser/mejl? Reell bugg.
 - **Åtgärd:** **idempotensnycklar** för alla skrivande verktyg (skapa-en-gång).
+- **Status:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad körning per
+  (användare, verktyg, idempotency_key); ett upprepat anrop med samma nyckel returnerar det cachade
+  resultatet istället för att köra på nytt. Inbyggd i `server.py`'s `_audited`-knutpunkt (samma
+  ställe som audit/timeline/sökindex redan hakar in), så alla verktyg som går via `_tool_call`
+  eller `_audited` kan slå på det utan egen kod. Trådat genom de verktyg vars sidoeffekt är extern
+  och dyr att ångra: `email_send`, `email_create_draft`, `calendar_create`, `calendar_update`,
+  `nc_tasks_add`. Naturligt idempotenta skrivningar (överskriv-på-sökväg som `files_write`/
+  `memory_write`/`nc_files_write`, uppsert-på-id) och lågrisk-dubbletter (`backlog_add` i egen
+  git-vault) fick avsiktligt ingen nyckel — se `safety/idempotency.py`'s modul-docstring för
+  omfångsmotiveringen.
 
 ### 14. Teststrategi för den deterministiska motorn
 Eval-sviten testar *LLM:ens verktygsanrop* — men **kritisk linje-matematiken måste vara bevisat
@@ -110,9 +120,20 @@ korrekt**. Ingen kodtest-strategi specad.
 Git/markdown är portabelt, men ingen **ett-kommando-export** av all en kunds/persons data i öppna format.
 - **Åtgärd:** `memaix export` (vaults + struktur i öppna format); GDPR-portabilitet.
 
-### 16. Tidszoner — pervasivt, inte bara PM
+### 16. ✅ Tidszoner — pervasivt, inte bara PM
 "Morgon"-brief i *vems* tidszon? Kalender över TZ? Vi flaggade det för PM men det genomsyrar allt.
 - **Åtgärd:** TZ per användare; all tid normaliserad; explicit i brief/schema.
+- **Status:** brief-pipelinen hade redan detta — `notify_prefs.timezone` per användare, och
+  `scheduler.next_brief_epoch`/`deliver._in_quiet_hours`/`brief.build` konverterar konsekvent via
+  `ZoneInfo(prefs["timezone"])`. Kalendern är transparent tz-medveten (litar på tzinfo från
+  Google/CalDAV/vobject). De två verkliga bristerna var `pm/allocate.py` (`project_start`) och
+  `pm/report.py` (`variance`'s `today`), som föll tillbaka på server-lokal `date.today()` — en
+  odefinierad, container-beroende tidszon som inte har med varken användaren eller UTC att göra.
+  Båda bytta till `datetime.now(timezone.utc).date()` som ett väldefinierat, dokumenterat
+  default; `pm_variance`-verktyget fick även en explicit `today`-override (saknades helt förut,
+  till skillnad från `pm_allocate`/`pm_whatif`'s `project_start`). Frågan om PM:s "idag" borde
+  följa projektets/användarens egen lokala kalenderdag istället för UTC är en separat
+  produktbeslutsfråga, inte en bugg — lämnad öppen, inte gissad.
 
 ### 17. Webhooks / händelse-system
 Inget sätt för Memaix att *notifiera* andra system vid ändring, eller ta emot inkommande (formulär →

@@ -34,9 +34,21 @@ ovanför listan (alla projekt användaren kan se). Varje rad i Väntande-listan:
 Statusfärgkodning: `pending` = gul vänsterkant, `executed` = grön, `rejected` =
 grå, `expired` = grå med linje genom, `failed` = röd.
 
-"Godkänn" och "Avvisa"-knappar är dolda för reader (rollen som gatade åtgärden
-kräver kontrolleras server-side; client-side döljer knapparna baserat på
-`me.role_map[project]`). Reader kan fortfarande se listan och förhandsgranska.
+> **Reconciliation 2026-07 (säkerhet — MÅSTE följas):** Efter
+> säkerhetsgranskningen är utkorgen **approver-scopad server-side**. En användare
+> ser *bara* de köade åtgärderna hon själv kan godkänna — `outbox_list` och
+> `outbox_get` filtrerar redan på `_can_approve_action` och `outbox_get` returnerar
+> `403` för en åtgärd användaren inte får godkänna. Det innebär att **en reader som
+> inte kan godkänna en åtgärd inte ser den alls — varken i listan eller i
+> förhandsgranskningen** (annars skulle en reader kunna läsa köade mejltexter, en
+> confused-deputy-läcka; se THREAT-MODEL.md). Tidigare formulering ("Reader kan
+> fortfarande se listan och förhandsgranska") är **struken** och får inte
+> implementeras.
+>
+> Godkännanderollen är per verktyg (`_OUTBOX_APPROVAL_ROLE` i `server.py`):
+> `email_send` → `owner`, `calendar_create`/`calendar_update` → `collaborator`,
+> övrigt → `owner` (default). Client-side är knapp-döljningen bara kosmetik ovanpå
+> det som redan filtrerats bort server-side — rita det listan faktiskt returnerar.
 
 Klick "Godkänn" → optimistisk flytt av raden till Avgjorda + spinner → `POST
 /app/api/outbox/{id}/approve` → vid konflikt (`409`): toast "Redan avgjort av
@@ -913,29 +925,42 @@ from starlette.responses import JSONResponse
 from ..acl import Acl
 from ..outbox.queue import ActionQueue
 from ..outbox.execute import execute_pending
+# Single source of truth for the approval role + the visibility filter. Do NOT
+# re-declare a second table in the web layer — reuse server.py's so the web-UI
+# and MCP surface can never drift apart.
+from ..server import _OUTBOX_APPROVAL_ROLE, _can_approve_action
 
 
 async def api_outbox_list(request: Request) -> JSONResponse:
-    """GET /app/api/outbox?project=&status=pending"""
+    """GET /app/api/outbox?project=&status=pending
+
+    Approver-scopad: returnerar bara åtgärder som *denna* användare får godkänna.
+    En reader (eller någon utan godkännanderollen för åtgärdens verktyg) ser inte
+    åtgärden alls — inte ens för förhandsgranskning (THREAT-MODEL.md)."""
     acl   = Acl.from_config()
     user  = _require_user(request)
     proj  = request.query_params.get("project") or None
     status = request.query_params.get("status") or "pending"
     q     = ActionQueue()
     projects = [proj] if proj else acl.visible_projects(user)
-    items = q.list(projects=projects, status=status)
+    items = [a for a in q.list(projects=projects, status=status)
+             if _can_approve_action(acl, user, a)]
     return JSONResponse(items)
 
 
 async def api_outbox_get(request: Request) -> JSONResponse:
-    """GET /app/api/outbox/{id}"""
+    """GET /app/api/outbox/{id}
+
+    404 om åtgärden inte finns; 403 om användaren inte får godkänna den (och
+    därmed inte får se dess innehåll)."""
     acl  = Acl.from_config()
     user = _require_user(request)
     q    = ActionQueue()
     item = q.get(request.path_params["id"])
     if not item:
         return JSONResponse({"error": "not_found"}, status_code=404)
-    acl.enforce(user, item["project"], "reader")
+    if not _can_approve_action(acl, user, item):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     return JSONResponse(item)
 
 
@@ -947,8 +972,8 @@ async def api_outbox_approve(request: Request) -> JSONResponse:
     item = q.get(request.path_params["id"])
     if not item:
         return JSONResponse({"error": "not_found"}, status_code=404)
-    required_role = _tool_required_role(item["tool"])
-    acl.enforce(user, item["project"], required_role)
+    if not _can_approve_action(acl, user, item):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     claimed = q.claim_for_decision(item["id"], "approved", user)
     if claimed is None:
         decided = q.get(item["id"])
@@ -969,8 +994,8 @@ async def api_outbox_reject(request: Request) -> JSONResponse:
     item = q.get(request.path_params["id"])
     if not item:
         return JSONResponse({"error": "not_found"}, status_code=404)
-    required_role = _tool_required_role(item["tool"])
-    acl.enforce(user, item["project"], required_role)
+    if not _can_approve_action(acl, user, item):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     claimed = q.claim_for_decision(item["id"], "rejected", user)
     if claimed is None:
         decided = q.get(item["id"])
@@ -982,14 +1007,10 @@ async def api_outbox_reject(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-_TOOL_ROLE: dict[str, str] = {
-    "email_send":      "owner",
-    "calendar_create": "owner",
-    "calendar_update": "owner",
-}
-
-def _tool_required_role(tool: str) -> str:
-    return _TOOL_ROLE.get(tool, "owner")  # konservativt default: owner
+# Godkännanderollen per verktyg är `_OUTBOX_APPROVAL_ROLE` i server.py
+# (email_send → owner, calendar_create/update → collaborator, default owner).
+# `_can_approve_action(acl, user, action)` enforce:ar den rollen och används både
+# som synlighetsfilter (list/get) och som behörighetsgrind (approve/reject).
 ```
 
 ### 4.6 `web/api/admin.py` — Backend för admin-vyer
@@ -1062,17 +1083,32 @@ async def api_admin_audit(request: Request) -> JSONResponse:
     ok_filter: bool | None = None
     if p.get("ok") == "true":   ok_filter = True
     elif p.get("ok") == "false": ok_filter = False
-    log = AuditLog()
-    entries, total = log.query(
+    # AuditLog har ingen noll-arg-konstruktor — använd factory + explicit sökväg
+    # (gateway-nivå-audit, se safety/audit.py: for_path / MEMAIX_AUDIT_DB).
+    from pathlib import Path
+    import os
+    log = AuditLog.for_path(Path(os.environ["MEMAIX_AUDIT_DB"]))
+    limit = int(p.get("limit", 50))
+    offset = int(p.get("offset", 0))
+    # OBS: query() returnerar en `list[dict]` (INTE en (entries, total)-tupel).
+    # Ingen totalräkning finns — pagineringen är "hämta nästa offset". Vill man
+    # ha en exakt total senare: lägg till en count()-metod i AuditLog.
+    entries = log.query(
         user=p.get("user") or None,
         project=p.get("project") or None,
         tool=p.get("tool") or None,
         ok=ok_filter,
         since=p.get("since") or None,
-        offset=int(p.get("offset", 0)),
-        limit=int(p.get("limit", 50)),
+        offset=offset,
+        limit=limit,
     )
-    return JSONResponse({"entries": entries, "total": total})
+    # has_more: bad om en rad till fanns bortom sidan.
+    has_more = len(log.query(
+        user=p.get("user") or None, project=p.get("project") or None,
+        tool=p.get("tool") or None, ok=ok_filter, since=p.get("since") or None,
+        offset=offset + limit, limit=1,
+    )) > 0
+    return JSONResponse({"entries": entries, "has_more": has_more})
 
 
 async def api_admin_system(request: Request) -> JSONResponse:
@@ -1189,29 +1225,32 @@ Identiska med Fas A+B (se `FEATURE-WEB-UI-MVP.md` §7). Tilläggskonventioner:
 - **`_require_admin` i varje admin-handler.** Inte en middleware — varje handler
   anropar `_require_admin(request, acl)` explicit. Enklare att granska.
 
-### `AuditLog.query()` — förväntat kontrakt
+### `AuditLog.query()` — faktiskt kontrakt (MEX-021, redan implementerat)
+
+`safety/audit.py::AuditLog.query` finns redan och har denna signatur — bygg mot
+den, ändra den inte:
 
 ```python
 class AuditLog:
     def query(
         self,
-        *,
         user: str | None = None,
         project: str | None = None,
         tool: str | None = None,
         ok: bool | None = None,
-        since: str | None = None,   # ISO-datum, t.ex. "2026-07-01"
-        offset: int = 0,
+        since: str | None = None,   # ISO-tidsstämpel, jämförs som ts >= since
         limit: int = 50,
-    ) -> tuple[list[dict], int]:
-        """Returnera (entries, total_matching).
-        entries är lista av {ts, user, project, tool, ok, detail}.
-        detail är None eller kort felsträng — aldrig lösenord/secrets/requestbody.
+        offset: int = 0,
+    ) -> list[dict]:
+        """Returnerar en LISTA (inte en tupel) av rader, äldst först inom
+        träffmängden. Varje rad: {id, ts, user, project, tool, ok, detail}.
+        Ingen total-räkning returneras — se api_admin_audit för has_more-mönstret.
+        `detail` är kort text (t.ex. felorsak), aldrig lösenord/secrets/requestbody.
         """
 ```
 
-Om `query()` ännu inte tar `offset`/`limit` och returnerar `(list, int)`:
-uppdatera `safety/audit.py` som en del av Fas C steg 9.
+Instansiera via factory: `AuditLog.for_path(Path(os.environ["MEMAIX_AUDIT_DB"]))`
+(eller `for_vault(vault)`), aldrig `AuditLog()` direkt.
 
 ### `pollBadge` och Page Visibility — kontrakt (definierat i `app.js` Fas A)
 
@@ -1268,10 +1307,13 @@ gateway/src/memaix_gateway/
 **Utkorg:**
 
 - [ ] Utkorg-badge i sidebar visar antal väntande; poll pausar när tabben är dold.
-- [ ] `/app/outbox` listar väntande ärenden för alla synliga projekt; projektfilter
-      avgränsar listan korrekt.
-- [ ] Reader ser listan och kan förhandsgranska men saknar Godkänn/Avvisa-knappar
-      (client-side dolt och server-side 403 om POST försöks direkt).
+- [ ] `/app/outbox` listar väntande ärenden **som användaren får godkänna** för
+      alla synliga projekt; projektfilter avgränsar listan korrekt.
+- [ ] En användare som saknar godkännanderollen för en åtgärd ser den **inte** i
+      listan och får `403` från `GET /app/api/outbox/{id}` (ingen förhandsgranskning
+      av köade mejltexter för en reader — approver-scopat, THREAT-MODEL.md).
+- [ ] `GET/POST` mot en åtgärd man inte får godkänna ger `403` server-side, inte
+      bara dold knapp client-side.
 - [ ] Owner godkänner ett `email_send`-ärende → verktyget utförs exakt en gång;
       rad uppdateras till `executed`.
 - [ ] Dubbel-godkännande (race condition) → 409, toast "Redan avgjort av {user}",

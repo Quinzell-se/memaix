@@ -278,3 +278,86 @@ def test_invalid_datetime_format_raises(acl, dav):
 def test_calendar_update_modifies_event(acl, dav):
     result = calendar_update(acl, "carol", "proj", "ev-001", _dav=dav, title="Updated Standup")
     assert result["title"] == "Updated Standup"
+
+
+# ------------------------------------------------------------------
+# Outbox gate (FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+
+class _FakeOutbox:
+    def __init__(self) -> None:
+        self.enqueued: list = []
+
+    def enqueue(self, user, project, tool, args, preview, ttl_h=72):
+        self.enqueued.append((user, project, tool, args, preview))
+        return "fake-action-id"
+
+
+def test_calendar_create_review_mode_queues_instead_of_creating(acl, dav):
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    before = len(dav._events)
+    result = calendar_create(
+        acl, "carol", "proj", "Planning", "2024-06-05T10:00:00", "2024-06-05T11:00:00",
+        _dav=dav, _outbox=outbox, _cfg=cfg,
+    )
+    assert result["pending"] is True
+    assert result["action_id"] == "fake-action-id"
+    assert len(dav._events) == before  # nothing was actually created
+    assert outbox.enqueued[0][2] == "calendar_create"
+
+
+def test_calendar_create_confirmed_bypasses_outbox(acl, dav):
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    result = calendar_create(
+        acl, "carol", "proj", "Planning", "2024-06-05T10:00:00", "2024-06-05T11:00:00",
+        _dav=dav, _outbox=outbox, _cfg=cfg, _confirmed=True,
+    )
+    assert "id" in result
+    assert outbox.enqueued == []
+
+
+def test_calendar_update_review_mode_queues_instead_of_updating(acl, dav):
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    result = calendar_update(
+        acl, "carol", "proj", "ev-001", _dav=dav, _outbox=outbox, _cfg=cfg, title="New title"
+    )
+    assert result["pending"] is True
+    # The event itself is untouched.
+    assert dav._events[0]["title"] == "Standup"
+    assert outbox.enqueued[0][2] == "calendar_update"
+
+
+def test_calendar_update_confirmed_bypasses_outbox(acl, dav):
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    result = calendar_update(
+        acl, "carol", "proj", "ev-001", _dav=dav, _outbox=outbox, _cfg=cfg,
+        _confirmed=True, title="New title",
+    )
+    assert result["title"] == "New title"
+    assert outbox.enqueued == []
+
+
+def test_calendar_create_still_enforces_role_before_queueing(acl, dav):
+    outbox = _FakeOutbox()
+    cfg = {"memaix": {"outbox": {"default_mode": "review"}}}
+    with pytest.raises(AccessDenied):
+        calendar_create(
+            acl, "bob", "proj", "Meeting", "2024-06-05T10:00:00", "2024-06-05T11:00:00",
+            _dav=dav, _outbox=outbox, _cfg=cfg,
+        )
+    assert outbox.enqueued == []
+
+
+def test_allowlist_forces_review_even_in_auto_mode(acl, dav):
+    acl.projects["proj"]["allowlist"] = ["@trusted.example"]
+    outbox = _FakeOutbox()
+    result = calendar_create(
+        acl, "carol", "proj", "Ext meeting", "2024-06-05T10:00:00", "2024-06-05T11:00:00",
+        attendees=["someone@evil.example"], _dav=dav, _outbox=outbox,
+    )
+    assert result["pending"] is True

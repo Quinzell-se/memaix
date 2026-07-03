@@ -86,18 +86,32 @@ toast "Ångrat." Irreversibla åtgärder (t.ex. skickat mejl) visas med grå
    (< 8 h). Ingen server-side session-store behövs.
 
 4. **TOTP-hemligheten lagras i `acl.yaml` under `users.{uid}.totp_secret_ref`.**
-   Värdet är en `*_ref`-referens (miljövariabel eller Vaultwarden) — aldrig i
-   klartext. `config.secret()` löser den. Används bara av admin.
+   Värdet är en `*_ref`-referens — aldrig i klartext. `config.secret()` löser den.
+   Använd `file:`-schema (t.ex. `file:/run/secrets/totp_alice`, läge 0600) för
+   hemligheter som skrivs vid runtime: `env:`-refs läses bara vid processtart och
+   blir inte live förrän omstart. Används bara av admin.
 
 5. **Admin-skrivoperationer skriver till `acl.yaml` på disk via `AclWriter`.**
    En ny hjälpklass `acl_writer.py` gör atomisk skrivning (tmp-fil + rename) med
-   backup-rotation (behåller de 3 senaste). Ändringen audit-loggas och Acl-cachen
-   ogiltigförklaras (`acl._cache = None` om singleton-mönster används).
+   backup-rotation (behåller de 3 senaste). Ändringen audit-loggas.
 
-6. **Tidslinjens data är `ActionLog` från funktion #5.** `GET /app/api/timeline`
-   anropar `ActionLog.query(user, project, limit=50)`. Undo-endpoint anropar
-   `ActionLog.undo(action_id, user)` — precis samma invers-logic som MCP-verktyget
-   `action_undo`. Ingen logikduplicering.
+   > **Reconciliation 2026-07:** Den körande gatewayen cachar `Acl` i en
+   > modulglobal (`server._acl` via `_get_acl()`) — en diskskrivning syns alltså
+   > **inte** förrän cachen töms. Använd den nu tillagda `server.reload_acl()`
+   > (tömmer cachen och läser om från disk) direkt efter varje lyckad AclWriter-
+   > skrivning. Det fiktiva `acl._cache = None` finns inte — anropa `reload_acl()`.
+
+6. **Tidslinjens data kommer från ångra/tidslinje-funktionen (#5).** Ingen
+   logikduplicering — återanvänd de faktiska tool-funktionerna.
+
+   > **Reconciliation 2026-07 (fiktiva namn):** Klassen heter `ActionsStore`
+   > (`timeline/store.py`), inte `ActionLog`, och den har **ingen** `query`- eller
+   > `undo`-metod. Rätt anrop:
+   > - Lista: `ActionsStore.list(projects: list[str], limit=50)` (samma som MCP-
+   >   verktyget `timeline_list`). Filtrera projekt via `acl.visible_projects(user)`.
+   > - Ångra: den fristående funktionen `timeline.undo.undo(store, acl, user, action_id)`
+   >   (samma som MCP-verktyget `timeline_undo`) — den enforce:ar samma roll som
+   >   originalåtgärden krävde. Anropa den, dubblera inte inverslogiken.
 
 7. **Faser är addativa — ingen befintlig kod rivs.** Fas D lägger till nya routes,
    nya HTML-sidor och ny JS utan att modifiera Fas A–C-kod (utöver att lägga till
@@ -128,8 +142,8 @@ POST /app/api/admin/…    ──► web/api/admin_write.py
                              AclWriter / NotifyStore / …
                              audit_log(user, "admin_*", …)
 
-GET /app/api/timeline    ──► ActionLog.query()            [funktion #5]
-POST /app/api/timeline/{id}/undo ──► ActionLog.undo()    [funktion #5]
+GET /app/api/timeline    ──► ActionsStore.list()          [funktion #5]
+POST /app/api/timeline/{id}/undo ──► timeline.undo.undo() [funktion #5]
 
 /app/admin/mfa           ──► TOTP-formulär
 POST /app/admin/mfa/verify ► TOTP.verify() → sätter mfa-cookie
@@ -313,6 +327,18 @@ class AclWriter:
         """tmp-fil + os.replace; bevarar 3 backuper (.bak1/.bak2/.bak3)."""
 ```
 
+**Kill-switch fungerar redan i kärnan (MEX-025-beroende, klart):** `acl.py::enforce`
+nekar nu en användare med `disabled: true` allt (även admin) och `Acl.is_disabled`
+finns. `set_user_disabled` behöver alltså bara skriva flaggan + anropa
+`server.reload_acl()` — men **måste** ha en lockout-spärr:
+
+- En admin får **inte** avaktivera sig själv.
+- Den **sista aktiva admin:en** får inte avaktiveras (annars kan ingen slå på
+  någon igen utan manuell acl.yaml-redigering).
+
+Returnera `409 last_admin` / `409 self_disable` från web-routen om spärren träffar.
+Efter varje skrivning: `server.reload_acl()` så flaggan slår igenom direkt.
+
 ### 4.4 MFA — `web/pages/admin-mfa.html` + `web/api/mfa.py`
 
 **Cookie-schema:**
@@ -346,9 +372,24 @@ Gå till setup." med länk till `/app/admin/mfa/setup`.
    format `otpauth://totp/Memaix:{user}?secret=...`).
 3. Visar 6-siffrigt bekräftelsefält — användaren verifierar att appen fungerar
    innan hemligheten sparas.
-4. `POST /app/admin/mfa/setup {code}` — verifiera koden, spara `totp_secret_ref`
-   till `acl.yaml` via `AclWriter`. Hemligheten sparas som `env:MEMAIX_TOTP_{USER_UPPER}`
-   och miljövariabeln sätts i `.env` (med varning i UI: "Spara .env-filen").
+4. `POST /app/admin/mfa/setup {code}` — verifiera koden mot den *väntande*
+   hemligheten, spara sedan.
+
+> **Reconciliation 2026-07 (två reella buggar i enrollment):**
+>
+> 1. **Väntande hemlighet måste överleva mellan GET och POST.** MFA-sessionen är
+>    cookie-only (nyckelbeslut 3) — det finns inget server-side session-state.
+>    Bär därför den nygenererade hemligheten i en kortlivad **signerad**
+>    enrollment-cookie (`memaix_mfa_enroll`, HMAC med `HYDRA_SYSTEM_SECRET`, TTL
+>    ~10 min) och verifiera POST-koden mot *den* — annars regenereras hemligheten
+>    per request och verifieringen kan aldrig lyckas. Rensa cookien efter sparning.
+> 2. **Spara som `file:`-ref, inte `env:`.** `config.secret()` läser `env:`-refs
+>    bara vid processtart — en hemlighet skriven till `.env` vid runtime blir
+>    **inte** live förrän gatewayen startas om, så efterföljande `pyotp.TOTP(
+>    config.secret(ref))` skulle misslyckas. Spara i stället som
+>    `file:/run/secrets/totp_{user}` (0600) som `config.secret()` läser live från
+>    disk. `totp_secret_ref` i `acl.yaml` pekar på filen; skriv den via AclWriter-
+>    grannen och anropa `server.reload_acl()`.
 
 **`POST /app/admin/mfa/verify`:**
 
@@ -398,7 +439,8 @@ Drawern är ett `<aside>`-element som glider in från höger (CSS transition).
 async def api_timeline(request: Request) -> JSONResponse:
     """
     GET /app/api/timeline?project=<X>&limit=<50>
-    Anropar ActionLog.query(user, project, limit).
+    Anropar ActionsStore.list(projects, limit) — projects från
+    acl.visible_projects(user). (INTE ActionLog.query — den finns inte.)
     ACL: enforce reader (läsning av tidslinje).
     Returnerar {actions: [{id, tool, project, summary, ts, reversible,
                            irreversible_reason, undone_at}]}.
@@ -410,7 +452,8 @@ async def api_timeline(request: Request) -> JSONResponse:
 ```python
 async def api_timeline_undo(request: Request) -> JSONResponse:
     """
-    Anropar ActionLog.undo(action_id, user).
+    Anropar timeline.undo.undo(store, acl, user, action_id). (INTE
+    ActionLog.undo — använd den fristående undo()-funktionen.)
     ACL: enforce samma roll som ursprungliga åtgärden (owner för board_move,
          collaborator för memory_write etc.) — hämtas ur action-raden.
     409 om redan ångrat.
@@ -446,7 +489,7 @@ av olika implementatörer, men ordningen nedan minimerar blockerare.
    Beroende av funktion #1 (NotifyStore). Testa: `pytest tests/test_api_brief.py`.
 
 6. **Ångra-tidslinje** (`web/api/timeline.py`, `timeline-drawer.js`, board.html-tillägg).
-   Beroende av funktion #5 (ActionLog). Testa: `pytest tests/test_api_timeline.py`.
+   Beroende av funktion #5 (`ActionsStore` + `timeline.undo.undo`). Testa: `pytest tests/test_api_timeline.py`.
 
 7. **CI + docs** — kör `python -m pytest -q` från `gateway/` (allt grönt);
    `python3 scripts/check-docs-index.py`; uppdatera `docs/INDEX.md` och
@@ -533,9 +576,13 @@ tests/test_acl_writer.py:
   i klartext. Använd alltid `*_ref`-konventionen.
 - Sökresultat: `snippet` trunkeras server-side (< 200 tecken) — returnera aldrig
   hela dokumentet via sök-API.
-- Undo: verifiera att `action.user == request_user` *eller* att request-user är
-  admin, innan undo tillåts. Förhindra att en användare ångrar en annan användares
-  åtgärder (utom admin).
+- Undo: den befintliga `timeline.undo.undo()` är **roll**-scopad, inte
+  ägar-scopad — den enforce:ar samma roll som originalåtgärden krävde
+  (`_NEED_FOR_TOOL`), oavsett vem som utförde den. Webb-lagret ska anropa den som
+  den är; duplicera inte behörighetslogik i web-routen. Vill man dessutom hindra
+  att en användare ångrar en *annan* användares åtgärd (utom admin) är det en
+  ändring i `timeline/undo.undo` (så MCP och webb behåller samma regel) — inte en
+  web-only-kontroll. Specificera i så fall den ändringen separat innan den byggs.
 - Alla admin-skrivoperationer audit-loggas med `tool="admin_{operation}"`,
   `detail=f"{field}: {old} → {new}"` (aldrig hemligheter i detail).
 
@@ -571,8 +618,13 @@ search = ["sentence-transformers", "numpy"]       # redan från funktion #2
       write korrupterar aldrig produktionsfilen.
 - [ ] Tidslinje-drawer öppnas i board; reversibla åtgärder har Ångra-knapp;
       irreversibla är grå med förklaring.
-- [ ] Undo-flödet anropar `ActionLog.undo()` och audit-loggar `action_undo`; 409
+- [ ] Undo-flödet anropar `timeline.undo.undo()` och audit-loggar `action_undo`; 409
       vid dubbelångring.
+- [ ] Kill-switch: `disabled: true` gör att `acl.enforce` nekar användaren allt
+      (verifieras redan av `tests/test_acl_admin.py`); AclWriter anropar
+      `server.reload_acl()` efter skrivning och spärrar självavaktivering / sista admin.
+- [ ] MFA-enrollment: väntande hemlighet bärs i signerad cookie mellan setup-GET och
+      verify-POST; hemligheten sparas som `file:`-ref (live utan omstart), inte `env:`.
 - [ ] Inga hemligheter, TOTP-koder eller dokumentinnehåll i audit-loggar eller
       access-loggar.
 - [ ] `python -m pytest -q` från `gateway/` är grönt; inga regressions i Fas A–C.

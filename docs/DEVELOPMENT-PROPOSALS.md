@@ -22,7 +22,7 @@ kvarstående är arkitektur-/processförslag.
 | 4 | Fleranvändar-auth + ACL på board:en | Säkerhet | ✅ authz åtgärdat |
 | 5 | Enhetlig behörighets-/audit-hjälpare | Arkitektur | ✅ åtgärdat |
 | 6 | Delat tillstånd till backend (SQLite) | Arkitektur | ✅ åtgärdat |
-| 7 | Robust OAuth-konto-identitet | Bugg | 📋 föreslaget |
+| 7 | Robust OAuth-konto-identitet | Bugg | ✅ åtgärdat |
 | 8 | Härda alla externa I/O-anrop | Säkerhet | ✅ IMAP/git åtgärdat |
 | 9 | Strukturerad loggning + observability | Drift | ✅ logger åtgärdat |
 | 10 | Robust datamodell för backlog/PM | Arkitektur | ✅ åtgärdat |
@@ -110,9 +110,13 @@ token-svar innehåller ingen `email` (den ligger i `id_token`). Alla Google-
 konton lagras därför under nyckeln `linked-google` → ett andra konto skriver
 över det första, och `account_list` visar platshållaren.
 
-**Åtgärd.** Avkoda `id_token` (eller anropa userinfo) för riktig e-post som
-`account_email`, så flera konton kan samexistera. Lägg till tydlig
-`needs_relink`-signal vid refresh-fel.
+**Åtgärd (gjort).** `server._get_account_email` avkodar nu `id_token`s claims
+(utan signaturverifiering — token kom redan direkt från providerns token-endpoint
+över TLS) och använder `email`/`preferred_username`/`upn`, med `sub` som andra
+fallback. Två länkade Google-konton kolliderar inte längre under samma nyckel.
+`memaix.example.yaml` uppdaterad med `openid`+`email`-scopes så providern
+faktiskt skickar med det. `needs_relink`-signalen vid refresh-fel fanns redan
+(`mark_needs_relink`).
 
 ## 8. Härda alla externa I/O-anrop
 
@@ -144,5 +148,21 @@ och board-PATCH saknar optimistisk låsning.
 **Åtgärd (gjort).** Ny `frontmatter.py` (`split` / `join` / `write_atomic`)
 används nu av `backlog.py`, `board/store.py` och `pm.py` — en parser att granska
 istället för fyra, och alla skrivningar går via temp-fil + `os.replace` (crash-
-säkra). Kvar: pydantic-schema för items och optimistisk låsning även på
-board-PATCH (MCP-verktygen har den redan).
+säkra).
+
+**Åtgärd (gjort, del 2).** `backlog_schema.py`'s `BacklogItem` validerar varje
+backlog-items form (status-enum, `value`/`complexity`/`risk` 1–5 per
+MCP-API.md) på både läsning (`_parse_item`) och skrivning (`_write_item`) i
+`tools/backlog.py` — pydantics `ValidationError` ärver `ValueError`, så
+befintliga `except (ValueError, yaml.YAMLError)`-anrop fångar den utan
+ändring. `pm/schemas.py` gör motsvarande för PM-lagrets skrivmetoder
+(`add_resource`/`add_availability`/`add_milestone`/`add_task`/`update_task`/
+`add_dependency`/`add_scenario`) — värst var `update_task(**fields)`, som
+tidigare accepterade vilket fältnamn/värde som helst; `TaskUpdate`
+(`extra="forbid"`) stänger det hålet. Gränser sattes bara där koden redan
+behandlar dem som invarianter (t.ex. `percent_complete` 0–100, som
+`pm/report.py` jämför mot 100) — odokumenterade fält som `priority` fick
+ingen påhittad övre gräns. Board-PATCH (`board/store.py`'s `write_status`)
+tog också valfri `expected_version` — samma `{"conflict": True,
+"current_version": N}`-konvention som MCP-verktygen, bakåtkompatibel eftersom
+dagens board-UI ännu inte skickar en version.

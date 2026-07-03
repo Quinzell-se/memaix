@@ -1,0 +1,35 @@
+<h1 class="page-title" data-i18n="web_admin_title">Admin</h1>
+<div class="tabs" id="admin-tabs">
+  <button class="tab tab-active" data-tab="users" data-i18n="web_admin_users">Users</button>
+  <button class="tab" data-tab="projects" data-i18n="web_admin_projects">Projects</button>
+  <button class="tab" data-tab="audit" data-i18n="web_admin_audit">Audit</button>
+  <button class="tab" data-tab="system" data-i18n="web_admin_system">System</button>
+</div>
+<div id="admin-users" class="admin-pane card"></div>
+<div id="admin-projects" class="admin-pane card" hidden></div>
+<div id="admin-audit" class="admin-pane card" hidden>
+  <form id="audit-filter" class="audit-filter">
+    <input type="text" id="audit-user" placeholder="user">
+    <input type="text" id="audit-project" placeholder="project">
+    <input type="text" id="audit-tool" placeholder="tool">
+    <select id="audit-ok">
+      <option value="">OK + fel</option>
+      <option value="true">OK</option>
+      <option value="false">Fel</option>
+    </select>
+    <input type="date" id="audit-since">
+    <button class="btn btn-primary" type="submit" data-i18n="web_admin_filter">Filter</button>
+  </form>
+  <table class="admin-table">
+    <thead><tr>
+      <th data-i18n="web_admin_when">When</th><th data-i18n="web_admin_user">User</th>
+      <th data-i18n="web_admin_project">Project</th><th data-i18n="web_admin_tool">Tool</th>
+      <th>OK</th><th data-i18n="web_admin_detail">Detail</th>
+    </tr></thead>
+    <tbody id="audit-tbody"></tbody>
+  </table>
+  <button class="btn" id="audit-more" hidden data-i18n="web_admin_more">Load more</button>
+</div>
+<div id="admin-system" class="admin-pane card" hidden></div>
+<div id="admin-denied" class="empty-state" hidden data-i18n="web_admin_denied">Admin access required.</div>
+<script src="/app/static/admin.js"></script>

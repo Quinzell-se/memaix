@@ -40,6 +40,7 @@ def _card_view(meta: dict) -> dict:
         "sprint":      meta.get("sprint") or "",
         "estimate":    meta.get("estimate"),
         "updated_at":  str(meta.get("updated_at", "")),
+        "version":     meta.get("version"),
     }
 
 
@@ -59,7 +60,7 @@ def list_backlog(vault: Path) -> list[dict]:
                 "id": p.stem, "title": f"⚠ parse error: {p.name}",
                 "category": "", "status": "inbox", "value": None,
                 "complexity": None, "risk": None, "sprint": "",
-                "estimate": None, "updated_at": "",
+                "estimate": None, "updated_at": "", "version": None,
             })
     return cards
 
@@ -82,8 +83,13 @@ def get_item(vault: Path, item_id: str) -> dict | None:
         return None
 
 
-def write_status(vault: Path, item_id: str, new_status: str) -> dict:
-    """Update item status. Raises ValueError on bad status, FileNotFoundError if missing."""
+def write_status(vault: Path, item_id: str, new_status: str, expected_version: int | None = None) -> dict:
+    """Update item status. Raises ValueError on bad status, FileNotFoundError if missing.
+
+    expected_version is optional (the board UI doesn't track it yet) — when
+    given and it doesn't match the file's current version, returns
+    {"conflict": True, "current_version": N} without writing, same
+    convention as tools/backlog.py's mutating calls."""
     if new_status not in VALID_STATUSES:
         raise ValueError(f"invalid status: {new_status!r}")
     validate_id(item_id, kind="item id")
@@ -92,9 +98,12 @@ def write_status(vault: Path, item_id: str, new_status: str) -> dict:
         raise FileNotFoundError(f"item not found: {item_id}")
     text = path.read_text(encoding="utf-8")
     meta, body = _split_fm(text)
+    current_version = int(meta.get("version", 1))
+    if expected_version is not None and current_version != expected_version:
+        return {"conflict": True, "current_version": current_version}
     old_status = meta.get("status", "")
     meta["status"] = new_status
-    meta["version"] = int(meta.get("version", 1)) + 1
+    meta["version"] = current_version + 1
     meta["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     fm.write_atomic(path, fm.join(meta, body))
     card = _card_view(meta)

@@ -89,18 +89,27 @@ toast "Återställt. Nytt commit: e4f5a6b." och laddar om filvisaren.
 
 ### 1.6 Per-user-inloggning
 
-Login-appen verifierar mot `password_hash` i `acl.yaml` per användare istället
-för den delade `MEMAIX_LOGIN_PASSWORD_HASH`. En användare som saknar `password_hash`
-kan inte logga in via webb-UI:t (MCP-tokenauth påverkas inte).
+Login-appen verifierar mot en per-user-hash (env `MEMAIX_LOGIN_PASSWORD_HASH_<USER>`
+eller `acl.yaml: users.<id>.password_hash`) istället för den delade
+`MEMAIX_LOGIN_PASSWORD_HASH`. I en fler-användaruppsättning kan en användare som
+saknar per-user-hash **inte** logga in — den delade hashen faller *inte* tillbaka
+för godtyckliga användare (impersonation-skydd, se §2 nyckelbeslut 1). MCP-tokenauth
+påverkas inte.
 
 ---
 
 ## 2. Nyckelbeslut
 
-1. **Per-user `password_hash` i `acl.yaml`.** `login-app/app.py` läser användarens
-   egen hash om den finns; faller annars tillbaka på miljövariabeln (bakåtkompat).
-   Hash-format: `bcrypt` via `passlib[bcrypt]`, samma som login-appar normalt
-   använder. Admin-CLI för att generera: `python -m memaix_gateway.cli hash-password`.
+1. **Per-user lösenord med impersonation-skydd.** Verifieringslogiken finns redan
+   implementerad och enhetstestad i `login-app/auth.py` (se §password) — bygg
+   ovanpå den, uppfinn inte en ny. Hash-format är **PBKDF2-HMAC-SHA256** (200 000
+   iterationer, `salt_hex:key_hex`), *inte* bcrypt. Per-user-hash läses från både
+   `MEMAIX_LOGIN_PASSWORD_HASH_<USER>` (env, samma konvention som board-UI:t) och
+   `acl.yaml: users.<id>.password_hash`, env först. Den **delade**
+   `MEMAIX_LOGIN_PASSWORD_HASH` gäller *bara* när exakt en användare är tillåten —
+   annars kan den inte autentisera (ett delat lösenord får aldrig logga in som en
+   *annan* tillåten användare, eftersom login-appen mintar identitet med
+   subject=username). Admin-CLI för att generera: `python -m memaix_gateway.cli hash-password`.
 
 2. **OAuth-länkflödet sker i nytt fönster, inte redirect.** Settings-sidan förblir
    öppen och pollar; inget state går förlorat. Det befintliga `/link/google` och
@@ -116,6 +125,24 @@ kan inte logga in via webb-UI:t (MCP-tokenauth påverkas inte).
    parallell implementation. Samma gäller `memory_search`, `memory_read`,
    `memory_history` och `memory_revert`. Invariant: webb-UI är ett tunt HTTP-lager
    ovanpå exakta samma tool-funktioner som MCP.
+
+   > **Reconciliation 2026-07:** `memory_search`, `memory_read`, `memory_history`
+   > och `memory_revert` finns redan i `tools/memory.py`. `memory_list` gör det
+   > **inte** ännu och måste läggas till som en tunn wrapper (första steget i denna
+   > fas) — den enforce:ar `reader` och returnerar `MemoryStore.list_all()` som
+   > redan finns:
+   >
+   > ```python
+   > def memory_list(acl: Acl, user_id: str, project: str) -> list[dict]:
+   >     """Lista alla noter i projektets vault. Returnerar [{path}]."""
+   >     acl.enforce(user_id, project, "reader")
+   >     store = _get_store(acl, project)
+   >     return [{"path": p} for p in store.list_all()]
+   > ```
+   >
+   > (`mtime` i sekvensdiagrammet nedan är best-effort — utelämna om
+   > `MemoryStore.list_all()` bara ger sökvägar; lägg annars till via `os.stat`
+   > i wrappern.)
 
 5. **Kalenderläge lagras i `acl.yaml` per projekt per användare** (under
    `users.{user}.calendar_mode.{project}`). `calendar.py`-funktionen `get_status()`
@@ -499,33 +526,39 @@ async def api_calendar_mode_set(request: Request) -> JSONResponse:
 users:
   alice:
     admin: true
-    password_hash: "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/…"  # bcrypt
+    # PBKDF2-HMAC-SHA256, format salt_hex:key_hex (INTE bcrypt).
+    password_hash: "9f8a…:c1d2…"
     oauth_subjects: [alice]
     grants:
       acme: owner
       project-a: collaborator
   bob:
-    password_hash: "$2b$12$aBcD…"
+    password_hash: "3b7c…:aa41…"
     grants:
       acme: collaborator
 ```
 
-`password_hash` är valfritt. Om det saknas: login-appen faller tillbaka på
-`MEMAIX_LOGIN_PASSWORD_HASH` (ett delat lösenord) — bakåtkompatibelt.
+`password_hash` är valfritt per användare. Alternativt sätts hashen via env
+`MEMAIX_LOGIN_PASSWORD_HASH_<USER>` (samma konvention som board-UI:t; env tar
+företräde). Den delade `MEMAIX_LOGIN_PASSWORD_HASH` gäller **endast** när exakt
+en användare är tillåten — se nyckelbeslut 1 för varför.
 
-**`login-app/app.py` — verifieringslogik:**
+**Verifieringslogiken finns redan i `login-app/auth.py`** (dependency-light,
+enhetstestad i `tests/test_login_auth.py`). Bygg inte om den — anropa den:
 
 ```python
-def verify_password(username: str, password: str, acl_cfg: dict) -> bool:
-    """Returnera True om lösenordet stämmer för användaren."""
-    user_cfg = acl_cfg.get("users", {}).get(username, {})
-    user_hash = user_cfg.get("password_hash")
-    if user_hash:
-        return bcrypt.checkpw(password.encode(), user_hash.encode())
-    # bakåtkompatibelt: delat lösenord via miljövariabel
-    shared_hash = os.environ.get("MEMAIX_LOGIN_PASSWORD_HASH", "")
-    return shared_hash and bcrypt.checkpw(password.encode(), shared_hash.encode())
+# login-app/auth.py (redan implementerad)
+def verify_password(user, provided, *, allowed_users, per_user_hashes,
+                    shared_hash, env=None) -> bool:
+    """PBKDF2-check mot rätt hash. Delad hash bara vid en tillåten användare."""
+    return pbkdf2_check(provided, password_hash_for(
+        user, allowed_users=allowed_users, per_user_hashes=per_user_hashes,
+        shared_hash=shared_hash, env=env))
 ```
+
+`login-app/app.py` laddar per-user-hashar från `acl.yaml` vid start
+(`auth.load_per_user_hashes`) och wire:ar `verify_password` mot körningens
+`ALLOWED_USERS` / `_SHARED_HASH`.
 
 **CLI för att generera hash:**
 
@@ -533,13 +566,14 @@ def verify_password(username: str, password: str, acl_cfg: dict) -> bool:
 python -m memaix_gateway.cli hash-password
 # → Lösenord: (prompt, dolt)
 # → Bekräfta: (prompt, dolt)
-# → $2b$12$LQv3c1yqBWVHxkd0LHAkCO…
-# Klistra in under users.{user}.password_hash i acl.yaml
+# → 9f8a…:c1d2…      (salt_hex:key_hex, PBKDF2-HMAC-SHA256, 200 000 iter)
+# Klistra in under users.{user}.password_hash i acl.yaml,
+# eller sätt MEMAIX_LOGIN_PASSWORD_HASH_<USER> i .env
 ```
 
-Implementeras i `gateway/src/memaix_gateway/cli.py` som ett `argparse`-subkommando.
-`passlib[bcrypt]` är redan ett beroende (login-appen). Om inte: lägg till i
-`gateway/pyproject.toml`.
+Implementeras i `gateway/src/memaix_gateway/cli.py` som ett `argparse`-subkommando
+som producerar **samma** PBKDF2-format som `auth.pbkdf2_check` förväntar (ingen
+`passlib`/bcrypt behövs — `hashlib.pbkdf2_hmac` räcker och matchar login-appen).
 
 ---
 
@@ -606,9 +640,13 @@ Bygg och verifiera i denna ordning. Varje steg ska vara självständigt grönt.
 
 **Fas B (MEX-023) — inställningar, minne, per-user-lösenord:**
 
-11. `cli.py hash-password` — generera bcrypt-hash. Manuellt test: kör CLI, klistra
-    in hash i `acl.yaml`, verifiera inloggning via `login-app`.
-12. `login-app/app.py` — per-user-hash + fallback. `pytest tests/test_login.py`.
+11. `cli.py hash-password` — generera PBKDF2-hash (`salt_hex:key_hex`, samma format
+    som `login-app/auth.py`). Manuellt test: kör CLI, klistra in hash i `acl.yaml`
+    (eller sätt `MEMAIX_LOGIN_PASSWORD_HASH_<USER>`), verifiera inloggning via `login-app`.
+12. `memory_list`-wrappern i `tools/memory.py` (ovanpå `MemoryStore.list_all()`) —
+    den saknas och måste läggas till före minnesutforskarens API. `pytest tests/test_memory.py`.
+13. `login-app/app.py` wire:ar redan `auth.verify_password`; verifieringslogiken är
+    testad i `tests/test_login_auth.py`. Lägg endast till ev. nya vy-tester här.
 13. `web/api/accounts.py` — `api_accounts_list/link/unlink`. Enhetstester med
     mockad `account.py`.
 14. `web/api/accounts.py` — kalenderläge get/set. Testa med mockad `calendar.py`.
@@ -650,12 +688,23 @@ dig själv skriva business-logik i `web/api/*.py` — flytta den till `tools/`.
 
 ### `_require_user(request)` — kontrakt
 
+> **Reconciliation 2026-07:** Tidigare utkast anropade `request.session` — men
+> gatewayen har **ingen** `SessionMiddleware` monterad och inför inte en. Webb-UI:t
+> återanvänder i stället board:ens redan befintliga, härdade signerade cookie
+> (`board/routes.py::_check_cookie` — HMAC-signerad med `HYDRA_SYSTEM_SECRET`,
+> fail-closed när board är avstängd, per-user). `/app/*` och `/board` delar alltså
+> session; `/login` för webb-UI:t är board-inloggningen (lösenord verifieras av
+> `login-app/auth.py`, se §password). Ingen server-side session store, inget nytt
+> auth-tillstånd.
+
 ```python
+from ..board.routes import _check_cookie  # HMAC-signerad, fail-closed, stateless
+
 def _require_user(request: Request) -> str:
-    """Hämta autentiserad användare från session-cookie.
-    Kastar HTTPException(401) om ej autentiserad.
+    """Autentiserad användare från den signerade board-session-cookien.
+    Kastar HTTPException(401) om cookien saknas/är ogiltig/board är avstängd.
     """
-    user = request.session.get("user")
+    user = _check_cookie(request)
     if not user:
         raise HTTPException(status_code=401, detail="not_authenticated")
     return user
@@ -734,8 +783,9 @@ gateway/src/memaix_gateway/
 
 **Fas B:**
 
-- [ ] `python -m memaix_gateway.cli hash-password` genererar bcrypt-hash som kan klistras in i `acl.yaml`.
-- [ ] Inloggning med per-user-lösenord fungerar; fallback till delat lösenord om `password_hash` saknas.
+- [ ] `python -m memaix_gateway.cli hash-password` genererar en PBKDF2-hash (`salt_hex:key_hex`) som kan klistras in i `acl.yaml` eller sättas som `MEMAIX_LOGIN_PASSWORD_HASH_<USER>`.
+- [ ] Inloggning med per-user-lösenord fungerar. Delad hash faller tillbaka **endast** vid exakt en tillåten användare; i fler-användarläge nekas en användare utan egen hash (impersonation-skydd).
+- [ ] `memory_list` finns i `tools/memory.py` och används av `/app/api/memory/notes` (ingen parallell implementation).
 - [ ] Flik Konton: alla tre statusdotar (linked/needs_relink/not_linked) visas korrekt.
 - [ ] "Koppla Google" → nytt fönster öppnas, poll startar, statusdot uppdateras utan sidladdning.
 - [ ] Kalenderläge-select sparar valt läge; reload visar det sparade värdet.

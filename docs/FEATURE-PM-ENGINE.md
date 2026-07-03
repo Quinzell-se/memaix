@@ -85,12 +85,14 @@ Koppla `task.backlog_id` ↔ backlog-item så PM och backlog hänger ihop.
 ## 6. Agent-lager (LLM:ens roll)
 
 MCP-prompter som guidar assistenten att använda motorn rätt:
-- `pm_plan_session(project)` — dekomponera mål → uppgifter (föreslå estimat/beroenden),
+- ✅ `pm_plan_session(project)` — dekomponera mål → uppgifter (föreslå estimat/beroenden),
   fånga resurser/tillgänglighet i klarspråk → `resource_*`/`task_*`, kör `allocate`,
   **förklara** resultat och flagga risk. Owner committar.
-- `pm_whatif_session(project)` — hjälp användaren formulera en fråga ("om vi tappar
+- ✅ `pm_whatif_session(project)` — hjälp användaren formulera en fråga ("om vi tappar
   Anna 2 veckor"), översätt till `changes`, kör `whatif`, förklara diffen.
-- `pm_review(project)` (finns) — utöka med `variance`/`utilization`/kritisk linje.
+- ✅ **`pm_weekly_review(project)`** (den befintliga prompten `pm_review` syftade på — inget
+  verktyg med exakt det namnet fanns) utökad med `pm_report`/`pm_utilization` för
+  milstolpe/varians/RAID/utnyttjande från motorn, utöver sprint-burndownen den redan gav.
 
 LLM:en räknar aldrig; den översätter avsikt → verktygsanrop och resultat → språk.
 
@@ -152,14 +154,40 @@ Lat `_get_pm()`. Verktygen i §5 via `_tool_call` (planändring enforce:ar owner
 resource_add→task_estimate→allocate→utilization-flöde; `whatif` returnerar diff utan
 att röra committed; reader nekas `allocate`/`plan_commit`.
 
+✅ **`pm_report(kind, audience)`** (v2): rollup över milstolpar/varians/RAID/
+utnyttjande — beräknar inget nytt, paketerar bara vad `variance`/`list_milestones`/
+`pm_raid_list` redan producerar. `kind="status"` (default) buntar
+milstolpar+varians+RAID; `kind="utilization"` kräver `scenario_id`+period (för att
+den, till skillnad från de andra, inte har ett förnuftigt utan-parametrar-default).
+`audience="leadership"` kondenserar till försenade milstolpar + hög/kritisk
+RAID-poster; `"team"` (default) ger allt. Hittade och fixade i förbifarten: `_parse_raid`s
+fältregex i `tools/pm.py` läckte en tom fälts värde in i nästa fält (`\s*` åt över
+radbrytningen) — aldrig testat tidigare eftersom inga befintliga tester round-trippade
+RAID-fält genom markdown.
+
 ### Steg 6 — Agent-prompter
-`pm_plan_session`, `pm_whatif_session`; utöka `pm_review`. Prompterna instruerar
-LLM:en att **aldrig räkna själv** utan kalla motorn och förklara. **Test:** prompt-
-strängar innehåller determinismgräns-instruktionen och rätt verktygsordning.
+✅ `pm_plan_session`, `pm_whatif_session`; `pm_weekly_review` utökad. Prompterna
+instruerar LLM:en att **aldrig räkna själv** utan kalla motorn och förklara.
+**Test** (`tests/test_pm_agent_prompts.py`): prompt-strängar innehåller
+determinismgräns-instruktionen och rätt verktygsordning.
 
 ### Steg 7 — (valfritt) CP-SAT
-`pm/allocate_cpsat.py` bakom `pm`-extran; välj heuristik/CP-SAT via config. **Test**
-hoppas om `ortools` saknas (`pytest.importorskip`).
+✅ `pm/allocate_cpsat.py`, bakom `pm`-extran (`pip install "memaix-gateway[pm]"`);
+`tools/pm_engine.py`'s `_resolve_allocator` väljer heuristik/CP-SAT via
+`memaix.yaml`'s `pm.allocator` (default `heuristic`, aldrig importerar `ortools`
+om inte `cpsat` faktiskt valts). Samma uppdelning som heuristiken:
+`schedule.compute_schedule()` ger fortfarande den resurs-agnostiska kritiska
+linjen oförändrad — CP-SAT löser bara VEM+NÄR som en optimering (minimerar
+makespan) istället för en girig placering, via OR-Tools intervall-variabler +
+`NoOverlap` per resurs. v1-omfång smalare än heuristikens, uttalat: hel-dag
+resurs-exklusiv upptagning (ingen delad dags-kapacitet mellan flera små
+uppgifter, till skillnad från heuristiken), tillgänglighetsundantag omodellerade
+(samma förenkling som `schedule.py`'s bas-CPM redan gör), ren
+makespan-minimering (kostnadsminimering/resursutjämning är fortsatt
+"Framtida arbete", inte v1). **Test** (`tests/test_pm_allocate_cpsat.py`,
+`tests/test_pm_allocator_config.py`): hoppas om `ortools` saknas
+(`pytest.importorskip`) — inte installerat i CI, samma konvention som
+`search`-extrans `sentence-transformers`.
 
 ### Steg 8 — Config + docs
 `memaix.example.yaml`: `pm.allocator: heuristic|cpsat`. Registrera doket i
@@ -169,13 +197,17 @@ hoppas om `ortools` saknas (`pytest.importorskip`).
 `cd gateway && python -m pytest -q` + `python3 scripts/check-docs-index.py`.
 
 ### Acceptanskriterier (speglar PM-PLANNING-ENGINE.md)
-- [ ] Resurser modelleras med kapacitet, tillgänglighet och kompetens.
-- [ ] Allokering respekterar kapacitet + kompetens + beroenden, deterministiskt.
-- [ ] Kritisk linje beräknas exakt (forward/backward pass); cykler avvisas.
-- [ ] What-if visar konsekvens (kritisk linje/milstolpe/konflikter) diffad mot baseline, utan att röra committed plan.
-- [ ] Uppföljning visar varians plan vs utfall; utnyttjandegrad mot kapacitet.
-- [ ] All beräkning i kod; LLM endast gränssnitt; `plan_commit` kräver owner och loggas.
-- [ ] Saknade estimat/tillgänglighet flaggas som osäkerhet — inga gissade datum; hela sviten + docs-index grön.
+- [x] Resurser modelleras med kapacitet, tillgänglighet och kompetens.
+- [x] Allokering respekterar kapacitet + kompetens + beroenden, deterministiskt
+      (både heuristiken och CP-SAT-alternativet).
+- [x] Kritisk linje beräknas exakt (forward/backward pass); cykler avvisas.
+- [x] What-if visar konsekvens (kritisk linje/milstolpe/konflikter) diffad mot baseline, utan att röra committed plan.
+- [x] Uppföljning visar varians plan vs utfall; utnyttjandegrad mot kapacitet; `pm_report` buntar
+      ihop bådadera plus milstolpar/RAID för valfri publik.
+- [x] All beräkning i kod; LLM endast gränssnitt (agent-prompterna instruerar detta explicit);
+      `plan_commit` kräver owner och loggas.
+- [x] Saknade estimat/tillgänglighet flaggas som osäkerhet — inga gissade datum; hela sviten (748
+      tester) + docs-index grön.
 
 ---
 

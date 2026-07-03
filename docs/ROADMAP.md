@@ -42,10 +42,10 @@ Grunden att bygga tryggt på.
 
 ## Fas 1 — Förtroende-grund 🔨
 Gör det säkert att låta agenten göra mer — *innan* den blir proaktiv.
-- 📋 **#3 Utkorg** — [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md)
-- 📋 **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md)
-- 📋 **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
-- 📋 **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
+- ✅ **#3 Utkorg** — [FEATURE-APPROVAL-OUTBOX.md](FEATURE-APPROVAL-OUTBOX.md) (backend+MCP+board-API klart; board.html-panel kvarstår)
+- ✅ **#5 Ångra & tidslinje** — [FEATURE-UNDO-TIMELINE.md](FEATURE-UNDO-TIMELINE.md) (v1: memory_write/append, calendar_create, backlog_add, board_move; fältnivå-undo för backlog_set_status/score/comment/calendar_update kräver pre-image-fångst och är kvar)
+- ✅ **#6-L0 Förmåge-register + coverage-test** — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (L1–L3 klart i Fas 3, se nedan)
+- ✅ **kod #7 OAuth-konto-identitet** (riktig e-post) — [DEVELOPMENT-PROPOSALS.md](DEVELOPMENT-PROPOSALS.md) §7
 
 **Varför nu:** utkorg + ångra gör autonomin trygg; registret är billigt och allt
 efteråt registrerar sig i det (annars faller coverage-testet); riktig konto-
@@ -53,8 +53,8 @@ identitet krävs för per-user mail/kalender.
 **DoD:** utgående åtgärder kan gate:as och godkännas; skrivande åtgärder kan ångras;
 varje MCP-verktyg är täckt av registret; flera Google-konton kan samexistera.
 
-## Fas 2 — Minne & intelligens 📋
-- 📋 **#2 Semantisk sökning / RAG** — [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md)
+## Fas 2 — Minne & intelligens ✅
+- ✅ **#2 Semantisk sökning / RAG** — [FEATURE-SEMANTIC-SEARCH.md](FEATURE-SEMANTIC-SEARCH.md) (hybrid FTS5+vektor, hooks för memory/backlog/files, live mail-fusion; `local`-embedder är valfri extra — `none` ger FTS5-only)
 
 **Varför nu:** retrieval-lagret återanvänds av brief, PM-agent och upptäckbarhet —
 störst hävstång. Bara `frontmatter` (klart) som beroende.
@@ -62,9 +62,9 @@ störst hävstång. Bara `frontmatter` (klart) som beroende.
 indexet färskt; degraderar till FTS5 utan embedder.
 
 ## Fas 3 — Proaktivitet 📋
-- 📋 **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md)
-- 📋 **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md)
-- 📋 **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md)
+- ✅ **#1 Brief + scheduler** — [FEATURE-PROACTIVE-BRIEF.md](FEATURE-PROACTIVE-BRIEF.md) (store/kanaler/BriefBuilder/leverans/scheduler/MCP-yta klart; live kalender-fusion i sökningen och FreeBusy/iCal-brief-täckning kvarstår)
+- ✅ **#4 Automationsregler** — [FEATURE-AUTOMATION-RULES.md](FEATURE-AUTOMATION-RULES.md) (motor + internal/webhook-triggers + standing instructions klart; live mail-poll och schedule-cron-triggers kvarstår — `rule_test` täcker dry-run för alla triggertyper under tiden)
+- ✅ **#6-L1/L2/L3 Guide** (tur, `memaix_help`, knuffar) — [FEATURE-DISCOVERABILITY.md](FEATURE-DISCOVERABILITY.md) (`build_tour` i onboarding, `capabilities`/`memaix_help`/`memaix://capabilities`, `next_suggestion`-knuffar klart; board-panelen (§8) är ren frontend-polish och kvarstår, som outkorgens board.html-panel)
 
 **Beroenden:** #1 bygger den generiska schemaläggaren som #4 återanvänder; #4:s
 utgående åtgärder går **alltid** via Utkorgen (#3); guiden visar nu riktiga
@@ -73,12 +73,105 @@ utlöses av schedule/mail/webhook/internal och kör en gång; "vad kan du göra?
 överblick → drill-down.
 
 ## Fas 4 — Ekosystem & fördjupning 📋
-- 📋 **Connector-ramverk** — [FEATURE-CONNECTOR-FRAMEWORK.md](FEATURE-CONNECTOR-FRAMEWORK.md)
+- ✅ **Connector-ramverk (grund)** — [FEATURE-CONNECTOR-FRAMEWORK.md](FEATURE-CONNECTOR-FRAMEWORK.md)
   *(realiserar adaptermodellen i [BACKENDS.md](BACKENDS.md) som en pluggbar SDK)*
-- 📋 **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
-  *(beror på connector-ramverket)*
-- 📋 **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
-  *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))*
+  `connectors/base.py` (kapabilitets-protokoll) + `connectors/registry.py`
+  (`ConnectorSpec`/`ConnectorRegistry.get` med `shared`/`per_user`-auth) +
+  `connectors/catalog.py` (registrerar dagens `imap`/`caldav`) klart och
+  testat isolerat. ✅ **Mail-cutover:** `email_list`/`email_read`/
+  `email_search`/`email_create_draft` går nu via `registry.get(...,"mail",user)`
+  istället för att bygga `_make_mailbox` direkt (`email_send`s SMTP är inte en
+  registrerad kapabilitet, orörd). **Kvar (avsiktligt skjutet upp, inte
+  bortglömt):** `calendar_*`'s cutover — `_resolve_calendar_dav` har en
+  3-vägs per-användare auth-prioritetskedja (Google-OAuth → iCal-hemlighet →
+  FreeBusy → statisk CalDAV) som inte passar registrets
+  en-typ/en-auth-läge-`get()`-form utan att utöka den; en fokuserad egen
+  migrering, inte en mekanisk omkoppling som mail var. `files_*` (lokal vault)
+  migreras **aldrig** hit — `"files"`-kapabiliteten är redan upptagen av
+  Nextcloud-WebDAV (`nc_files_*`), och vault:en har en helt annan
+  resursform (bar sökväg, inte `{type,url,...}`); se `connectors/registry.py`'s
+  docstring. ✅ **Microsoft Graph mail (första nya externa adapter):**
+  `connectors/adapters/mail_microsoft.py`'s `GraphMailAdapter`, `auth="per_user"` — ett
+  projekt sätter `mailbox.type: microsoft`, gatewayen använder den inloggade användarens
+  egna länkade `microsoft`-konto (redan byggda `account_link`-flödet), med
+  token-uppdatering (`server._ensure_fresh_microsoft_mail_token`) innan registret läser
+  den. Byggd utan att röra `tools/email.py` — bevis på pluggbarhet. v1: läsning +
+  utkast-skapande, `email_send` kvar på SMTP.
+- ✅ **Nextcloud som förstklassig backend** — [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md)
+  *(beror på connector-ramverket)* — ✅ **Contacts (CardDAV)**:
+  `connectors/adapters/contacts_carddav.py` + `contacts_search`/`contacts_get`.
+  ✅ **Files (WebDAV)**: `connectors/adapters/files_webdav.py` (PROPFIND/GET/PUT,
+  path-traversal blockerad via `paths.validate_relative_path`) + nya
+  `nc_files_list/read/write/search`-verktyg + indexeringshook (`nc_files_write` →
+  sökbar via `search_all` under en egen `source_type='nc_file'`, skild från lokala
+  `file` så källhänvisningen alltid visar rätt backend). Medveten designbeslut: en
+  **egen** `files:`-resurs i acl.yaml, inte samma som `vault:` — vaulten är en ren
+  sökväg-sträng som hela kodbasen (minne/backlog/PM/onboarding/...) redan förutsätter,
+  medan Nextcloud-filer är en *tillkommande* källa nås via nya verktyg, aldrig genom
+  att koppla om `files_*`. ✅ **Tasks (CalDAV VTODO)**: `connectors/adapters/
+  tasks_caldav.py` (samma PROPFIND+vobject-mönster som Contacts/Files) +
+  `nc_tasks_list/add/complete`. Egen `tasks:`-resurs, skild från `calendar:`
+  trots att båda defaultar till `type: caldav` — en uppgiftslista och en
+  händelsekalender är oftast olika CalDAV-collections. *Nedprioriterat på
+  användarens begäran:* Talk (notiskanal). ✅ **Deck-synk**: `connectors/
+  adapters/deck_nextcloud.py` (Decks JSON-REST-API, inte ett öppet DAV-
+  protokoll) + `nextcloud/sync.py::deck_sync` — nya Deck-kort blir backlog-
+  items (id-koppling `deck_card_id` i frontmatter); drift sedan senaste synk
+  (`deck_synced_at`-baslinje) upptäcks per sida; ändrar bara en sida vinner
+  den sidan, ändrar båda blir det en **konflikt** som loggas och löses med
+  "senast ändrad vinner". v1 synkar bara titel+beskrivning (inte etiketter/
+  förfallodatum/tilldelning — en uttalad avgränsning). ✅ **Notes-synk**:
+  `connectors/adapters/notes_nextcloud.py` (samma JSON-REST-mönster som Deck)
+  + `nextcloud/sync.py::notes_sync` — samma konfliktregel som Deck-synken,
+  men eftersom minnesanteckningar (till skillnad från backlog-items) saknar
+  frontmatter/metadata-plats lever länken+baslinjen i en egen liten
+  `NotesLinkStore` (SQLite) istället för i filen själv. Nya Nextcloud-
+  anteckningar blir `notes/<slug>.md`. ✅ **Dokumentgenerering**:
+  `nc_generate_report` kör `pm_report()` och skriver resultatet som en riktig
+  `.odt`-fil (`nextcloud/docgen.py::render_odt`, hand-byggd zip+XML — inget
+  nytt beroende för något så här smalt) till projektets Nextcloud-filer via
+  en ny `write_binary` på `WebDavFilesAdapter` (`write_file`s `str`-typ hade
+  förstört ODT:ns binära data). Lägst prioriterat enligt specen själv, och
+  sista biten kvar av Nextcloud-specen. **Nedprioriterat på användarens
+  begäran, inte glömt:** Talk (notiskanal) — ingen `ChatBackend` finns än.
+- ✅ **PM-planeringsmotor + agent** — [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md)
+  *(bygger [PM-PLANNING-ENGINE.md](PM-PLANNING-ENGINE.md) + [PM-DATA-MODEL.md](PM-DATA-MODEL.md))* —
+  ✅ **Kärnmotorn (steg 1–3) + MCP-yta**: `pm/store.py` (fullt schema från
+  PM-DATA-MODEL.md, cykel-avvisning på `dependency`), `pm/schedule.py`
+  (kritisk linje: forward/backward pass, FS/SS/FF/SF + lag, cykel → tydligt
+  fel), `pm/allocate.py` (prioritetsbaserad list-scheduling: kompetens +
+  kapacitet + tillgänglighet + beroenden, deterministisk och idempotent),
+  `pm/report.py` (`utilization`, `variance`). Verktyg:
+  `resource_add/list/availability/set_skill`, `milestone_add`, `task_add/
+  estimate/log_actual`, `dependency_add`, `scenario_add/list`,
+  `pm_allocate`, `pm_utilization`, `pm_variance`, `plan_commit` — RBAC per
+  PM-AGENT.md (planändring = owner). **Medvetet bortvalt v1:** `task_assign`
+  (schemat har inget fält för manuell override — allokering är alltid
+  motor-beräknad, matchar "LLM:en räknar aldrig"); kalender är
+  arbetsdag-agnostisk (ingen helg/röd dag-modell ännu).
+  ✅ **What-if-scenarier**: `pm/whatif.py::whatif` + verktyget `pm_whatif`
+  (collaborator, eftersom den aldrig rör den committade planen) — klonar
+  bas-scenariot till ett nytt `kind='whatif'`, lägger ändringarna som
+  `scenario_change`-rader (samma overlay `allocate.py` redan läser: uppgifts-
+  estimat/prioritet/kompetenskrav, resurs på/av), kör om motorn på klonen,
+  och diffar resultatet mot bas-scenariots *redan lagrade* schema/allokering
+  — rör alltså aldrig bas-scenariot. Diffen pekar ut ändrad slutdatum/
+  kritiskhet per uppgift, ändrad resurstilldelning, och förskjutna
+  milstolpar. Detta är den kontrollerade "vad händer om"-vägen — i
+  kontrast mot att redigera schemat direkt för hand, vilket fortfarande
+  inte går (se ovan).
+  ✅ **PM v2**: `pm_report(kind, audience)` — rollup av milstolpar/varians/RAID/
+  utnyttjande, inget nyberäknat (hittade och fixade i förbifarten en
+  `_parse_raid`-regexbugg som läckte tomma fälts värden in i nästa fält).
+  Agent-prompter `pm_plan_session`/`pm_whatif_session` (+ `pm_weekly_review`
+  utökad) som guidar LLM:en genom motorn utan att den någonsin räknar
+  själv. `pm/allocate_cpsat.py` — valfri OR-Tools CP-SAT-allokerare bakom
+  `pm`-extran, vald via `memaix.yaml`'s `pm.allocator: heuristic|cpsat`;
+  samma kritiska-linje-lager som heuristiken, löser bara
+  resurstilldelningen som en makespan-minimerande optimering (intervall-
+  variabler + `NoOverlap` per resurs) istället för girig placering — smalare
+  v1-omfång än heuristiken (hel-dag resurs-exklusiv upptagning, inga
+  tillgänglighetsundantag), uttalat i modulens docstring.
 
 **Varför sist:** störst värde när kärnan är stabil, sökbar och säker. PM-motorn
 kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
@@ -88,11 +181,33 @@ kan dock byggas parallellt med fas 2–3 eftersom den är fristående.
 ---
 
 ## Tvärgående (löpande)
-- **Kvalitetsgrindar:** `ruff` / `mypy` / `bandit` som CI-steg (DEVELOPMENT-PROPOSALS #3, nästa steg).
+- ✅ **Kvalitetsgrindar:** `ruff` / `mypy` / `bandit` som separata CI-gate-steg (DEVELOPMENT-PROPOSALS #3).
+  Alla tre körs rent (0 findings) mot hela `gateway/src/memaix_gateway`. Genuina fynd åtgärdades i
+  koden (defusedxml för Nextcloud-XML-parsning, None-säkring av SMTP/IMAP-lösenord, explicita
+  typannoteringar/asserts för mypy); accepterade-per-design-mönster (best-effort try/except,
+  `/tmp`-defaultsökvägar, git-subprocess med listargument, interna invarant-asserts) är
+  dokumenterat skippade i `gateway/pyproject.toml`'s `[tool.bandit]`-sektion. De sju SQL-frågor som
+  bygger platshållar-antal via f-strängar (alla värden parametriserade) har individuella
+  `# nosec B608`-kommentarer med motivering.
 - **Skala:** Redis-backend bakom rate-limit/state-gränssnittet när fler workers behövs (#6).
-- **Datarobusthet:** pydantic-schema för backlog/PM-items (#10, nästa steg).
-- **Tidszoner:** normalisera all tid till UTC, visa i användarens tz (OPEN-GAPS #16) — berör brief, kalender, PM.
-- **Idempotens:** idempotensnycklar för alla skrivande verktyg (OPEN-GAPS #13) — delvis löst i #1/#3/#4.
+- ✅ **Datarobusthet:** `backlog_schema.py`'s `BacklogItem` validerar varje backlog-items form
+  (status-enum, `value`/`complexity`/`risk` 1–5) på läsning och skrivning i `tools/backlog.py`;
+  `pm/schemas.py` validerar PM-lagrets skrivmetoder, framför allt `update_task(**fields)` som
+  tidigare accepterade vilket fältnamn/värde som helst (`TaskUpdate` med `extra="forbid"` stänger
+  det). Board-PATCH fick också valfri `expected_version`-låsning (samma konvention som
+  MCP-verktygen) — se DEVELOPMENT-PROPOSALS #10.
+- ✅ **Tidszoner:** brief-pipelinen (`notify_prefs.timezone` + `scheduler`/`deliver`/`brief`) var
+  redan korrekt tz-medveten per användare, och kalendern litar transparent på tzinfo från
+  Google/CalDAV. De faktiska bristerna var `pm/allocate.py`/`pm/report.py`'s fallback till
+  server-lokal `date.today()` — bytt till `datetime.now(timezone.utc).date()`; `pm_variance`
+  fick även en `today`-override den saknade helt (OPEN-GAPS #16).
+- ✅ **Idempotens:** `safety/idempotency.py`'s `IdempotencyStore` cachar resultatet av en lyckad
+  körning per (användare, verktyg, idempotency_key) och är inbyggd i `server.py`'s `_audited`-
+  knutpunkt — ett upprepat anrop (t.ex. AI:n retrear efter nätverksglapp) returnerar det cachade
+  resultatet istället för att upprepa sidoeffekten. Trådat genom `email_send`,
+  `email_create_draft`, `calendar_create`, `calendar_update`, `nc_tasks_add` — verktygen med en
+  extern, dyr-att-ångra sidoeffekt (OPEN-GAPS #13). Naturligt idempotenta skrivningar
+  (överskriv-på-sökväg, uppsert-på-id) och lågrisk-dubbletter (`backlog_add`) behöver ingen nyckel.
 
 ## Rekommenderad MVP-lansering
 **Fas 0–2 + #1** ger säker autonomi, minne och en morgonbrief — en meningsfull

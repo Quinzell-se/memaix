@@ -15,6 +15,10 @@ auth:
 #     client_id: "YOUR_GOOGLE_CLIENT_ID"
 #     client_secret_ref: "env:GOOGLE_CLIENT_SECRET"
 #     scopes:
+#       # openid+email are required so the id_token carries a real email —
+#       # without them every linked Google account collides under one key.
+#       - "openid"
+#       - "email"
 #       - "https://www.googleapis.com/auth/calendar"
 #       - "https://www.googleapis.com/auth/gmail.readonly"
 #       - "https://www.googleapis.com/auth/gmail.compose"
@@ -22,9 +26,52 @@ auth:
 #     client_id: "YOUR_AZURE_APP_CLIENT_ID"
 #     client_secret_ref: "env:MICROSOFT_CLIENT_SECRET"
 #     scopes:
+#       - "openid"
+#       - "email"
 #       - "Calendars.ReadWrite"
 #       - "Mail.Read"
 #       - "offline_access"
+
+# outbox:
+#   default_mode: "auto"   # 'auto' (default) | 'review' — global fallback when a
+#                          # project doesn't set its own acl.yaml `outbox:` mode.
+
+# brief:
+#   enabled: true                  # global switch for the scheduler (default true);
+#                                  # each user still opts in separately via brief_configure
+#   default_timezone: "Europe/Stockholm"
+#   send_when_empty: true          # send even when there's nothing new to report
+#   max_mail: 5                    # unread messages shown per project
+
+# rules:
+#   # Inbound webhook triggers are served at {public_url}/hooks/{token} — the
+#   # token itself (set on the rule's trigger) is the shared secret; there is
+#   # no separate config needed here. Live mail-poll and schedule-cron trigger
+#   # sources are not yet implemented (see FEATURE-AUTOMATION-RULES.md "Framtida
+#   # arbete") — today's sources are: internal (backlog status changes) and
+#   # webhook. rule_test lets you dry-run a rule against a synthetic event of
+#   # any trigger type without a live source.
+
+# search:
+#   embedder: "local"      # 'local' | 'none' (default) — 'none' means search_all()
+#                          # still works via lexical (FTS5) search, just without
+#                          # semantic ranking. 'local' requires the optional
+#                          # sentence-transformers dependency:
+#                          #   pip install "memaix-gateway[search]"
+#   model: "intfloat/multilingual-e5-small"
+#   max_candidates: 500    # cap on vectors compared per query (cosine is done
+#                          # in Python — raise only if your vault is huge)
+
+# PM planning engine (FEATURE-PM-ENGINE.md) — resource_add/task_add/pm_allocate/
+# pm_utilization/pm_variance/plan_commit. Own SQLite DB (MEMAIX_PM_DB env var,
+# default /tmp/memaix-pm.db).
+# pm:
+#   allocator: "heuristic"  # 'heuristic' (default, no extra deps) | 'cpsat'
+#                           # (optimizes for shortest project finish date via
+#                           # OR-Tools; requires the optional dependency:
+#                           #   pip install "memaix-gateway[pm]"
+#                           # pm_allocate/pm_whatif raise a clear ImportError
+#                           # if 'cpsat' is selected without it installed)
 
 onboarding:
   enabled: true

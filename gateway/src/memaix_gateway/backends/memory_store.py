@@ -141,6 +141,10 @@ class MemoryStore:
         rows = self._conn.execute("SELECT path FROM notes ORDER BY path").fetchall()
         return [r["path"] for r in rows]
 
+    def get_updated_at(self, path: str) -> str | None:
+        row = self._conn.execute("SELECT updated_at FROM notes WHERE path = ?", (path,)).fetchone()
+        return row["updated_at"] if row else None
+
     def search(self, query: str) -> list[dict]:
         """FTS5 full-text search.  Returns [{path, snippet}]."""
         try:

@@ -13,6 +13,13 @@ _dav duck type (must implement):
   find_events(start: datetime, end: datetime) -> list[dict]  (same as list_events)
 
 For real CalDAV the adapter is inline below (_RealDavAdapter).
+
+Outbox gate:
+  calendar_create/calendar_update are routed through the approval outbox (see
+  outbox/policy.py) exactly like email_send — when action_mode() resolves to
+  'review', the call is queued and returns {"pending": True, "action_id": ...}
+  instead of touching the calendar. _confirmed=True (used by outbox.execute
+  after approval) always executes immediately.
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ class CalendarAuthRequired(Exception):
     def __init__(self, link_url: str, options: list[dict] | None = None) -> None:
         self.link_url = link_url
         self.options = options or []
-        super().__init__(f"auth_required: configure calendar via calendar_setup")
+        super().__init__("auth_required: configure calendar via calendar_setup")
 
 
 # ------------------------------------------------------------------
@@ -149,14 +156,18 @@ class _ICalAdapter:
         self._url = ical_url
 
     def _fetch(self) -> list[dict]:
+        from datetime import date, timezone
+
         import requests
         import vobject
-        from datetime import timezone, date
 
+        from ..safety.net import validate_external_url
+
+        validate_external_url(self._url)  # authoritative SSRF check before fetching the secret iCal URL
         r = requests.get(self._url, timeout=10)
         r.raise_for_status()
         cal = vobject.readOne(r.text)
-        events = []
+        events: list[dict] = []
         for component in cal.components():
             if component.name != "VEVENT":
                 continue
@@ -225,8 +236,9 @@ class _FreeBusyAdapter:
         self._api_key = api_key
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
-        import requests
         from datetime import timezone
+
+        import requests
 
         def _iso(dt: datetime) -> str:
             if not dt.tzinfo:
@@ -270,13 +282,17 @@ class _FreeBusyAdapter:
 
 class _RealDavAdapter:
     def __init__(self, acl: Acl, project: str) -> None:
-        import caldav
+        # caldav's package __init__ exposes DAVClient via a lazy PEP 562
+        # __getattr__ typed to return `object`, which makes mypy treat
+        # `caldav.DAVClient(...)` as calling a non-callable. Importing the
+        # real class from its submodule keeps the actual type.
+        from caldav.davclient import DAVClient
 
         cfg = acl.resource(project, "calendar")
         if not cfg:
             raise ValueError(f"project {project!r} has no calendar configured")
         password = config.secret(cfg.get("password_ref"))
-        client = caldav.DAVClient(
+        client = DAVClient(
             url=cfg["url"],
             username=cfg.get("user", ""),
             password=password,
@@ -438,6 +454,20 @@ def calendar_find_free(
     return free
 
 
+def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
+    """Return a {"pending": ...} dict if this action should be queued, else None."""
+    from ..outbox.policy import action_mode
+    from ..outbox.preview import render_preview
+    from ..outbox.queue import default_queue
+
+    memaix_cfg = _cfg if _cfg is not None else config.load()
+    if action_mode(memaix_cfg, acl, project, tool, args) != "review":
+        return None
+    queue = _outbox if _outbox is not None else default_queue()
+    action_id = queue.enqueue(user_id, project, tool, args, render_preview(tool, args))
+    return {"pending": True, "action_id": action_id, "note": "Väntar på godkännande i utkorgen"}
+
+
 def calendar_create(
     acl: Acl,
     user_id: str,
@@ -450,9 +480,25 @@ def calendar_create(
     description: str | None = None,
     *,
     _dav=None,
+    _confirmed: bool = False,
+    _outbox=None,
+    _cfg: dict | None = None,
 ) -> dict:
-    """Create an event.  Returns {id, title, start, end}."""
+    """Create an event.  Returns {id, title, start, end}.
+
+    Queued for approval instead of created when the outbox policy resolves
+    to 'review' (see module docstring) — unless _confirmed=True.
+    """
     acl.enforce(user_id, project, "collaborator")
+    if not _confirmed:
+        args = {
+            "title": title, "start": start, "end": end, "attendees": attendees,
+            "location": location, "description": description,
+        }
+        queued = _maybe_queue(acl, user_id, project, "calendar_create", args, _outbox=_outbox, _cfg=_cfg)
+        if queued is not None:
+            return queued
+
     start_dt = _parse_dt(start)
     end_dt = _parse_dt(end)
     import uuid as _uuid
@@ -469,10 +515,23 @@ def calendar_update(
     id: str,
     *,
     _dav=None,
+    _confirmed: bool = False,
+    _outbox=None,
+    _cfg: dict | None = None,
     **fields,
 ) -> dict:
-    """Update event fields.  Returns updated event dict."""
+    """Update event fields.  Returns updated event dict.
+
+    Queued for approval instead of applied when the outbox policy resolves
+    to 'review' (see module docstring) — unless _confirmed=True.
+    """
     acl.enforce(user_id, project, "collaborator")
+    if not _confirmed:
+        args = {"id": id, **fields}
+        queued = _maybe_queue(acl, user_id, project, "calendar_update", args, _outbox=_outbox, _cfg=_cfg)
+        if queued is not None:
+            return queued
+
     dav = _get_dav(acl, project, _dav)
     return dav.update_event(id, **fields)
 
@@ -524,6 +583,15 @@ def setup_mode(
     if mode == "ical_secret":
         if not ical_url:
             return {"ok": False, "error": "ical_url krävs för mode=ical_secret"}
+        # SSRF guard (safety/net.py): reject a URL pointing at an internal target
+        # before we ever store or fetch it. resolve=False here — config must not
+        # depend on the name resolving at set-time; the authoritative resolve
+        # happens in _ICalAdapter._fetch just before the real request.
+        from ..safety.net import BlockedURLError, validate_external_url
+        try:
+            validate_external_url(ical_url, resolve=False)
+        except BlockedURLError as exc:
+            return {"ok": False, "error": f"ical_url avvisad: {exc}"}
         store.store(user_id, "ical_secret", "ical_secret", {"ical_url": ical_url})
         return {"ok": True, "mode": "ical_secret", "stored": True}
 

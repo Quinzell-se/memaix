@@ -32,6 +32,59 @@ projects:
     # calendar:
     #   type: google
     #   auth: per_user
+    #
+    # Outbox (FEATURE-APPROVAL-OUTBOX.md): gate outgoing/hard-to-undo actions
+    # (email_send, calendar_create/update) behind human approval.
+    #   outbox: review          # 'auto' (default, unchanged behaviour) | 'review'
+    #   allowlist:               # optional — force 'review' for any recipient
+    #     - "@trusted-client.example"    # not on this list, even in 'auto' mode
+    #     - "specific@partner.example"
+    #
+    # Contacts (FEATURE-NEXTCLOUD-BACKEND.md) — enables contacts_search/contacts_get.
+    # 'type' defaults to 'carddav' (the only adapter registered today).
+    # contacts:
+    #   url: "https://cloud.example.com/remote.php/dav/addressbooks/users/acme/contacts/"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #
+    # Files (FEATURE-NEXTCLOUD-BACKEND.md) — enables nc_files_list/read/write/search.
+    # A separate resource from `vault` (the local, always-on project vault) —
+    # this is an *additional* files source, e.g. a client's shared Nextcloud
+    # folder. 'type' defaults to 'webdav' (the only adapter registered today).
+    # files:
+    #   url: "https://cloud.example.com/remote.php/dav/files/acme/Projects/acme/"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #
+    # Tasks (FEATURE-NEXTCLOUD-BACKEND.md) — enables nc_tasks_list/add/complete.
+    # A CalDAV VTODO collection — typically a *different* URL from `calendar`
+    # (a task list, not an event calendar), even though both default to
+    # 'type: caldav'. 'type' defaults to 'caldav' (the only adapter registered today).
+    # tasks:
+    #   url: "https://cloud.example.com/remote.php/dav/calendars/acme/tasks/"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #
+    # Deck (FEATURE-NEXTCLOUD-BACKEND.md) — enables deck_sync (owner only,
+    # two-way sync against the project's backlog). 'url' is the Nextcloud
+    # base URL (not a DAV path — Deck is its own REST API), plus which
+    # board/stack to sync. 'type' defaults to 'nextcloud' (the only adapter
+    # registered today).
+    # deck:
+    #   url: "https://cloud.example.com"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
+    #   board_id: 1
+    #   stack_id: 2
+    #
+    # Notes (FEATURE-NEXTCLOUD-BACKEND.md) — enables notes_sync (owner only,
+    # two-way sync against memory/ notes). 'url' is the Nextcloud base URL
+    # (Notes is its own REST API, like Deck). 'type' defaults to 'nextcloud'
+    # (the only adapter registered today).
+    # notes:
+    #   url: "https://cloud.example.com"
+    #   user: "acme@example.com"
+    #   password_ref: "env:ACME_NEXTCLOUD_APP_PASSWORD"
   project-a:
     vault: /srv/vaults/project-a
     allow_send: true

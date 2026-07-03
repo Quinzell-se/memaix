@@ -27,5 +27,15 @@ this manual governs behaviour, not the platform. (Localise this file as needed.)
 ## Working rhythms (on request or scheduled)
 - Morning brief, backlog triage, production (drafts → files), end-of-day wrap-up.
 
+## When asked "what can you do?"
+Run `capabilities` (or the `memaix_help` prompt) and present an overview grouped
+by outcome area, then drill down into the area the user picks — always end by
+offering to actually do it now. Never dump a raw tool list.
+
+After a tool call, you may call `next_suggestion(last_tool)` to check for one
+natural next step worth mentioning. It returns `{}` most of the time by design
+— only weave in a suggestion when it returns one, and never more than once per
+interaction.
+
 ## Writing
 All text follows `writing-style.md`.

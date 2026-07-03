@@ -17,6 +17,14 @@ _smtp duck type:
 
 Feature gate:
   acl.resource(project, "allow_send") must be truthy to use email_send.
+
+Outbox gate:
+  email_send is outgoing and hard to undo, so it is also routed through the
+  approval outbox (see outbox/policy.py). When action_mode() resolves to
+  'review' (project's outbox=review, global default, or an unlisted
+  recipient), the send is queued instead of executed and the call returns
+  {"pending": True, "action_id": ...}. Passing _confirmed=True (used by
+  outbox.execute after an operator approves) always executes immediately.
 """
 
 from __future__ import annotations
@@ -26,7 +34,6 @@ from email.message import EmailMessage
 
 from .. import config
 from ..acl import Acl
-
 
 # ------------------------------------------------------------------
 # Internal helpers
@@ -45,6 +52,8 @@ def _make_mailbox(acl: Acl, project: str):
 
     cfg = _mailbox_cfg(acl, project)
     password = config.secret(cfg.get("password_ref"))
+    if password is None:
+        raise ValueError(f"no password configured for mailbox (project {project!r})")
     mb = MailBox(cfg["host"])
     mb.login(cfg["user"], password)
     return mb
@@ -175,12 +184,37 @@ def email_send(
     cc: str | None = None,
     *,
     _smtp=None,
+    _confirmed: bool = False,
+    _outbox=None,
+    _cfg: dict | None = None,
 ) -> dict:
-    """Send a message via SMTP.  Requires owner + allow_send feature flag."""
+    """Send a message via SMTP.  Requires owner + allow_send feature flag.
+
+    Queued for approval instead of sent when the outbox policy resolves to
+    'review' (see module docstring) — unless _confirmed=True.
+    """
     acl.enforce(user_id, project, "owner")
     # Feature gate
     if not acl.resource(project, "allow_send"):
         raise RuntimeError("feature_disabled: allow_send is false")
+
+    if not _confirmed:
+        from ..outbox.policy import action_mode
+        from ..outbox.preview import render_preview
+        from ..outbox.queue import default_queue
+
+        args = {"to": to, "subject": subject, "body": body, "cc": cc}
+        memaix_cfg = _cfg if _cfg is not None else config.load()
+        if action_mode(memaix_cfg, acl, project, "email_send", args) == "review":
+            queue = _outbox if _outbox is not None else default_queue()
+            action_id = queue.enqueue(
+                user_id, project, "email_send", args, render_preview("email_send", args)
+            )
+            return {
+                "pending": True,
+                "action_id": action_id,
+                "note": "Väntar på godkännande i utkorgen",
+            }
 
     cfg = _mailbox_cfg(acl, project)
     smtp_cfg: dict = acl.resource(project, "smtp") or {}
@@ -200,6 +234,8 @@ def email_send(
         port = int(smtp_cfg.get("port", 587))
         user = cfg.get("user", "")
         password = config.secret(cfg.get("password_ref"))
+        if password is None:
+            raise ValueError(f"no password configured for mailbox (project {project!r})")
         with smtplib.SMTP(host, port) as s:
             s.starttls()
             s.login(user, password)

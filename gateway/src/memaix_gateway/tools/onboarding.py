@@ -25,7 +25,7 @@ DEFAULT_INTERVIEW = (
 )
 
 _FLAG_PATH = "_system/onboarding.json"
-_INCOMPLETE_TOKEN = "profil_status: ofullständig"
+_INCOMPLETE_TOKEN = "profil_status: ofullständig"  # nosec B105 -- profile-status marker, not a credential
 
 
 def _interview_template(vault: Path, cfg: dict | None = None) -> str:
@@ -47,7 +47,7 @@ def build_interview_prompt(user_id: str, vault: Path | None, cfg: dict | None = 
     """Return the full prompt text for the onboarding_interview MCP prompt."""
     template = _interview_template(vault, cfg) if vault else DEFAULT_INTERVIEW
     outro = (cfg or {}).get("memaix", {}).get("onboarding", {}).get(
-        "outro", "Tack! Sammanställ nu en kondenserad profil (löptext + punkter, inte råa svar) och anropa verktyget `onboarding_complete` med texten som `profile_content`. Hoppa inte över det steget — det är det som markerar onboarding som klar."
+        "outro", "Tack! Sammanställ nu en kondenserad profil (löptext + punkter, inte råa svar) och anropa verktyget `onboarding_complete` med texten som `profile_content`. Hoppa inte över det steget — det är det som markerar onboarding som klar."  # noqa: E501
     )
     return (
         f"{template}\n\n"
@@ -119,6 +119,56 @@ def _git_commit(vault: Path, message: str) -> None:
         ["git", "-C", str(vault), "commit", "-m", message],
         capture_output=True,
     )
+
+
+_DEFAULT_TOUR_KEYS = ("memory.remember", "mail.triage", "backlog.capture", "brief.daily")
+
+
+def build_tour(user_id: str, profile_text: str, available: list, t, max_items: int = 4) -> dict:
+    """Rank `available` capabilities against words in `profile_text` (role,
+    responsibilities, goals) via Capability.tags and return a short, localized
+    "want to try this?" tour. Falls back to a generic starter set when nothing
+    in the profile matches. See docs/FEATURE-DISCOVERABILITY.md §5.
+    """
+    text_lower = (profile_text or "").lower()
+    scored = sorted(
+        (cap for cap in available if any(tag.lower() in text_lower for tag in cap.tags)),
+        key=lambda cap: sum(1 for tag in cap.tags if tag.lower() in text_lower),
+        reverse=True,
+    )
+
+    if not scored:
+        by_key = {cap.key: cap for cap in available}
+        scored = [by_key[k] for k in _DEFAULT_TOUR_KEYS if k in by_key]
+
+    chosen = list(scored[:max_items])
+    if len(chosen) < max_items:
+        chosen_keys = {cap.key for cap in chosen}
+        for cap in available:
+            if len(chosen) >= max_items:
+                break
+            if cap.key not in chosen_keys:
+                chosen.append(cap)
+                chosen_keys.add(cap.key)
+
+    suggestions = []
+    for cap in chosen:
+        examples = t(cap.example_prompts_key)
+        example = examples[0] if isinstance(examples, list) and examples else ""
+        suggestions.append(
+            {
+                "capability_key": cap.key,
+                "title": t(cap.title_key),
+                "why": t(cap.summary_key),
+                "example": example,
+            }
+        )
+
+    return {
+        "greeting": t("tour.greeting"),
+        "suggestions": suggestions,
+        "areas": sorted({cap.area for cap in available}),
+    }
 
 
 def complete_onboarding(user_id: str, vault: Path, profile_content: str) -> dict:

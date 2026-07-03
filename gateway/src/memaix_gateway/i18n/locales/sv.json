@@ -2,7 +2,6 @@
   "_locale": "sv",
   "page_title_board": "Memaix Board",
   "page_title_login": "Memaix — Logga in",
-
   "login_heading": "Logga in",
   "login_subtitle": "Logga in med dina Memaix-uppgifter",
   "login_label_username": "Användarnamn",
@@ -12,7 +11,6 @@
   "login_error_credentials": "Fel användarnamn eller lösenord.",
   "login_error_server": "Kunde inte nå servern.",
   "login_error_session_expired": "Session utgången — logga in igen.",
-
   "board_btn_refresh": "Uppdatera",
   "board_btn_logout": "Logga ut",
   "board_no_projects": "Inga projekt.",
@@ -26,9 +24,7 @@
   "board_moved_to": "Flyttat till",
   "board_no_activity": "Ingen aktivitet ännu.",
   "activity_heading": "Aktivitet",
-
   "time_just_now": "just nu",
-
   "modal_label_id": "ID",
   "modal_label_version": "Version",
   "modal_label_created": "Skapad",
@@ -37,12 +33,307 @@
   "modal_label_value": "Värde: ",
   "modal_label_complexity": "Komp: ",
   "modal_label_risk": "Risk: ",
-
   "col_inbox": "Inkorg",
   "col_triaged": "Triagerad",
   "col_evaluated": "Utvärderad",
   "col_approved": "Godkänd",
   "col_in_dev": "Under utveckling",
   "col_done": "Klar",
-  "col_rejected": "Avvisad"
+  "col_rejected": "Avvisad",
+  "cap.memory.remember.title": "Kom ihåg saker åt dig",
+  "cap.memory.remember.summary": "Sparar anteckningar, beslut och fakta i projektminnet så inget glöms bort.",
+  "cap.memory.remember.examples": [
+    "Kom ihåg att kunden vill ha veckovisa uppdateringar",
+    "Spara dagens standup-anteckningar"
+  ],
+  "cap.memory.recall.title": "Minns vad du berättat",
+  "cap.memory.recall.summary": "Sök och läs tillbaka allt som sparats i projektminnet.",
+  "cap.memory.recall.examples": [
+    "Vad bestämde vi om deadline?",
+    "Hitta mina anteckningar från kickoff-mötet"
+  ],
+  "cap.memory.undo.title": "Ångra en minnesändring",
+  "cap.memory.undo.summary": "Återställ en minnesnot till en tidigare version.",
+  "cap.memory.undo.examples": [
+    "Ångra min senaste ändring i noten"
+  ],
+  "cap.memory.notes_sync.title": "Synka med Nextcloud Notes",
+  "cap.memory.notes_sync.summary": "Tvåvägssynk mellan din Nextcloud Notes och minnesanteckningar — nya anteckningar hämtas in, och ändringar på båda håll hålls i synk (senast ändrad vinner vid konflikt). Endast ägare.",
+  "cap.memory.notes_sync.examples": [
+    "Synka mina minnesanteckningar med Nextcloud Notes",
+    "Hämta in nya Nextcloud-anteckningar"
+  ],
+  "cap.mail.triage.title": "Hålla koll på inkorgen",
+  "cap.mail.triage.summary": "Lista, sök och läs projektets brevlåda.",
+  "cap.mail.triage.examples": [
+    "Visa olästa mejl från den här veckan",
+    "Hitta mejlet om avtalet"
+  ],
+  "cap.mail.draft.title": "Förbereda mejlutkast",
+  "cap.mail.draft.summary": "Skriver ett utkast som du kan granska innan det skickas.",
+  "cap.mail.draft.examples": [
+    "Skriv ett svarsutkast till kundens mejl"
+  ],
+  "cap.mail.send.title": "Skicka mejl åt dig",
+  "cap.mail.send.summary": "Skickar ett mejl efter ditt godkännande (endast ägare).",
+  "cap.mail.send.examples": [
+    "Skicka det godkända utkastet till kunden"
+  ],
+  "cap.calendar.view.title": "Kolla din kalender",
+  "cap.calendar.view.summary": "Lista händelser och hitta lediga tider.",
+  "cap.calendar.view.examples": [
+    "Vad har jag i kalendern imorgon?",
+    "Hitta en ledig timme den här veckan"
+  ],
+  "cap.calendar.manage.title": "Hantera kalenderhändelser",
+  "cap.calendar.manage.summary": "Skapa eller ändra kalenderhändelser.",
+  "cap.calendar.manage.examples": [
+    "Boka ett möte med teamet på torsdag"
+  ],
+  "cap.calendar.connect.title": "Koppla din kalender",
+  "cap.calendar.connect.summary": "Välj hur Memaix får åtkomst till din kalender (Google OAuth, iCal eller ledig/upptagen).",
+  "cap.calendar.connect.examples": [
+    "Koppla min Google-kalender"
+  ],
+  "cap.files.manage.title": "Jobba med projektfiler",
+  "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
+  "cap.files.manage.examples": [
+    "Lista filerna i avtalsmappen",
+    "Sök filer efter 'budget'"
+  ],
+  "cap.files.nextcloud.title": "Jobba med Nextcloud-filer",
+  "cap.files.nextcloud.summary": "Lista, läs, sök och skriv filer i projektets länkade Nextcloud — separat från projektvaulten, användbart när kundens filer finns där.",
+  "cap.files.nextcloud.examples": [
+    "Lista filerna i den delade Nextcloud-mappen",
+    "Sök våra Nextcloud-filer efter 'avtal'"
+  ],
+  "cap.tasks.nextcloud.title": "Håll koll på uppgifter i Nextcloud",
+  "cap.tasks.nextcloud.summary": "Lista, lägg till och slutför uppgifter i projektets länkade Nextcloud-uppgiftslista.",
+  "cap.tasks.nextcloud.examples": [
+    "Vad finns på min Nextcloud-uppgiftslista?",
+    "Lägg till en uppgift att följa upp med kunden",
+    "Markera fakturauppgiften som klar"
+  ],
+  "cap.backlog.capture.title": "Fånga nya idéer",
+  "cap.backlog.capture.summary": "Lägg till ett nytt item i projektets backlog.",
+  "cap.backlog.capture.examples": [
+    "Lägg till ett backlog-item för den nya funktionsönskan"
+  ],
+  "cap.backlog.review.title": "Granska backloggen",
+  "cap.backlog.review.summary": "Lista och inspektera backlog-items.",
+  "cap.backlog.review.examples": [
+    "Visa backloggen",
+    "Vad ligger fortfarande i triage?"
+  ],
+  "cap.backlog.score.title": "Poängsätta och diskutera items",
+  "cap.backlog.score.summary": "Lägg till värde-/komplexitet-/riskpoäng eller kommentarer på ett backlog-item.",
+  "cap.backlog.score.examples": [
+    "Poängsätt det här som högt värde, låg komplexitet"
+  ],
+  "cap.backlog.decide.title": "Besluta status",
+  "cap.backlog.decide.summary": "Flytta ett backlog-item till en ny status (endast ägare).",
+  "cap.backlog.decide.examples": [
+    "Godkänn det här backlog-itemet"
+  ],
+  "cap.backlog.deck_sync.title": "Synka med Nextcloud Deck",
+  "cap.backlog.deck_sync.summary": "Tvåvägssynk mellan en Nextcloud Deck-tavla och backloggen — nya kort blir backlog-items, och ändringar på båda håll hålls i synk (senast ändrad vinner vid konflikt). Endast ägare.",
+  "cap.backlog.deck_sync.examples": [
+    "Synka backloggen med vår Deck-tavla",
+    "Hämta in nya Deck-kort"
+  ],
+  "cap.pm.methodology.title": "Sätta projektmetodik",
+  "cap.pm.methodology.summary": "Konfigurera metodik och sprintkapacitet (endast ägare).",
+  "cap.pm.methodology.examples": [
+    "Sätt det här projektet till Scrum med 2-veckors sprintar"
+  ],
+  "cap.pm.sprint_plan.title": "Planera en sprint",
+  "cap.pm.sprint_plan.summary": "Committa backlog-items i en sprint (endast ägare).",
+  "cap.pm.sprint_plan.examples": [
+    "Planera nästa sprint från den godkända backloggen"
+  ],
+  "cap.pm.sprint_status.title": "Kolla sprintläget",
+  "cap.pm.sprint_status.summary": "Se burndown och kvarvarande poäng för en sprint.",
+  "cap.pm.sprint_status.examples": [
+    "Hur går den aktuella sprinten?"
+  ],
+  "cap.pm.raid_add.title": "Logga en risk eller ett problem",
+  "cap.pm.raid_add.summary": "Lägg till en Risk/Antagande/Problem/Beroende-post i projektloggen.",
+  "cap.pm.raid_add.examples": [
+    "Logga en risk om leverantörsförseningen"
+  ],
+  "cap.pm.raid_view.title": "Granska risker och problem",
+  "cap.pm.raid_view.summary": "Lista öppna RAID-poster.",
+  "cap.pm.raid_view.examples": [
+    "Vilka risker är öppna just nu?"
+  ],
+  "cap.pm.report.title": "Skapa en statusrapport",
+  "cap.pm.report.summary": "Skapar en statussammanställning från backlog, RAID och anteckningar.",
+  "cap.pm.report.examples": [
+    "Ge mig en statusrapport för det här projektet"
+  ],
+  "cap.pm.planning_engine.title": "Planera resurser och uppgifter med PM-motorn",
+  "cap.pm.planning_engine.summary": "Modellera resurser, kapacitet och uppgiftsberoenden, och beräkna sedan ett riktigt kritisk linje-schema och resursbegränsad allokering — motorn räknar, gissar aldrig; du godkänner planen.",
+  "cap.pm.planning_engine.examples": [
+    "Lägg till Anna som resurs med 6 timmars kapacitet per dag",
+    "Vad är kritiska linjen för det här projektet?",
+    "Hur utnyttjat är teamet nästa månad?",
+    "Vad händer med deadline om vi tappar Anna i två veckor?"
+  ],
+  "cap.outbox.review.title": "Granska utkorgen",
+  "cap.outbox.review.summary": "Se köade utgående åtgärder (mejl, kalenderändringar) och godkänn eller avvisa dem innan de går ut.",
+  "cap.outbox.review.examples": [
+    "Vad väntar på mitt godkännande?",
+    "Godkänn det köade mejlet"
+  ],
+  "cap.undo.timeline.title": "Ångra en nyligen utförd åtgärd",
+  "cap.undo.timeline.summary": "Se en tidslinje över senaste åtgärder och ångra de som stödjer det.",
+  "cap.undo.timeline.examples": [
+    "Vad gjorde du precis?",
+    "Ångra min senaste ändring i noten"
+  ],
+  "cap.search.ask.title": "Fråga över allt på en gång",
+  "cap.search.ask.summary": "Sök i minne, filer, backlog och mejl samtidigt — med källhänvisningar du kan lita på.",
+  "cap.search.ask.examples": [
+    "Vad lovade vi kunden om deadline?",
+    "Hitta allt om budgeten"
+  ],
+  "cap.brief.daily.title": "Få en daglig brief",
+  "cap.brief.daily.summary": "En schemalagd sammanfattning av kalender, mejl, backlog-ändringar och öppna risker, levererad till en kanal du väljer.",
+  "cap.brief.daily.examples": [
+    "Sätt upp en daglig brief åt mig kl 07",
+    "Skicka min brief nu"
+  ],
+  "cap.automation.rules.title": "Automatisera med regler",
+  "cap.automation.rules.summary": "Sätt upp \"när X händer, gör Y\"-regler som körs utan att du behöver vara där.",
+  "cap.automation.rules.examples": [
+    "När mejl kommer från en kund, lägg till det i backloggen",
+    "Visa mina automationsregler"
+  ],
+  "cap.automation.standing.title": "Sätt stående instruktioner",
+  "cap.automation.standing.summary": "Vägledning assistenten följer varje session, som \"skriv alltid på svenska\".",
+  "cap.automation.standing.examples": [
+    "Håll svaren korta",
+    "Vilka är mina stående instruktioner?"
+  ],
+  "tour.greeting": "Kul att lära känna dig! Utifrån det du berättade kan jag ta det här av dig direkt:",
+  "cap.lock.no_role": "Du har inte åtkomst till det här i något projekt än — be en projektägare lägga till dig.",
+  "cap.lock.no_mailbox": "Ingen mejlkorg är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_calendar": "Ingen kalender är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_vault": "Inget projektvalv är konfigurerat för det här än — be en admin sätta upp ett.",
+  "cap.lock.link_google": "Länka ditt Google-konto för att låsa upp det här — kör account_link('google').",
+  "cap.lock.link_microsoft": "Länka ditt Microsoft-konto för att låsa upp det här — kör account_link('microsoft').",
+  "cap.lock.no_contacts": "Ingen adressbok är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_files": "Ingen Nextcloud-filkoppling är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_tasks": "Ingen Nextcloud-uppgiftslista är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_deck": "Ingen Nextcloud Deck-tavla är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.lock.no_notes": "Ingen Nextcloud Notes-koppling är konfigurerad för det här än — be en admin sätta upp en.",
+  "cap.contacts.search.title": "Slå upp en kontakt",
+  "cap.contacts.search.summary": "Sök i din länkade adressbok (t.ex. Nextcloud) på namn, mejl, organisation eller telefonnummer.",
+  "cap.contacts.search.examples": [
+    "Vem är anna@acme.com?",
+    "Hitta telefonnumret till Erik på Acme"
+  ],
+  "web_nav_home": "Hem",
+  "web_nav_board": "Board",
+  "web_nav_outbox": "Utkorg",
+  "web_nav_memory": "Minne",
+  "web_nav_settings": "Inställningar",
+  "web_nav_admin": "Admin",
+  "web_logout": "Logga ut",
+  "web_home_title": "Hem",
+  "web_home_todo": "Att göra",
+  "web_home_todo_empty": "Inget kräver din uppmärksamhet.",
+  "web_home_projects": "Mina projekt",
+  "web_home_activity": "Aktivitet",
+  "web_todo_outbox": "åtgärder väntar på ditt godkännande",
+  "web_todo_outbox_go": "Gå till utkorgen",
+  "web_todo_relink": "konto behöver kopplas om",
+  "web_todo_relink_go": "Koppla om",
+  "web_todo_onboarding": "Onboarding-underlag saknas",
+  "web_todo_onboarding_go": "Slutför",
+  "web_open_board": "Öppna board",
+  "web_cards": "kort",
+  "web_activity_empty": "Ingen aktivitet ännu.",
+  "web_time_now": "just nu",
+  "web_time_yesterday": "igår",
+  "web_settings_title": "Inställningar",
+  "web_settings_accounts": "Kopplade konton",
+  "web_settings_accounts_empty": "Inga kopplade konton.",
+  "web_settings_link_google": "Koppla Google-konto",
+  "web_settings_link_microsoft": "Koppla Microsoft-konto",
+  "web_settings_needs_relink": "behöver kopplas om",
+  "web_settings_unlink": "Koppla från",
+  "web_settings_unlinked": "Kontot frånkopplat.",
+  "web_settings_link_started": "Slutför inloggningen i det nya fönstret.",
+  "web_settings_calendar": "Kalenderåtkomst",
+  "web_settings_calendar_active": "Aktivt läge",
+  "web_calmode_oauth": "OAuth — använd kopplat Google-konto",
+  "web_calmode_ical": "Hemlig iCal-URL (skrivskyddad)",
+  "web_calmode_freebusy": "Endast ledig/upptagen",
+  "web_calmode_none": "Ingen — ta bort kalenderkoppling",
+  "web_save": "Spara",
+  "web_saved": "Sparat.",
+  "web_memory_title": "Minne",
+  "web_memory_search": "Sök noter…",
+  "web_memory_empty": "Inga noter ännu.",
+  "web_memory_pick": "Välj en not för att visa den.",
+  "web_memory_history": "Historik",
+  "web_memory_revert": "Återställ",
+  "web_memory_revert_confirm": "Återställ filen till commit",
+  "web_memory_reverted": "Återställd.",
+  "web_outbox_title": "Utkorg",
+  "web_outbox_pending": "Väntande",
+  "web_outbox_decided": "Avgjorda",
+  "web_outbox_empty": "Inget väntar på ditt godkännande.",
+  "web_outbox_preview": "Förhandsgranska",
+  "web_outbox_approve": "Godkänn",
+  "web_outbox_reject": "Avvisa",
+  "web_outbox_reject_reason": "Orsak (valfritt)",
+  "web_outbox_reject_confirm": "Bekräfta avvisning",
+  "web_outbox_approved": "Godkänd och utförd.",
+  "web_outbox_failed": "Utförandet misslyckades.",
+  "web_outbox_rejected": "Avvisad.",
+  "web_outbox_conflict": "Redan avgjort av",
+  "web_cancel": "Avbryt",
+  "web_admin_title": "Admin",
+  "web_admin_users": "Användare",
+  "web_admin_projects": "Projekt",
+  "web_admin_audit": "Audit",
+  "web_admin_system": "System",
+  "web_admin_denied": "Kräver admin-behörighet.",
+  "web_admin_user": "Användare",
+  "web_admin_project": "Projekt",
+  "web_admin_tool": "Verktyg",
+  "web_admin_when": "Tidpunkt",
+  "web_admin_detail": "Detalj",
+  "web_admin_filter": "Filtrera",
+  "web_admin_more": "Hämta fler",
+  "web_admin_grants": "Behörigheter",
+  "web_admin_check": "Kontroll",
+  "web_admin_disabled": "avstängd",
+  "web_nav_search": "Sök",
+  "web_search_title": "Sök",
+  "web_search_go": "Sök",
+  "web_search_empty": "Inga träffar.",
+  "web_search_hits": "träffar",
+  "web_brief_title": "Daglig brief",
+  "web_brief_enabled": "Aktiverad",
+  "web_brief_next": "Nästa brief",
+  "web_timeline_title": "Tidslinje",
+  "web_timeline_empty": "Inga registrerade åtgärder.",
+  "web_timeline_undo": "Ångra",
+  "web_timeline_undone": "Ångrat.",
+  "web_timeline_undo_failed": "Ångra misslyckades.",
+  "web_timeline_conflict": "Objektet har ändrats — vägrar skriva över.",
+  "web_mfa_setup": "Aktivera MFA",
+  "web_mfa_setup_help": "Lägg till i din authenticator-app och ange 6-siffrig kod:",
+  "web_mfa_secret": "Hemlighet",
+  "web_mfa_confirm": "Bekräfta",
+  "web_mfa_enrolled": "MFA aktiverad.",
+  "web_mfa_verify": "Verifiera MFA",
+  "web_mfa_verified": "MFA verifierad i 8 h.",
+  "web_mfa_active": "MFA aktiv — skrivoperationer tillgängliga.",
+  "web_admin_enable": "Aktivera",
+  "web_admin_disable": "Stäng av",
+  "web_admin_last_admin": "Vägrade: skulle stänga av sista aktiva admin."
 }

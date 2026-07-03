@@ -86,12 +86,12 @@ def test_score_updates_fields(acl):
     r = backlog_add(acl, "carol", "proj", "Scoreable", "desc")
     item_id = r["id"]
 
-    result = backlog_score(acl, "carol", "proj", item_id, expected_version=1, value=8, complexity=3)
+    result = backlog_score(acl, "carol", "proj", item_id, expected_version=1, value=4, complexity=3)
     assert result.get("conflict") is None
     assert result["version"] == 2
 
     item = backlog_get(acl, "bob", "proj", item_id)
-    assert item["value"] == 8
+    assert item["value"] == 4
     assert item["complexity"] == 3
 
 
@@ -193,6 +193,27 @@ def test_invalid_status_raises_value_error(acl):
     r = backlog_add(acl, "carol", "proj", "title", "desc")
     with pytest.raises(ValueError):
         backlog_set_status(acl, "alice", "proj", r["id"], "INVALID", expected_version=1)
+
+
+def test_score_out_of_range_raises_value_error(acl):
+    r = backlog_add(acl, "carol", "proj", "title", "desc")
+    with pytest.raises(ValueError):
+        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+
+
+def test_score_zero_raises_value_error(acl):
+    r = backlog_add(acl, "carol", "proj", "title", "desc")
+    with pytest.raises(ValueError):
+        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, complexity=0)
+
+
+def test_corrupted_frontmatter_status_is_skipped_by_list(acl, vault):
+    r = backlog_add(acl, "carol", "proj", "title", "desc")
+    path = vault / "backlog" / f"{r['id']}.md"
+    path.write_text(path.read_text().replace("status: inbox", "status: not-a-real-status"))
+    assert backlog_list(acl, "bob", "proj") == []
+    with pytest.raises(ValueError):
+        backlog_get(acl, "bob", "proj", r["id"])
 
 
 def test_get_missing_item_raises_file_not_found(acl):

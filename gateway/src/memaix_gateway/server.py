@@ -12,30 +12,48 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
 from . import config
-from .acl import Acl
+from .acl import AccessDenied, Acl
+from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
-from .tools import files as t_files
-from .tools import whoami as t_whoami
-from .tools import memory as t_memory
-from .tools import backlog as t_backlog
-from .tools import email as t_email
-from .tools import calendar as t_cal
 from .tools import account as t_account
+from .tools import backlog as t_backlog
+from .tools import calendar as t_cal
+from .tools import contacts as t_contacts
+from .tools import email as t_email
+from .tools import files as t_files
+from .tools import memory as t_memory
+from .tools import nc_docgen as t_nc_docgen
+from .tools import nc_files as t_nc_files
+from .tools import nc_tasks as t_nc_tasks
 from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
-from .tools.calendar import CalendarAuthRequired, _PerUserGoogleAdapter, _ICalAdapter, _FreeBusyAdapter
+from .tools import pm_engine as t_pm_engine
+from .tools import whoami as t_whoami
+from .tools.calendar import CalendarAuthRequired, _FreeBusyAdapter, _ICalAdapter, _PerUserGoogleAdapter
 
 logger = logging.getLogger(__name__)
 
 _acl: Acl | None = None
 _audit: AuditLog | None = None
 _token_store: "TokenStore | None" = None  # type: ignore[name-defined]
+_outbox_queue: "ActionQueue | None" = None  # type: ignore[name-defined]
+_timeline_store: "ActionsStore | None" = None  # type: ignore[name-defined]
+_search_store: "EmbeddingStore | None" = None  # type: ignore[name-defined]
+_search_embedder = None
+_search_embedder_loaded = False
+_notify_store: "NotifyStore | None" = None  # type: ignore[name-defined]
+_rules_store: "RulesStore | None" = None  # type: ignore[name-defined]
+_nudge_state: "NudgeState | None" = None  # type: ignore[name-defined]
+_pm_store: "PMStore | None" = None  # type: ignore[name-defined]
+_notes_link_store: "NotesLinkStore | None" = None  # type: ignore[name-defined]
+_idempotency_store: "IdempotencyStore | None" = None  # type: ignore[name-defined]
 
 
 def _get_acl() -> Acl:
@@ -46,11 +64,24 @@ def _get_acl() -> Acl:
     return _acl
 
 
+def reload_acl() -> Acl:
+    """Drop the cached Acl and rebuild it from disk.
+
+    `_get_acl()` caches the Acl in a module global, so a rewrite of acl.yaml
+    (e.g. the admin UI's AclWriter, or a manual edit) is otherwise invisible to
+    the running gateway until restart. Any code path that mutates acl.yaml MUST
+    call this afterwards so the change takes effect immediately."""
+    global _acl
+    _acl = None
+    return _get_acl()
+
+
 def _get_token_store():
     global _token_store
     if _token_store is None:
-        from .backends.token_store import TokenStore
         from cryptography.fernet import Fernet
+
+        from .backends.token_store import TokenStore
         key_ref = os.environ.get("TOKEN_MASTER_KEY")
         if not key_ref:
             # In HTTP (server) mode an ephemeral key silently discards every
@@ -92,6 +123,30 @@ def _get_audit() -> AuditLog:
     return _audit
 
 
+def _get_outbox():
+    global _outbox_queue
+    if _outbox_queue is None:
+        from .outbox.queue import ActionQueue
+        db_path = Path(os.environ.get("MEMAIX_OUTBOX_DB", "/tmp/memaix-outbox.db"))
+        _outbox_queue = ActionQueue.for_path(db_path)
+    return _outbox_queue
+
+
+def _get_timeline():
+    global _timeline_store
+    if _timeline_store is None:
+        from .timeline.store import ActionsStore
+        db_path = Path(os.environ.get("MEMAIX_ACTIONS_DB", "/tmp/memaix-actions.db"))
+        _timeline_store = ActionsStore.for_path(db_path)
+    return _timeline_store
+
+
+def _http_mode() -> bool:
+    """True when the gateway is served over HTTP (vs stdio) — MEMAIX_TRANSPORT
+    or --http. In HTTP mode identity MUST come from a verified OAuth token."""
+    return os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
+
+
 def _user() -> str:
     # HTTP mode: resolve identity from the OAuth token injected by MCP SDK middleware.
     try:
@@ -104,6 +159,13 @@ def _user() -> str:
             raise RuntimeError(f"OAuth subject not mapped in acl.yaml: {token.subject!r}")
     except ImportError:
         pass
+
+    # Fail closed in HTTP mode: if we're served over HTTP but no verified OAuth
+    # subject resolved (missing token, or auth.issuer not configured), deny —
+    # never silently fall through to the MEMAIX_USER env identity, which would
+    # let an unauthenticated HTTP client act as that single user.
+    if _http_mode():
+        raise RuntimeError("no authenticated OAuth subject — refusing to identify caller in HTTP mode")
 
     # stdio fallback (Fas 1-style, backward-compatible).
     uid = os.environ.get("MEMAIX_USER", "").strip()
@@ -120,18 +182,339 @@ def _rl(user: str, project: str) -> None:
         raise RuntimeError("rate_limited: project quota exceeded")
 
 
-def _audited(user: str, project: str, tool: str, fn, *args, **kwargs):
-    """Call fn(*args, **kwargs), log result to audit, re-raise on error."""
+def _audited(user: str, project: str, tool: str, fn, *args, idempotency_key: str | None = None, **kwargs):
+    """Call fn(*args, **kwargs), log result to audit, re-raise on error.
+
+    Every tool call funnels through here (whether via _tool_call or the
+    older direct-_audited pattern used by calendar_*), which makes this the
+    single choke point for the undo/timeline recording hook below — args is
+    always (acl, user, project, *tail) by convention (see FEATURE-UNDO-TIMELINE.md).
+
+    idempotency_key (docs/OPEN-GAPS.md #13): if given and a prior call with
+    the same (user, tool, key) already succeeded, its cached result is
+    returned without re-running fn — so a retried email_send/calendar_create/
+    nc_tasks_add can't repeat the external side effect. A replay skips
+    fn() entirely (no re-check of ACL/rate-limit beyond what already ran
+    above this call, no duplicate timeline/search-index recording) since
+    those already happened for the original call; only the audit trail gets
+    a new "idempotent replay" entry so retries stay visible.
+    """
+    if idempotency_key:
+        cached = _get_idempotency().get(user, tool, idempotency_key)
+        if cached is not None:
+            _get_audit().log(user, project, tool, True, "idempotent replay")
+            return cached
     try:
         result = fn(*args, **kwargs)
         _get_audit().log(user, project, tool, True)
+        _maybe_record_timeline(user, project, tool, args[3:], kwargs, result)
+        _maybe_index_for_search(user, project, tool, args[3:], kwargs, result)
+        _maybe_publish_internal_event(user, project, tool, args[3:], kwargs, result)
+        if idempotency_key and isinstance(result, dict):
+            _get_idempotency().record(user, tool, idempotency_key, result)
         return result
     except Exception as exc:
         _get_audit().log(user, project, tool, False, str(exc))
         raise
 
 
-def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kwargs):
+def _maybe_record_timeline(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort undo-log recording — must never break the tool call itself."""
+    from .timeline.inverse import TOOL_HANDLERS
+
+    handler = TOOL_HANDLERS.get(tool)
+    if handler is None:
+        return
+    if isinstance(result, dict) and result.get("pending"):
+        return  # queued for outbox approval — nothing actually happened yet
+    try:
+        summary_fn, inverse_fn = handler
+        summary = summary_fn(tail, kwargs, result)
+        inverse = inverse_fn(tail, kwargs, result)
+        _get_timeline().record(user, project, tool, summary, inverse)
+    except Exception:
+        logger.warning("timeline recording failed for tool %r", tool, exc_info=True)
+
+
+def _index_memory_write(acl, user, project, tail, kwargs, result):
+    note, content = tail[0], tail[1]
+    return ("memory", note, note, content)
+
+
+def _index_memory_append(acl, user, project, tail, kwargs, result):
+    # Re-read the full note so the index holds current content, not just the
+    # newly appended fragment (replace_chunks would otherwise drop the rest).
+    note = tail[0]
+    try:
+        full_content = t_memory.memory_read(acl, user, project, note)["content"]
+    except Exception:
+        full_content = tail[1]
+    return ("memory", note, note, full_content)
+
+
+def _index_backlog_add(acl, user, project, tail, kwargs, result):
+    if not isinstance(result, dict) or not result.get("id"):
+        return None
+    title, description = tail[0], tail[1]
+    return ("backlog", result["id"], title, f"{title}\n{description or ''}")
+
+
+def _index_files_write(acl, user, project, tail, kwargs, result):
+    path, content = tail[0], tail[1]
+    return ("file", path, path, content)
+
+
+def _index_nc_files_write(acl, user, project, tail, kwargs, result):
+    # Distinct source_type from local files ("nc_file" vs "file") so a
+    # search_all citation tells you unambiguously which backend it lives in.
+    path, content = tail[0], tail[1]
+    return ("nc_file", path, path, content)
+
+
+# Search-index coverage is intentionally scoped to the writes named in
+# FEATURE-SEMANTIC-SEARCH.md's acceptance criteria (memory_write/append,
+# backlog_add, files_write) — field-level backlog edits (score/comment/
+# set_status) don't change the searchable text meaningfully enough to
+# justify a full item re-read on every call; reindex via search_reindex.
+# nc_files_write (FEATURE-NEXTCLOUD-BACKEND.md §4) follows the same rule as
+# files_write once it exists.
+SEARCH_INDEX_HANDLERS = {
+    "memory_write": _index_memory_write,
+    "memory_append": _index_memory_append,
+    "backlog_add": _index_backlog_add,
+    "files_write": _index_files_write,
+    "nc_files_write": _index_nc_files_write,
+}
+
+
+def _get_search_store():
+    global _search_store
+    if _search_store is None:
+        from .search.store import EmbeddingStore
+        db_path = Path(os.environ.get("MEMAIX_INDEX_DB", "/tmp/memaix-index.db"))
+        _search_store = EmbeddingStore.for_path(db_path)
+    return _search_store
+
+
+def _get_search_embedder():
+    global _search_embedder, _search_embedder_loaded
+    if not _search_embedder_loaded:
+        from .search.embedder import make_embedder
+        search_cfg = config.load().get("memaix", {}).get("search", {})
+        _search_embedder = make_embedder(search_cfg)
+        _search_embedder_loaded = True
+    return _search_embedder
+
+
+def _get_notify():
+    global _notify_store
+    if _notify_store is None:
+        from .notify.store import NotifyStore
+        db_path = Path(os.environ.get("MEMAIX_NOTIFY_DB", "/tmp/memaix-notify.db"))
+        _notify_store = NotifyStore.for_path(db_path)
+    return _notify_store
+
+
+def _brief_tools_for_user() -> dict:
+    """Concrete tool functions the BriefBuilder uses to gather content —
+    built here (not in notify/brief.py) so that module stays free of any
+    server.py/tools.* import at module scope."""
+
+    def calendar_events(acl, u, project, day_start, day_end):
+        dav = _resolve_calendar_dav(project, u)
+        if dav is None:
+            return []
+        return t_cal.calendar_list(
+            acl, u, project, day_start.isoformat(), day_end.isoformat(), _dav=dav
+        )
+
+    return {
+        "calendar_events": calendar_events,
+        "email_list": t_email.email_list,
+        "backlog_list": t_backlog.backlog_list,
+        "pm_raid_list": t_pm.pm_raid_list,
+    }
+
+
+def _get_rules():
+    global _rules_store
+    if _rules_store is None:
+        from .rules.store import RulesStore
+        db_path = Path(os.environ.get("MEMAIX_RULES_DB", "/tmp/memaix-rules.db"))
+        _rules_store = RulesStore.for_path(db_path)
+    return _rules_store
+
+
+def _get_pm():
+    global _pm_store
+    if _pm_store is None:
+        from .pm.store import PMStore
+        db_path = Path(os.environ.get("MEMAIX_PM_DB", "/tmp/memaix-pm.db"))
+        _pm_store = PMStore.for_path(db_path)
+    return _pm_store
+
+
+def _get_idempotency():
+    global _idempotency_store
+    if _idempotency_store is None:
+        from .safety.idempotency import IdempotencyStore
+        db_path = Path(os.environ.get("MEMAIX_IDEMPOTENCY_DB", "/tmp/memaix-idempotency.db"))
+        _idempotency_store = IdempotencyStore.for_path(db_path)
+    return _idempotency_store
+
+
+def _get_nudge_state():
+    global _nudge_state
+    if _nudge_state is None:
+        from .capabilities.nudges import NudgeState
+        db_path = Path(os.environ.get("MEMAIX_NUDGE_DB", "/tmp/memaix-nudges.db"))
+        _nudge_state = NudgeState.for_path(db_path)
+    return _nudge_state
+
+
+def _get_accounts(user: str) -> list:
+    try:
+        return _get_token_store().list_accounts(user)
+    except Exception:
+        return []
+
+
+def _translator_for_config(cfg: dict):
+    from .i18n import get_translator
+    locale = cfg.get("memaix", {}).get("server", {}).get("locale", "en")
+    return get_translator(locale)
+
+
+_LOCK_REASON_KEYS = {
+    "no_role": "cap.lock.no_role",
+    "no_mailbox": "cap.lock.no_mailbox",
+    "no_calendar": "cap.lock.no_calendar",
+    "no_vault": "cap.lock.no_vault",
+    "no_contacts": "cap.lock.no_contacts",
+    "no_files": "cap.lock.no_files",
+    "no_tasks": "cap.lock.no_tasks",
+    "no_deck": "cap.lock.no_deck",
+    "no_notes": "cap.lock.no_notes",
+    "link_google": "cap.lock.link_google",
+    "link_microsoft": "cap.lock.link_microsoft",
+}
+
+
+def _lock_reason_text(t, reason: str) -> str:
+    return t(_LOCK_REASON_KEYS.get(reason, reason))
+
+
+def _capability_summary(cap, t) -> dict:
+    return {"key": cap.key, "area": cap.area, "title": t(cap.title_key), "summary": t(cap.summary_key)}
+
+
+def _capability_detail(cap, t) -> dict:
+    detail = _capability_summary(cap, t)
+    detail["tools"] = list(cap.tools)
+    detail["examples"] = t(cap.example_prompts_key)
+    return detail
+
+
+def _capabilities_data(area: str | None = None) -> dict:
+    """ACL/account-filtered capability data for the `capabilities` tool,
+    `memaix_help` prompt, and `memaix://capabilities` resource — the single
+    place these three surfaces read from (docs/FEATURE-DISCOVERABILITY.md §6)."""
+    from .capabilities.registry import available_for, group_by_area
+
+    user = _user()
+    acl = _get_acl()
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, locked = available_for(acl, user, _get_accounts(user), cfg)
+
+    if area is None:
+        grouped = group_by_area(available)
+        areas = [
+            {"area": a, "capabilities": [_capability_summary(c, t) for c in caps]}
+            for a, caps in grouped.items()
+        ]
+        locked_out = [
+            {
+                "area": entry["capability"].area,
+                "title": t(entry["capability"].title_key),
+                "reason": entry["reason"],
+                "hint": _lock_reason_text(t, entry["reason"]),
+            }
+            for entry in locked
+        ]
+        return {"areas": areas, "locked": locked_out}
+
+    return {
+        "area": area,
+        "capabilities": [_capability_detail(c, t) for c in available if c.area == area],
+        "locked": [
+            {
+                "title": t(entry["capability"].title_key),
+                "reason": entry["reason"],
+                "hint": _lock_reason_text(t, entry["reason"]),
+            }
+            for entry in locked
+            if entry["capability"].area == area
+        ],
+    }
+
+
+def _index_internal_event_backlog_set_status(tail, kwargs, result):
+    # tail = (id, status, expected_version) — see backlog_set_status's _tool_call site.
+    if not isinstance(result, dict) or result.get("conflict"):
+        return None  # nothing actually transitioned
+    item_id, new_status, expected_version = tail[0], tail[1], tail[2]
+    return {
+        "event_key": f"{item_id}:{expected_version}:{new_status}",
+        "payload": {"event": "backlog.status", "to": new_status, "item_id": item_id},
+    }
+
+
+# Internal event sources are intentionally scoped to backlog status
+# transitions for v1 — the one already flowing through _audited with a
+# reliable pre/post signal. Live mail-poll and schedule-cron trigger sources
+# are documented follow-up work (FEATURE-AUTOMATION-RULES.md "Framtida arbete").
+INTERNAL_EVENT_HANDLERS = {
+    "backlog_set_status": _index_internal_event_backlog_set_status,
+}
+
+
+def _maybe_publish_internal_event(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort internal-trigger publication — must never break the tool call itself."""
+    handler = INTERNAL_EVENT_HANDLERS.get(tool)
+    if handler is None:
+        return
+    try:
+        built = handler(tail, kwargs, result)
+        if built is None:
+            return
+        event = {"type": "internal", "project": project, "id": built["event_key"], "payload": built["payload"]}
+        from .rules.engine import evaluate
+        evaluate(_get_rules(), _get_acl(), event)
+    except Exception:
+        logger.warning("internal event publish failed for tool %r", tool, exc_info=True)
+
+
+def _maybe_index_for_search(user: str, project: str, tool: str, tail: tuple, kwargs: dict, result) -> None:
+    """Best-effort search-index update — must never break the tool call itself."""
+    handler = SEARCH_INDEX_HANDLERS.get(tool)
+    if handler is None:
+        return
+    try:
+        acl = _get_acl()
+        built = handler(acl, user, project, tail, kwargs, result)
+        if built is None:
+            return
+        source_type, ref, title, text = built
+        from .search.index import index_upsert
+        index_upsert(_get_search_store(), _get_search_embedder(), project, source_type, ref, title, text)
+    except Exception:
+        logger.warning("search indexing failed for tool %r", tool, exc_info=True)
+
+
+def _tool_call(
+    tool: str, project: str, fn, *tail, need: str | None = None, idempotency_key: str | None = None, **kwargs,
+):
     """Single entry point for a project-scoped tool call.
 
     Resolves the caller's identity, applies rate limiting, optionally enforces
@@ -148,10 +531,23 @@ def _tool_call(tool: str, project: str, fn, *tail, need: str | None = None, **kw
     acl = _get_acl()
     if need is not None:
         acl.enforce(user, project, need)
-    return _audited(user, project, tool, fn, acl, user, project, *tail, **kwargs)
+    return _audited(user, project, tool, fn, acl, user, project, *tail, idempotency_key=idempotency_key, **kwargs)
 
 
 mcp = FastMCP("memaix")
+
+# Populate the capability registry (docs/FEATURE-DISCOVERABILITY.md) once at
+# import time so onboarding/help/board surfaces always reflect the tools
+# actually registered below.
+_register_default_capabilities()
+
+
+def all_tool_names() -> set[str]:
+    """Return every MCP tool name registered on `mcp` — used by the anti-drift
+    capability-coverage test (tests/test_capabilities_coverage.py) so a tool
+    can never be added without being made discoverable or explicitly marked
+    internal."""
+    return {t.name for t in mcp._tool_manager.list_tools()}
 
 
 # ------------------------------------------------------------------
@@ -187,10 +583,23 @@ def onboarding_complete(profile_content: str) -> dict:
     shared_vault = _get_acl().resource("shared", "vault")
     if not shared_vault:
         raise RuntimeError("shared vault not configured")
-    return _audited(
+    result = _audited(
         user, "shared", "onboarding_complete",
         t_onboarding.complete_onboarding, user, Path(shared_vault), profile_content,
     )
+    result["tour"] = _build_tour_for_user(user, profile_content)
+    return result
+
+
+def _build_tour_for_user(user: str, profile_text: str) -> dict:
+    """Rank the user's now-available capabilities against their profile text
+    and return a short guided tour — see docs/FEATURE-DISCOVERABILITY.md §5."""
+    from .capabilities.registry import available_for
+
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, _locked = available_for(_get_acl(), user, _get_accounts(user), cfg)
+    return t_onboarding.build_tour(user, profile_text, available, t)
 
 
 @mcp.tool()
@@ -216,6 +625,512 @@ def account_unlink(provider: str, account: str) -> dict:
     user = _user()
     store = _get_token_store()
     return t_account.account_unlink(_get_acl(), user, provider, account, store)
+
+
+# ------------------------------------------------------------------
+# Outbox tools — approve/reject queued outgoing actions (SAFETY: FEATURE-APPROVAL-OUTBOX.md)
+# ------------------------------------------------------------------
+
+# Role table + visibility filter live in outbox/policy.py (single source of
+# truth shared with the board and web-UI APIs); these aliases keep the
+# server-local names stable.
+from .outbox.policy import APPROVAL_ROLE as _OUTBOX_APPROVAL_ROLE  # noqa: E402
+from .outbox.policy import can_approve as _can_approve_action  # noqa: E402
+
+
+def _outbox_action_or_404(outbox, action_id: str) -> dict:
+    action = outbox.get(action_id)
+    if action is None:
+        raise FileNotFoundError(f"no such outbox action: {action_id!r}")
+    return action
+
+
+@mcp.tool()
+def outbox_list(project: str | None = None, status: str = "pending") -> list:
+    """List queued outgoing actions (default: pending) that you have the role to
+    approve — the action body includes recipients/content, so it's scoped to
+    would-be approvers, not every reader of the project."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return [a for a in _get_outbox().list(projects, status or None) if _can_approve_action(acl, user, a)]
+
+
+@mcp.tool()
+def outbox_get(action_id: str) -> dict:
+    """Fetch a single queued action by id (requires the role that could approve it)."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    if action["project"] not in acl.visible_projects(user):
+        raise AccessDenied(f"{user} cannot see outbox actions for {action['project']}")
+    if not _can_approve_action(acl, user, action):
+        raise AccessDenied(f"{user} lacks the role to view/approve this {action.get('tool')} action")
+    return action
+
+
+@mcp.tool()
+def outbox_approve(action_id: str) -> dict:
+    """Approve a queued action and execute it now (requires the tool's own role)."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    need = _OUTBOX_APPROVAL_ROLE.get(action["tool"], "owner")
+    acl.enforce(user, action["project"], need)
+
+    claimed = outbox.claim_for_decision(action_id, "approved", user)
+    if claimed is None:
+        current = outbox.get(action_id) or {}
+        return {"conflict": True, "current_status": current.get("status")}
+
+    from .outbox.execute import execute_pending
+    result = execute_pending(acl, claimed)
+    ok = "error" not in result
+    outbox.record_result(action_id, "executed" if ok else "failed", result)
+    _get_audit().log(
+        user, action["project"], f"outbox_execute:{action['tool']}", ok,
+        "" if ok else str(result.get("error", "")),
+    )
+    return {"ok": ok, "action_id": action_id, "result": result}
+
+
+@mcp.tool()
+def outbox_reject(action_id: str, reason: str = "") -> dict:
+    """Reject a queued action — it is never executed."""
+    user = _user()
+    acl = _get_acl()
+    outbox = _get_outbox()
+    action = _outbox_action_or_404(outbox, action_id)
+    need = _OUTBOX_APPROVAL_ROLE.get(action["tool"], "owner")
+    acl.enforce(user, action["project"], need)
+
+    claimed = outbox.claim_for_decision(action_id, "rejected", user, reason)
+    if claimed is None:
+        current = outbox.get(action_id) or {}
+        return {"conflict": True, "current_status": current.get("status")}
+
+    _get_audit().log(user, action["project"], f"outbox_reject:{action['tool']}", True, reason)
+    return {"ok": True, "action_id": action_id, "status": "rejected"}
+
+
+# ------------------------------------------------------------------
+# Timeline tools — undo a recorded action (FEATURE-UNDO-TIMELINE.md)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def timeline_list(project: str | None = None, limit: int = 50) -> list:
+    """List recent actions (newest first) for your visible projects, with
+    an `reversible` flag showing which ones can be undone via timeline_undo."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return _get_timeline().list(projects, limit)
+
+
+@mcp.tool()
+def timeline_undo(action_id: str) -> dict:
+    """Undo a recorded action (requires the same role the original action did)."""
+    user = _user()
+    acl = _get_acl()
+    from .timeline.undo import undo
+    return undo(_get_timeline(), acl, user, action_id)
+
+
+# ------------------------------------------------------------------
+# Search tools — unified retrieval with source citations (FEATURE-SEMANTIC-SEARCH.md)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def search_all(query: str, projects: list[str] | None = None, limit: int = 8) -> dict:
+    """Search memory notes, files and backlog items (plus your mail where
+    readable) across your projects. Returns ranked results with source
+    citations {project, source_type, ref, title, snippet, score} — cite the
+    project/source_type/ref when you answer from these results."""
+    user = _user()
+    acl = _get_acl()
+    cfg = config.load()
+    from .search.query import search_all as _search_all
+    from .tools.email import email_search as _email_search_fn
+    return _search_all(
+        acl, user, cfg, _get_search_store(), _get_search_embedder(),
+        query, projects, limit, _email_search=_email_search_fn,
+    )
+
+
+@mcp.tool()
+def search_reindex(project: str) -> dict:
+    """Rebuild the search index for a project from its current vault content (owner only)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    acl.enforce(user, project, "owner")
+    from .search.index import reindex_project
+    return reindex_project(_get_search_store(), _get_search_embedder(), acl, project)
+
+
+@mcp.tool()
+def search_status() -> dict:
+    """Show whether semantic search is active and how many chunks are
+    indexed per project you can see."""
+    user = _user()
+    acl = _get_acl()
+    visible = acl.visible_projects(user)
+    return {
+        "semantic_enabled": _get_search_embedder() is not None,
+        "chunks_by_project": _get_search_store().count_by_project(visible),
+    }
+
+
+# ------------------------------------------------------------------
+# Brief tools — proactive daily brief & notifications (FEATURE-PROACTIVE-BRIEF.md)
+# ------------------------------------------------------------------
+
+_KNOWN_CHANNEL_TYPES = {"email", "webhook", "ntfy"}
+
+
+def _validate_brief_time(brief_time: str) -> None:
+    import re
+    if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", brief_time or ""):
+        raise ValueError(f"brief_time must be HH:MM (24h), got {brief_time!r}")
+
+
+def _validate_timezone(tz_name: str) -> None:
+    from zoneinfo import ZoneInfo
+    try:
+        ZoneInfo(tz_name)
+    except Exception as exc:
+        raise ValueError(f"unknown timezone: {tz_name!r}") from exc
+
+
+def _validate_channels(channels: list[dict] | None) -> None:
+    from .safety.net import BlockedURLError, validate_external_url
+
+    for spec in channels or []:
+        if spec.get("type") not in _KNOWN_CHANNEL_TYPES:
+            raise ValueError(
+                f"unknown channel type {spec.get('type')!r}; must be one of {sorted(_KNOWN_CHANNEL_TYPES)}"
+            )
+        # SSRF guard for the URLs the server will POST brief content to.
+        # resolve=False at config-time; the authoritative resolve happens in
+        # notify/channels.py right before the request.
+        url = spec.get("url") if spec.get("type") == "webhook" else spec.get("server")
+        if url:
+            try:
+                validate_external_url(url, resolve=False)
+            except BlockedURLError as exc:
+                raise ValueError(f"channel url avvisad: {exc}") from exc
+
+
+@mcp.tool()
+def brief_configure(
+    enabled: bool,
+    brief_time: str = "07:00",
+    timezone: str | None = None,
+    channels: list[dict] | None = None,
+    quiet_hours: dict | None = None,
+    projects: list[str] | None = None,
+) -> dict:
+    """Configure your daily brief: schedule (HH:MM in your timezone), delivery
+    channels (email/webhook/ntfy), optional quiet hours, and which projects
+    to cover (default: all you can see). timezone defaults to
+    memaix.brief.default_timezone in config, falling back to UTC."""
+    user = _user()
+    cfg = config.load()
+    timezone = timezone or cfg.get("memaix", {}).get("brief", {}).get("default_timezone", "UTC")
+    _validate_brief_time(brief_time)
+    _validate_timezone(timezone)
+    _validate_channels(channels)
+
+    from datetime import datetime
+    from datetime import timezone as _tz
+    store = _get_notify()
+    prefs = store.set_prefs(
+        user, now_iso=datetime.now(_tz.utc).isoformat(),
+        enabled=enabled, brief_time=brief_time, timezone=timezone,
+        channels=channels, projects=projects,
+        quiet_start=(quiet_hours or {}).get("start"), quiet_end=(quiet_hours or {}).get("end"),
+    )
+
+    from .notify.scheduler import next_brief_epoch
+    next_epoch = next_brief_epoch(prefs, datetime.now(_tz.utc))
+    store.upsert_schedule(user, "daily", next_epoch)
+
+    return {
+        "ok": True, "prefs": prefs,
+        "next_run": datetime.fromtimestamp(next_epoch, tz=_tz.utc).isoformat(),
+    }
+
+
+@mcp.tool()
+def brief_status() -> dict:
+    """Show your current brief configuration and next/last scheduled run."""
+    user = _user()
+    store = _get_notify()
+    prefs = store.get_prefs(user)
+    if prefs is None:
+        return {"configured": False}
+
+    from datetime import datetime
+    from datetime import timezone as _tz
+    schedule = store.get_schedule(user, "daily")
+    next_run = (
+        datetime.fromtimestamp(schedule["next_run"], tz=_tz.utc).isoformat() if schedule else None
+    )
+    last_run = (
+        datetime.fromtimestamp(schedule["last_run"], tz=_tz.utc).isoformat()
+        if schedule and schedule.get("last_run") else None
+    )
+    return {"configured": True, "prefs": prefs, "next_run": next_run, "last_run": last_run}
+
+
+def _build_brief_now() -> dict:
+    user = _user()
+    acl = _get_acl()
+    store = _get_notify()
+    prefs = store.get_prefs(user) or {
+        "timezone": "UTC", "brief_time": "07:00", "projects": [], "channels": [],
+    }
+    from datetime import datetime
+    from datetime import timezone as _tz
+
+    from .notify.brief import build
+    return build(acl, user, config.load(), prefs, now=datetime.now(_tz.utc), tools=_brief_tools_for_user())
+
+
+@mcp.tool()
+def brief_preview() -> dict:
+    """Build today's brief right now and return it, without sending it —
+    the connector's 'fetch it when I open the app' path."""
+    return _build_brief_now()
+
+
+@mcp.tool()
+def brief_send_now() -> dict:
+    """Build and deliver your brief immediately via your configured channels.
+    Ignores quiet hours and the once-per-day duplicate guard — this is an
+    explicit request, so it always sends."""
+    user = _user()
+    acl = _get_acl()
+    store = _get_notify()
+    prefs = store.get_prefs(user)
+    if not prefs:
+        return {"ok": False, "error": "brief not configured — call brief_configure first"}
+
+    from datetime import datetime
+    from datetime import timezone as _tz
+
+    from .notify.deliver import deliver
+    result = deliver(
+        store, acl, config.load(), user, prefs,
+        now=datetime.now(_tz.utc), force=True, tools=_brief_tools_for_user(),
+    )
+    _get_audit().log(user, "shared", "brief_send", bool(result.get("ok")), "")
+    return result
+
+
+@mcp.prompt()
+def daily_brief() -> str:
+    """Deliver today's brief for the calling user (fetch-on-open path)."""
+    return _build_brief_now()["markdown"]
+
+
+# ------------------------------------------------------------------
+# Automation rules & standing instructions (FEATURE-AUTOMATION-RULES.md)
+# ------------------------------------------------------------------
+
+_KNOWN_TRIGGER_TYPES = {"mail", "internal", "webhook", "schedule"}
+_KNOWN_ACTION_TYPES = {"backlog_add", "memory_append", "pm_raid_add", "email_create_draft", "email_send", "notify"}
+_KNOWN_CONDITION_OPS = {"contains", "equals", "matches"}
+# 'notify' is outgoing egress too (posts to a webhook/ntfy/email channel) — a
+# rule that auto-sends it therefore requires owner to create, like email_send.
+_OUTGOING_ACTION_TYPES = {"email_send", "email_create_draft", "notify"}
+
+
+def _validate_rule_spec(trigger: dict, actions: list[dict], conditions: list[dict] | None) -> None:
+    if not isinstance(trigger, dict) or trigger.get("type") not in _KNOWN_TRIGGER_TYPES:
+        raise ValueError(f"trigger.type must be one of {sorted(_KNOWN_TRIGGER_TYPES)}")
+    if not actions:
+        raise ValueError("a rule needs at least one action")
+    for a in actions:
+        if not isinstance(a, dict) or a.get("type") not in _KNOWN_ACTION_TYPES:
+            raise ValueError(f"unknown action type {a.get('type') if isinstance(a, dict) else a!r}; "
+                              f"must be one of {sorted(_KNOWN_ACTION_TYPES)}")
+    for c in conditions or []:
+        if c.get("op") not in _KNOWN_CONDITION_OPS:
+            raise ValueError(f"unknown condition op {c.get('op')!r}; must be one of {sorted(_KNOWN_CONDITION_OPS)}")
+
+
+@mcp.tool()
+def rule_add(
+    project: str, name: str, trigger: dict, actions: list[dict], conditions: list[dict] | None = None,
+) -> dict:
+    """Create an automation rule: when <trigger> happens (and <conditions>
+    hold), run <actions>. Requires owner if any action is outgoing
+    (email_send/email_create_draft — which still goes through the outbox if
+    the project is in review mode), otherwise collaborator."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    _validate_rule_spec(trigger, actions, conditions)
+    needs_owner = any(a.get("type") in _OUTGOING_ACTION_TYPES for a in actions)
+    acl.enforce(user, project, "owner" if needs_owner else "collaborator")
+    rule = _get_rules().add_rule(user, project, name, trigger, actions, conditions)
+    return {"ok": True, "rule": rule}
+
+
+@mcp.tool()
+def rule_list(project: str | None = None) -> list:
+    """List your automation rules for projects you can see."""
+    user = _user()
+    acl = _get_acl()
+    visible = set(acl.visible_projects(user))
+    projects = [project] if project else sorted(visible)
+    projects = [p for p in projects if p in visible]
+    return _get_rules().list_rules(projects)
+
+
+def _rule_or_404(rules, rule_id: str) -> dict:
+    rule = rules.get_rule(rule_id)
+    if rule is None:
+        raise FileNotFoundError(f"no such rule: {rule_id!r}")
+    return rule
+
+
+@mcp.tool()
+def rule_set_enabled(rule_id: str, enabled: bool) -> dict:
+    """Enable or disable a rule (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    return {"ok": rules.set_enabled(rule_id, enabled)}
+
+
+@mcp.tool()
+def rule_delete(rule_id: str) -> dict:
+    """Delete a rule (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    return {"ok": rules.delete_rule(rule_id)}
+
+
+@mcp.tool()
+def rule_test(rule_id: str, sample_event: dict) -> dict:
+    """Dry-run a rule against a sample event — shows what it WOULD do,
+    without doing it (owner only)."""
+    user = _user()
+    acl = _get_acl()
+    rules = _get_rules()
+    rule = _rule_or_404(rules, rule_id)
+    acl.enforce(user, rule["project"], "owner")
+    from .rules.engine import evaluate
+    results = evaluate(rules, acl, sample_event, dry_run=True)
+    matching = [r for r in results if r["rule_id"] == rule_id]
+    return {"matched": bool(matching), "result": matching[0] if matching else None}
+
+
+@mcp.tool()
+def standing_set(text: str) -> dict:
+    """Set your standing instructions — guidance the assistant follows every session."""
+    user = _user()
+    _get_rules().set_standing(user, text)
+    return {"ok": True}
+
+
+@mcp.tool()
+def standing_get() -> dict:
+    """Get your current standing instructions."""
+    user = _user()
+    return {"text": _get_rules().get_standing(user) or ""}
+
+
+@mcp.resource("memaix://standing-instructions")
+def standing_instructions_resource() -> str:
+    """The calling user's standing instructions, for clients that read
+    resources at session start."""
+    user = _user()
+    return _get_rules().get_standing(user) or ""
+
+
+@mcp.tool()
+def capabilities(area: str | None = None) -> dict:
+    """List what Memaix can do for you right now, grouped by outcome area
+    (memory, mail, calendar, backlog, pm, brief, search, automation, undo,
+    outbox). Call with no area for a grouped overview; pass an area (e.g.
+    'mail') to drill down into its capabilities with example prompts. Result
+    is filtered to what you can actually use given your role, linked
+    accounts, and project resources — locked capabilities are shown with a
+    hint on how to unlock them."""
+    return _capabilities_data(area)
+
+
+@mcp.prompt()
+def memaix_help(area: str = "") -> str:
+    """Explain what Memaix can do: an overview grouped by outcome, or (given
+    an area) a drill-down with example prompts and an offer to act now."""
+    data = _capabilities_data(area or None)
+    lines: list[str] = []
+    if "areas" in data:
+        lines += ["# Vad kan jag göra?", "", "Här är det jag kan hjälpa till med just nu:"]
+        for entry in data["areas"]:
+            titles = ", ".join(c["title"] for c in entry["capabilities"])
+            lines.append(f"- **{entry['area']}**: {titles}")
+        if data["locked"]:
+            lines += ["", "Låst just nu:"]
+            lines += [f"- {locked['title']} — {locked['hint']}" for locked in data["locked"]]
+        lines += ["", "Fråga om ett specifikt område (t.ex. \"mail\") för konkreta exempel."]
+    else:
+        lines += [f"# {data['area']}", ""]
+        for cap in data["capabilities"]:
+            lines.append(f"## {cap['title']}")
+            lines.append(cap["summary"])
+            examples = cap["examples"] if isinstance(cap["examples"], list) else []
+            lines += [f"- \"{ex}\"" for ex in examples]
+            lines.append("")
+        if data["locked"]:
+            lines += ["Låst just nu:"]
+            lines += [f"- {locked['title']} — {locked['hint']}" for locked in data["locked"]]
+        lines += ["", "Vill du att jag gör något av detta nu?"]
+    return "\n".join(lines)
+
+
+@mcp.resource("memaix://capabilities")
+def capabilities_resource() -> dict:
+    """Same ACL/account-filtered overview as the `capabilities` tool, for
+    clients that read resources at session start."""
+    return _capabilities_data(None)
+
+
+@mcp.tool()
+def next_suggestion(last_tool: str) -> dict:
+    """After calling `last_tool`, ask whether there's one natural next
+    capability worth mentioning. Sparse and rate-limited — never suggests a
+    locked capability, and returns {} most of the time by design."""
+    import time
+
+    from .capabilities.nudges import suggest
+    from .capabilities.registry import available_for
+
+    user = _user()
+    cfg = config.load()
+    t = _translator_for_config(cfg)
+    available, _locked = available_for(_get_acl(), user, _get_accounts(user), cfg)
+    result = suggest(user, last_tool, available, _get_nudge_state(), now=time.time())
+    if result is None:
+        return {}
+    return {"capability_key": result["capability_key"], "title": t(result["title_key"])}
 
 
 @mcp.tool()
@@ -428,7 +1343,234 @@ def pm_weekly_review(project: str) -> str:
         "call pm_sprint_status on the active sprint, "
         "then pm_raid_list for open risks/issues, "
         "then pm_status_report to persist a snapshot. "
-        "Summarize blockers and burndown for the user."
+        "Summarize blockers and burndown for the user. "
+        "If the project also runs the deterministic PM engine (check with "
+        "scenario_list — a committed scenario means it does), also call "
+        "pm_report(project, kind='status') for milestone/variance/RAID rollup, "
+        "and pm_utilization for the committed scenario over the past week — "
+        "quote the engine's numbers (slippage days, utilization %, which tasks "
+        "are on the critical path per pm_variance's planned_finish) rather than "
+        "estimating them yourself."
+    )
+
+
+# ------------------------------------------------------------------
+# PM planning-engine tools (FEATURE-PM-ENGINE.md) — deterministic
+# resource/task/critical-path/allocation engine, distinct from the
+# markdown+git pm_* tools above. The engine computes; nothing here or in
+# tools/pm_engine.py ever guesses a date.
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def resource_add(project: str, name: str, cost_per_hour: float | None = None, capacity_hours_per_day: float = 8.0) -> dict:
+    """Add a plannable resource (person) to the PM engine."""
+    return _tool_call(
+        "resource_add", project, t_pm_engine.resource_add, name,
+        cost_per_hour=cost_per_hour, capacity_hours_per_day=capacity_hours_per_day, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def resource_list(project: str) -> list:
+    """List PM-engine resources for a project."""
+    return _tool_call("resource_list", project, t_pm_engine.resource_list, _pm=_get_pm())
+
+
+@mcp.tool()
+def resource_availability(
+    project: str, resource_id: int, start_date: str, end_date: str, hours_per_day: float, reason: str | None = None,
+) -> dict:
+    """Record an availability exception (vacation, part-time, ...) for a resource."""
+    return _tool_call(
+        "resource_availability", project, t_pm_engine.resource_availability,
+        resource_id, start_date, end_date, hours_per_day, reason, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def resource_set_skill(project: str, resource_id: int, skill: str, level: int | None = None) -> dict:
+    """Tag a resource with a skill (creates the skill if it's new)."""
+    return _tool_call(
+        "resource_set_skill", project, t_pm_engine.resource_set_skill, resource_id, skill, level, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def milestone_add(project: str, name: str, target_date: str | None = None) -> dict:
+    """Add a milestone that tasks can be linked to."""
+    return _tool_call("milestone_add", project, t_pm_engine.milestone_add, name, target_date, _pm=_get_pm())
+
+
+@mcp.tool()
+def task_add(
+    project: str, title: str, estimate_hours: float | None = None, required_skill: str | None = None,
+    priority: int = 3, backlog_id: str | None = None, milestone_id: int | None = None,
+) -> dict:
+    """Add a PM-engine task (scheduled/allocated work — distinct from backlog_add)."""
+    return _tool_call(
+        "task_add", project, t_pm_engine.task_add, title,
+        estimate_hours=estimate_hours, required_skill=required_skill, priority=priority,
+        backlog_id=backlog_id, milestone_id=milestone_id, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def task_estimate(project: str, task_id: int, estimate_hours: float) -> dict:
+    """Set or update a task's estimate."""
+    return _tool_call("task_estimate", project, t_pm_engine.task_estimate, task_id, estimate_hours, _pm=_get_pm())
+
+
+@mcp.tool()
+def task_log_actual(
+    project: str, task_id: int, date: str, hours_logged: float | None = None,
+    percent_complete: float | None = None, note: str | None = None,
+) -> dict:
+    """Log actual progress (hours and/or percent complete) against a task, for variance tracking."""
+    return _tool_call(
+        "task_log_actual", project, t_pm_engine.task_log_actual, task_id, date,
+        hours_logged=hours_logged, percent_complete=percent_complete, note=note, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def dependency_add(project: str, predecessor_id: int, successor_id: int, type: str = "FS", lag_days: float = 0.0) -> dict:
+    """Add a task dependency (FS/SS/FF/SF). Rejected if it would create a cycle."""
+    return _tool_call(
+        "dependency_add", project, t_pm_engine.dependency_add,
+        predecessor_id, successor_id, type, lag_days, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def scenario_add(project: str, name: str) -> dict:
+    """Create a planning scenario to allocate tasks against."""
+    return _tool_call("scenario_add", project, t_pm_engine.scenario_add, name, _pm=_get_pm())
+
+
+@mcp.tool()
+def scenario_list(project: str) -> list:
+    """List planning scenarios for a project."""
+    return _tool_call("scenario_list", project, t_pm_engine.scenario_list, _pm=_get_pm())
+
+
+@mcp.tool()
+def pm_allocate(project: str, scenario_id: int, project_start: str | None = None) -> dict:
+    """Run the planning engine for a scenario: critical path + resource-constrained
+    allocation. Deterministic — always recomputed from resources/tasks/dependencies,
+    never guessed. Owner only."""
+    return _tool_call(
+        "pm_allocate", project, t_pm_engine.pm_allocate, scenario_id, project_start, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def pm_whatif(project: str, base_scenario_id: int, changes: list[dict], project_start: str | None = None) -> dict:
+    """Simulate the effect of `changes` (each {entity: 'task'|'resource',
+    entity_id, field, value} — supported fields: task.estimate_hours,
+    task.priority, task.required_skill_id, resource.active) against
+    base_scenario_id, in a brand-new scenario. Never touches the base or
+    committed plan. Returns a diff: which tasks' finish date or criticality
+    changed, which resource assignments changed, and which milestones moved.
+    Collaborator role (it doesn't touch the committed plan, unlike allocate)."""
+    return _tool_call(
+        "pm_whatif", project, t_pm_engine.pm_whatif, base_scenario_id, changes, project_start, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def pm_utilization(
+    project: str, scenario_id: int, period_start: str, period_end: str, resource_id: int | None = None,
+) -> dict:
+    """Allocated hours vs capacity per resource over a period, for a scenario."""
+    return _tool_call(
+        "pm_utilization", project, t_pm_engine.pm_utilization,
+        scenario_id, period_start, period_end, resource_id, _pm=_get_pm(),
+    )
+
+
+@mcp.tool()
+def pm_variance(project: str, today: str | None = None) -> dict:
+    """Compare the committed baseline plan against logged actuals (hours + schedule slippage).
+
+    `today` (ISO date) overrides the default of "today in UTC" — e.g. to
+    match a project's own calendar day when it differs from UTC."""
+    return _tool_call("pm_variance", project, t_pm_engine.pm_variance, today, _pm=_get_pm())
+
+
+@mcp.tool()
+def plan_commit(project: str, scenario_id: int) -> dict:
+    """Freeze a scenario as the committed plan and its baseline for future variance
+    tracking. Owner only; who committed it is recorded (audit)."""
+    return _tool_call("plan_commit", project, t_pm_engine.plan_commit, scenario_id, _pm=_get_pm())
+
+
+@mcp.tool()
+def pm_report(
+    project: str, kind: str = "status", audience: str = "team",
+    scenario_id: int | None = None, period_start: str | None = None, period_end: str | None = None,
+) -> dict:
+    """Rollup PM data (milestones/variance/RAID/utilization) for you to narrate.
+
+    kind: 'status' (milestones+variance+raid, default), 'milestones',
+    'variance', 'raid', or 'utilization' (requires scenario_id/period_start/
+    period_end). audience: 'team' (full detail) or 'leadership' (condensed
+    to overdue milestones and high/critical RAID entries)."""
+    return _tool_call(
+        "pm_report", project, t_pm_engine.pm_report, kind, audience, scenario_id, period_start, period_end,
+        _pm=_get_pm(),
+    )
+
+
+@mcp.prompt()
+def pm_plan_session(project: str) -> str:
+    """Guide the AI through building a plan in the deterministic PM engine
+    (resources/tasks/dependencies -> allocate), for '{project}'."""
+    return (
+        f"You are running a planning session for project '{project}' using the "
+        "deterministic PM engine (resource_*/task_*/dependency_add/pm_allocate/"
+        "plan_commit) — NOT the markdown pm_* tools (pm_sprint_planning). "
+        "The engine computes dates and capacity; you never calculate a schedule, "
+        "a critical path, or a finish date yourself. "
+        "1) Ask the user for the goal and decompose it into tasks — propose "
+        "estimate_hours and dependencies for each, but let the user confirm or "
+        "correct them before calling task_add/dependency_add. "
+        "2) Capture who's available: call resource_add for each person, "
+        "resource_set_skill for any skills tasks require, and "
+        "resource_availability for known absences (vacation, part-time). "
+        "3) Call scenario_add, then pm_allocate(scenario_id) to run the engine. "
+        "4) Explain the result in plain language: what's on the critical path, "
+        "which tasks have zero slack, and flag anything the engine warned "
+        "about (missing estimate, no eligible resource for a skill) as an open "
+        "risk — never invent a date or assignment the engine didn't return. "
+        "5) Only an owner can call plan_commit to freeze the baseline — ask them "
+        "to review the allocation first."
+    )
+
+
+@mcp.prompt()
+def pm_whatif_session(project: str) -> str:
+    """Guide the AI through translating a plain-language "what if" question
+    into a pm_whatif() call and explaining the diff, for '{project}'."""
+    return (
+        f"Help the user explore a hypothetical change to project '{project}'s plan "
+        "using pm_whatif — it simulates changes in an isolated scenario and never "
+        "touches the committed plan. You never compute the consequence yourself; "
+        "the engine does. "
+        "1) Get the committed baseline scenario_id (scenario_list, kind='baseline' "
+        "or 'committed') to pass as base_scenario_id. "
+        "2) Translate the user's question (e.g. \"what if we lose Anna for 2 "
+        "weeks\", \"what if this task takes twice as long\") into a `changes` list: "
+        "each change is {entity: 'task'|'resource', entity_id, field, value} — "
+        "only estimate_hours/priority/required_skill_id (task) or active "
+        "(resource) are supported; ask the user for a concrete number/id if the "
+        "question doesn't map cleanly onto one of those. "
+        "3) Call pm_whatif(project, base_scenario_id, changes). "
+        "4) Explain the diff in plain language: which tasks' dates moved, "
+        "whether the critical path changed, and any new resource conflicts — "
+        "quote the engine's numbers, don't estimate your own. The whatif "
+        "scenario is disposable; nothing is committed unless the user "
+        "separately runs a real plan_commit on a real scenario."
     )
 
 
@@ -465,26 +1607,256 @@ def calendar_status(project: str) -> dict:
 
 
 # ------------------------------------------------------------------
+# Contacts tools (FEATURE-NEXTCLOUD-BACKEND.md §5 — connector framework)
+# ------------------------------------------------------------------
+
+
+@mcp.tool()
+def contacts_search(project: str, query: str) -> list:
+    """Search the project's linked address book (e.g. Nextcloud CardDAV) by
+    name, email, org, or phone substring. Returns [{id, name, email, org, phone}]."""
+    from .connectors.registry import default_registry
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "contacts", user)
+    return _audited(
+        user, project, "contacts_search", t_contacts.contacts_search, acl, user, project, query, _contacts=backend,
+    )
+
+
+@mcp.tool()
+def contacts_get(project: str, id: str) -> dict:
+    """Fetch one contact by id from the project's linked address book."""
+    from .connectors.registry import default_registry
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "contacts", user)
+    return _audited(
+        user, project, "contacts_get", t_contacts.contacts_get, acl, user, project, id, _contacts=backend,
+    )
+
+
+def _get_nc_files(project: str, user: str):
+    from .connectors.registry import default_registry
+
+    return default_registry().get(_get_acl(), _get_token_store(), project, "files", user)
+
+
+@mcp.tool()
+def nc_files_list(project: str, path: str = "/") -> list:
+    """List files/directories in the project's linked Nextcloud (WebDAV) files —
+    separate from files_list, which is the local vault."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(user, project, "nc_files_list", t_nc_files.nc_files_list, acl, user, project, path, _files=backend)
+
+
+@mcp.tool()
+def nc_files_read(project: str, path: str) -> str:
+    """Read a file from the project's linked Nextcloud (WebDAV) files."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(user, project, "nc_files_read", t_nc_files.nc_files_read, acl, user, project, path, _files=backend)
+
+
+@mcp.tool()
+def nc_files_write(project: str, path: str, content: str) -> str:
+    """Write a file to the project's linked Nextcloud (WebDAV) files — indexed
+    for search_all like a local vault file."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_files_write", t_nc_files.nc_files_write, acl, user, project, path, content, _files=backend,
+    )
+
+
+@mcp.tool()
+def nc_files_search(project: str, query: str, path: str = "/") -> list:
+    """Search the project's linked Nextcloud (WebDAV) files by content (skips large/binary files)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_files_search", t_nc_files.nc_files_search, acl, user, project, query, path, _files=backend,
+    )
+
+
+@mcp.tool()
+def nc_generate_report(
+    project: str, path: str, kind: str = "status", audience: str = "team",
+    scenario_id: int | None = None, period_start: str | None = None, period_end: str | None = None,
+) -> dict:
+    """Render a pm_report() rollup (milestones/variance/RAID/utilization) as
+    a real .odt file and write it to the project's linked Nextcloud files —
+    for sharing a status report with stakeholders as a document, not just
+    structured data. Same kind/audience options as pm_report."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_files(project, user)
+    return _audited(
+        user, project, "nc_generate_report", t_nc_docgen.nc_generate_report,
+        acl, user, project, path, kind, audience, scenario_id, period_start, period_end,
+        _files=backend, _pm=_get_pm(),
+    )
+
+
+def _get_nc_tasks(project: str, user: str):
+    from .connectors.registry import default_registry
+
+    return default_registry().get(_get_acl(), _get_token_store(), project, "tasks", user)
+
+
+@mcp.tool()
+def nc_tasks_list(project: str) -> list:
+    """List tasks in the project's linked Nextcloud task list (CalDAV VTODO)."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(user, project, "nc_tasks_list", t_nc_tasks.nc_tasks_list, acl, user, project, _tasks=backend)
+
+
+@mcp.tool()
+def nc_tasks_add(
+    project: str, title: str, due: str | None = None, notes: str | None = None, idempotency_key: str | None = None,
+) -> dict:
+    """Add a task to the project's linked Nextcloud task list.
+
+    Pass idempotency_key (same value on retry) to avoid creating a duplicate
+    task if the call is retried after e.g. a network timeout."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(
+        user, project, "nc_tasks_add", t_nc_tasks.nc_tasks_add, acl, user, project, title, due, notes,
+        _tasks=backend, idempotency_key=idempotency_key,
+    )
+
+
+@mcp.tool()
+def nc_tasks_complete(project: str, id: str) -> dict:
+    """Mark a Nextcloud task complete."""
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = _get_nc_tasks(project, user)
+    return _audited(
+        user, project, "nc_tasks_complete", t_nc_tasks.nc_tasks_complete, acl, user, project, id, _tasks=backend,
+    )
+
+
+@mcp.tool()
+def deck_sync(project: str) -> dict:
+    """Two-way sync between the project's linked Nextcloud Deck stack and its
+    backlog. New cards become backlog items; when only one side changed since
+    the last sync that side wins, and when both changed it's reported as a
+    conflict (most-recently-changed side wins). Owner only — it mutates both
+    stores. Only title/description are synced (v1 scope)."""
+    from .connectors.registry import default_registry
+    from .nextcloud.sync import deck_sync as _run_deck_sync
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    deck_cfg = acl.resource(project, "deck") or {}
+    backend = default_registry().get(acl, _get_token_store(), project, "deck", user)
+    return _audited(
+        user, project, "deck_sync", _run_deck_sync, acl, user, project,
+        _deck=backend, board_id=deck_cfg.get("board_id"), stack_id=deck_cfg.get("stack_id"),
+    )
+
+
+def _get_notes_link_store():
+    global _notes_link_store
+    if _notes_link_store is None:
+        from .nextcloud.notes_store import NotesLinkStore
+        db_path = Path(os.environ.get("MEMAIX_NOTES_LINK_DB", "/tmp/memaix-notes-link.db"))
+        _notes_link_store = NotesLinkStore.for_path(db_path)
+    return _notes_link_store
+
+
+@mcp.tool()
+def notes_sync(project: str) -> dict:
+    """Two-way sync between the project's linked Nextcloud Notes account and
+    its memory notes. New notes become memory notes at 'notes/<slug>.md';
+    when only one side changed since the last sync that side wins, and when
+    both changed it's reported as a conflict (most-recently-changed side
+    wins). Owner only — it mutates both stores."""
+    from .connectors.registry import default_registry
+    from .nextcloud.sync import notes_sync as _run_notes_sync
+
+    user = _user()
+    _rl(user, project)
+    acl = _get_acl()
+    backend = default_registry().get(acl, _get_token_store(), project, "notes", user)
+    return _audited(
+        user, project, "notes_sync", _run_notes_sync, acl, user, project,
+        _notes=backend, link_store=_get_notes_link_store(),
+    )
+
+
+# ------------------------------------------------------------------
 # Email tools
 # ------------------------------------------------------------------
+
+
+def _mail_backend(project: str, user: str):
+    """Resolve the project's mail connector (FEATURE-CONNECTOR-FRAMEWORK.md
+    Byggordning step 4/6) — same imap adapter _make_mailbox always built for
+    the shared-IMAP case, or the per-user Microsoft Graph adapter if the
+    user has a linked microsoft account and the project's mail resource
+    selects it (see ConnectorRegistry.get's per_user auth branch).
+
+    _ensure_fresh_microsoft_mail_token runs first: the registry's per_user
+    branch just loads whatever token is stored, it doesn't refresh an
+    expiring one — refreshing (and re-storing) has to happen before load,
+    same division of labor as _resolve_calendar_dav's Google refresh."""
+    from .connectors.registry import default_registry
+
+    _ensure_fresh_microsoft_mail_token(user)
+    return default_registry().get(_get_acl(), _get_token_store(), project, "mail", user)
+
+
+def _with_mail_backend(fn):
+    """Wrap a tools.email function so `_imap` is resolved lazily, inside
+    _audited's try/except — resolving it eagerly at the call site would move
+    an unconfigured-mailbox ValueError outside the audit-log boundary."""
+
+    def wrapped(acl, user_id, project, *args, **kwargs):
+        return fn(acl, user_id, project, *args, _imap=_mail_backend(project, user_id), **kwargs)
+
+    return wrapped
 
 
 @mcp.tool()
 def email_list(project: str, folder: str = "INBOX", limit: int = 20) -> list:
     """List recent messages in a mailbox folder."""
-    return _tool_call("email_list", project, t_email.email_list, folder, limit)
+    return _tool_call("email_list", project, _with_mail_backend(t_email.email_list), folder, limit)
 
 
 @mcp.tool()
 def email_read(project: str, id: str) -> dict:
     """Read a message by UID."""
-    return _tool_call("email_read", project, t_email.email_read, id)
+    return _tool_call("email_read", project, _with_mail_backend(t_email.email_read), id)
 
 
 @mcp.tool()
 def email_search(project: str, query: str, limit: int = 20) -> list:
     """Search messages by body content."""
-    return _tool_call("email_search", project, t_email.email_search, query, limit)
+    return _tool_call("email_search", project, _with_mail_backend(t_email.email_search), query, limit)
 
 
 @mcp.tool()
@@ -495,20 +1867,31 @@ def email_create_draft(
     body: str,
     cc: str | None = None,
     in_reply_to: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
-    """Save a draft to the mailbox Drafts folder."""
+    """Save a draft to the mailbox Drafts folder.
+
+    Pass idempotency_key (same value on retry) to avoid creating a second
+    draft if the call is retried after e.g. a network timeout."""
     return _tool_call(
-        "email_create_draft", project, t_email.email_create_draft,
-        to, subject, body, cc, in_reply_to,
+        "email_create_draft", project, _with_mail_backend(t_email.email_create_draft),
+        to, subject, body, cc, in_reply_to, idempotency_key=idempotency_key,
     )
 
 
 @mcp.tool()
-def email_send(project: str, to: str, subject: str, body: str, cc: str | None = None) -> dict:
-    """Send an email (requires owner + allow_send feature flag)."""
+def email_send(
+    project: str, to: str, subject: str, body: str, cc: str | None = None, idempotency_key: str | None = None,
+) -> dict:
+    """Send an email (requires owner + allow_send feature flag).
+
+    Pass idempotency_key (same value on retry) to avoid sending a duplicate
+    if the call is retried after e.g. a network timeout — a retry with the
+    same key returns the original result (including a queued outbox
+    action_id) instead of sending/queuing again."""
     return _tool_call(
         "email_send", project, t_email.email_send,
-        to, subject, body, cc,
+        to, subject, body, cc, idempotency_key=idempotency_key,
     )
 
 
@@ -556,8 +1939,12 @@ def calendar_create(
     attendees: list[str] | None = None,
     location: str | None = None,
     description: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
-    """Create a calendar event."""
+    """Create a calendar event.
+
+    Pass idempotency_key (same value on retry) to avoid creating a duplicate
+    event if the call is retried after e.g. a network timeout."""
     user = _user()
     _rl(user, project)
     try:
@@ -566,22 +1953,31 @@ def calendar_create(
             user, project, "calendar_create",
             t_cal.calendar_create,
             _get_acl(), user, project, title, start, end, attendees, location, description, _dav=dav,
+            idempotency_key=idempotency_key,
         )
     except CalendarAuthRequired as e:
         return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
 
 
 @mcp.tool()
-def calendar_update(project: str, id: str, **fields) -> dict:
-    """Update fields on an existing calendar event."""
+def calendar_update(project: str, id: str, idempotency_key: str | None = None, **fields) -> dict:
+    """Update fields on an existing calendar event.
+
+    Pass idempotency_key (same value on retry) to avoid re-applying the
+    same update twice if the call is retried after e.g. a network timeout."""
     user = _user()
     _rl(user, project)
+    # Reject any leading-underscore key from the client: those names are
+    # reserved for internal control kwargs (_dav/_confirmed/_outbox/_cfg) and
+    # must never be settable by a caller — otherwise a client could pass
+    # _confirmed=True and bypass the outbox gate in tools/calendar.py.
+    fields = {k: v for k, v in fields.items() if not k.startswith("_")}
     try:
         dav = _resolve_calendar_dav(project, user)
         return _audited(
             user, project, "calendar_update",
             t_cal.calendar_update,
-            _get_acl(), user, project, id, _dav=dav, **fields,
+            _get_acl(), user, project, id, _dav=dav, idempotency_key=idempotency_key, **fields,
         )
     except CalendarAuthRequired as e:
         return {"auth_required": True, "link_url": e.link_url, "options": e.options, "hint": "Kör calendar_setup för att välja åtkomstläge"}
@@ -615,6 +2011,60 @@ def _refresh_google_token(cfg: dict, store, user: str, account: str, token_data:
         return new_data.get("access_token")
     except Exception:
         return None
+
+
+def _refresh_microsoft_token(cfg: dict, store, user: str, account: str, token_data: dict) -> str | None:
+    """Mirrors _refresh_google_token for the microsoft provider (used by
+    the Graph mail adapter)."""
+    import requests as req_lib
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        return None
+    provider_cfg = cfg.get("memaix", {}).get("oauth_providers", {}).get("microsoft", {})
+    client_id = provider_cfg.get("client_id", "")
+    client_secret = config.secret(provider_cfg.get("client_secret_ref", "")) or ""
+    try:
+        resp = req_lib.post(
+            "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        new_data = resp.json()
+        # Microsoft may not re-issue refresh_token on every refresh — preserve the original
+        new_data.setdefault("refresh_token", refresh_token)
+        store.store(user, "microsoft", account, new_data)
+        return new_data.get("access_token")
+    except Exception:
+        return None
+
+
+def _ensure_fresh_microsoft_mail_token(user: str) -> None:
+    """If the user has a linked microsoft account, refresh its access_token
+    when it's missing/expiring before the connector registry loads it —
+    registry.get()'s per_user branch only loads whatever is stored, it
+    doesn't refresh. A no-op if the user has no microsoft account (the
+    project's mail resource is presumably shared IMAP instead)."""
+    store = _get_token_store()
+    accounts = [a for a in store.list_accounts(user) if a["provider"] == "microsoft"]
+    if not accounts:
+        return
+    account = accounts[0]["account"]
+    token_data = store.load_one(user, "microsoft", account)
+    if not token_data:
+        return
+    import time
+    expires_at = token_data.get("expires_at") or (
+        token_data.get("created_at", 0) + token_data.get("expires_in", 3600)
+    )
+    if isinstance(expires_at, (int, float)) and expires_at - 60 < time.time():
+        if not _refresh_microsoft_token(config.load(), store, user, account, token_data):
+            store.mark_needs_relink(user, "microsoft", account)
 
 
 def _resolve_calendar_dav(project: str, user: str):
@@ -704,10 +2154,10 @@ def _resolve_calendar_dav(project: str, user: str):
 
 def build_http_app():
     """Build the Starlette app with Bearer-auth for HTTP transport."""
-    from starlette.routing import Route
-    from starlette.responses import JSONResponse, RedirectResponse
-    from starlette.requests import Request
     from starlette.middleware.cors import CORSMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, RedirectResponse, Response
+    from starlette.routing import Route
 
     # ------------------------------------------------------------------
     # Custom HTTP handlers
@@ -828,7 +2278,7 @@ def build_http_app():
         auth_url = PROVIDER_AUTH_URLS[provider] + "?" + urlencode(params)
         return RedirectResponse(auth_url)
 
-    async def link_callback(request: Request) -> JSONResponse:
+    async def link_callback(request: Request) -> Response:
         """Handle OAuth callback: exchange code for tokens and store them."""
         provider = request.path_params["provider"]
         code = request.query_params.get("code", "")
@@ -872,16 +2322,22 @@ def build_http_app():
             resp.raise_for_status()
             token_data = resp.json()
         except Exception as exc:
-            return JSONResponse(
-                {"error": "token_exchange_failed", "detail": str(exc)}, status_code=500
-            )
+            # Don't echo the raw exception (can carry internal URLs / response
+            # fragments) back to the caller — log it, return a generic error.
+            logger.warning("OAuth token exchange failed for provider %s: %s", provider, exc)
+            return JSONResponse({"error": "token_exchange_failed"}, status_code=500)
 
         account_email = token_data.get("email", "") or _get_account_email(provider, token_data)
 
         store = _get_token_store()
         store.store(user_id, provider, account_email, token_data)
 
-        provider_label = {"google": "Google", "microsoft": "Microsoft"}.get(provider, provider.title())
+        # HTML-escape values that ultimately derive from an IdP claim
+        # (account_email) or the provider string before embedding them in the
+        # success page — an attacker-controlled claim must not inject markup.
+        from html import escape as _html_escape
+        provider_label = _html_escape({"google": "Google", "microsoft": "Microsoft"}.get(provider, provider.title()))
+        account_email = _html_escape(account_email or "")
         board_url = public_url.rstrip("/") + "/board"
         html = f"""<!doctype html>
 <html lang="sv">
@@ -943,14 +2399,48 @@ def build_http_app():
         from starlette.responses import HTMLResponse as _HTMLResponse
         return _HTMLResponse(html)
 
+    async def rule_webhook(request: Request) -> JSONResponse:
+        """Inbound trigger for webhook-type automation rules (FEATURE-AUTOMATION-RULES.md §6).
+
+        The token is itself the shared secret (a random 'token' generated when
+        the rule was created) — a sufficiently random URL segment, compared in
+        constant time (rules/match.py). Rate-limited per client IP so the token
+        can't be brute-forced.
+        """
+        # Unauthenticated endpoint — rate-limit per client IP so a valid token
+        # can't be guessed by volume (30 attempts / 60 s).
+        client_ip = request.client.host if request.client else "unknown"
+        if not _rate_limiter.check(f"webhook:{client_ip}", limit=30, window_s=60):
+            return JSONResponse({"error": "rate_limited"}, status_code=429)
+
+        token = request.path_params["token"]
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        import hashlib
+        import json as _json
+        digest = hashlib.sha256(_json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        event = {
+            "type": "webhook", "project": None, "id": f"webhook:{token}:{digest}",
+            "payload": {**body, "token": token},
+        }
+        from .rules.engine import evaluate
+        results = evaluate(_get_rules(), _get_acl(), event)
+        if not results:
+            return JSONResponse({"error": "no matching enabled rule for this token"}, status_code=404)
+        return JSONResponse({"ok": True, "matched": len(results)})
+
     # ------------------------------------------------------------------
 
     cfg = config.load()
     auth_cfg = cfg.get("memaix", {}).get("auth", {})
 
     if auth_cfg.get("issuer"):
-        from .auth.token import HydraTokenVerifier
         from mcp.server.auth.settings import AuthSettings
+
+        from .auth.token import HydraTokenVerifier
         verifier = HydraTokenVerifier.from_config(cfg)
         mcp.settings.auth = AuthSettings(
             issuer_url=auth_cfg["issuer"],
@@ -961,8 +2451,9 @@ def build_http_app():
     # FastMCP's DNS rebinding protection defaults to allowed_hosts=[] when binding
     # to 0.0.0.0 (as opposed to localhost), which causes 421 for every real hostname.
     # Explicitly allow the public host extracted from resource_server_url.
-    from mcp.server.transport_security import TransportSecuritySettings
     from urllib.parse import urlparse as _urlparse2
+
+    from mcp.server.transport_security import TransportSecuritySettings
     _pub_host = _urlparse2(
         auth_cfg.get("resource_server_url", auth_cfg.get("issuer", ""))
     ).netloc or "mcp.example.com"
@@ -975,6 +2466,7 @@ def build_http_app():
     mcp.settings.streamable_http_path = "/"
 
     from .board.routes import board_routes
+    from .web.routes import web_routes
 
     custom_routes = [
         Route("/health", health_handler),
@@ -982,7 +2474,9 @@ def build_http_app():
         Route("/oauth2/register", dcr_handler, methods=["POST"]),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
+        Route("/hooks/{token}", rule_webhook, methods=["POST"]),
         *board_routes,
+        *web_routes,
     ]
 
     mcp._custom_starlette_routes = custom_routes
@@ -996,6 +2490,40 @@ def build_http_app():
         0, _Route("/.well-known/oauth-protected-resource", protected_resource_handler)
     )
 
+    # Start the proactive-brief scheduler (FEATURE-PROACTIVE-BRIEF.md §7).
+    # Runs as a background asyncio task inside the same process as the HTTP
+    # server; a single worker deployment is assumed (see docs's multi-worker
+    # note — the schedule table's compare-and-set claim keeps a second worker
+    # from double-sending, but only one worker needs to run the loop at all).
+    # Starlette dropped add_event_handler(); wrap the router's lifespan context
+    # manager instead so our task starts/stops alongside FastMCP's own lifespan.
+    if cfg.get("memaix", {}).get("brief", {}).get("enabled", True):
+        import contextlib
+
+        _original_lifespan = starlette_app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def _lifespan_with_scheduler(app):
+            import asyncio
+
+            from .notify.deliver import deliver as _deliver_brief
+            from .notify.scheduler import scheduler_loop
+
+            def _deliver_for_user(user, prefs, now):
+                _deliver_brief(
+                    _get_notify(), _get_acl(), config.load(), user, prefs,
+                    now=now, tools=_brief_tools_for_user(),
+                )
+
+            task = asyncio.create_task(scheduler_loop(_get_notify(), _deliver_for_user))
+            try:
+                async with _original_lifespan(app) as state:
+                    yield state
+            finally:
+                task.cancel()
+
+        starlette_app.router.lifespan_context = _lifespan_with_scheduler
+
     # Wrap with CORS so claude.ai browser requests aren't blocked.
     app = CORSMiddleware(
         app=starlette_app,
@@ -1008,9 +2536,44 @@ def build_http_app():
     return app
 
 
+def _decode_id_token_claims(id_token: str) -> dict:
+    """Decode an OIDC id_token's claims without verifying the signature.
+
+    Safe here: the token was obtained directly from the provider's token
+    endpoint over TLS during the exchange above (never supplied by the
+    client), and is only used to derive a stable account identifier — not to
+    authenticate a request. Returns {} on any decode failure.
+    """
+    import jwt
+    try:
+        return jwt.decode(
+            id_token,
+            options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
+        )
+    except Exception:
+        return {}
+
+
 def _get_account_email(provider: str, token_data: dict) -> str:
-    """Extract account email from token response or return a placeholder."""
-    return token_data.get("email", f"linked-{provider}")
+    """Derive a stable per-account identifier from the token response.
+
+    Google/Microsoft never put the email in the token endpoint body itself —
+    it lives in the id_token's claims (requires an 'openid'+'email' scope).
+    Without this, every linked account for a provider fell back to the same
+    'linked-<provider>' key and a second linked account silently overwrote
+    the first in the token store. Falls back to the token's 'sub' (still
+    unique per account) before the last-resort shared placeholder.
+    """
+    id_token = token_data.get("id_token")
+    if id_token:
+        claims = _decode_id_token_claims(id_token)
+        email = claims.get("email") or claims.get("preferred_username") or claims.get("upn")
+        if email:
+            return email
+        sub = claims.get("sub")
+        if sub:
+            return f"{provider}-{sub}"
+    return f"linked-{provider}"
 
 
 def main() -> None:
