@@ -7,6 +7,19 @@ bekräftelser) presenteras för operatören. Kompletterar `WIZARD.md` (flödet) 
 **En liten lokal webb-wizard som paketet själv serverar — inte en native Win/Mac-app.** Plus
 CLI/declarative config för repeterbara installationer. Ingen native desktop-app i v1.
 
+**Entré: ett startskript.** `./setup.sh` (macOS/Linux) eller `.\setup.ps1` (Windows) genererar
+engångstoken, startar wizarden (`scripts/setup_web.py`, enbart stdlib) och öppnar webbläsaren.
+Skriptet — inte webben — reser sedan stacken och kör doctor (webben behöver aldrig Docker-åtkomst).
+Saknas python3 på värden körs wizarden i en python-container publicerad enbart på 127.0.0.1.
+På en molnserver: kör skriptet där, nå wizarden via `ssh -L 8765:localhost:8765 servern`.
+**Status: första versionen byggd.** Config-genereringen delas med CLI-wizarden via
+`scripts/setup_engine.py` — en motor, två bärare.
+
+**Fas 1b-omdefinition (2026-07-03):** den separata "config-wizard" som BUILD.md Fas 1b beskrev
+byggs INTE — day-2-konfiguration (användare, roller, projekt) bor i `/app/admin` (AclWriter,
+auditlogg, MFA, automatisk omläsning). En andra skrivväg till samma filer vore dubbel buggyta.
+Setup-webben är enbart **first-boot**: den vägrar starta om `config/acl.yaml` redan finns.
+
 ## Varför webb, inte native
 - **Memaix körs på en server, ofta headless** (VPS via SSH). En Win/Mac-app passar inte en
   headless Linux-box — bara desktop-install.
