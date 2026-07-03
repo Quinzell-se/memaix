@@ -34,11 +34,14 @@ jobs:
       - name: Beroende-sårbarheter (pip-audit)
         working-directory: gateway
         # Scans installed deps against the PyPI advisory DB (OPEN-GAPS #5).
-        # --skip-editable: the gateway itself is installed with `pip install -e`
-        # and isn't on PyPI — auditing it is impossible and fails --strict.
+        # Audit a freeze WITHOUT the editable gateway: the local package isn't
+        # on PyPI, and under --strict pip-audit errors on it both when trying
+        # to audit it AND when skipping it (--skip-editable still exits 1).
+        # Freezing with --exclude-editable keeps --strict for every real dep.
         run: |
           pip install pip-audit
-          python -m pip_audit --strict --desc --skip-editable
+          pip freeze --exclude-editable > /tmp/audit-reqs.txt
+          python -m pip_audit --strict --desc -r /tmp/audit-reqs.txt
 
   sbom:
     runs-on: ubuntu-latest
