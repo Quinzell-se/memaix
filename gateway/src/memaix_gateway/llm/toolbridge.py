@@ -77,8 +77,13 @@ class ToolBridge:
         return _audit()
 
     def _max_role_rank(self) -> int:
-        """Användarens högsta roll över synliga projekt (admin ⇒ owner)."""
+        """Användarens högsta roll över synliga projekt (admin ⇒ owner).
+        Kill-switch först: en avstängd användare får INGET (acl-kontraktet
+        'disabled ⇒ nekad allt') — annars läcker schemat verktyg till någon
+        som ändå nekas vid varje anrop."""
         acl = self._acl()
+        if getattr(acl, "is_disabled", None) and acl.is_disabled(self.user):
+            return -1
         if getattr(acl, "is_admin", None) and acl.is_admin(self.user):
             return _rank("owner")
         grants = acl.grants(self.user)

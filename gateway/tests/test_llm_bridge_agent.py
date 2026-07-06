@@ -255,3 +255,57 @@ def test_server_user_respects_agent_identity(monkeypatch):
         assert server._user() == "jimmy"
     finally:
         AGENT_USER.reset(token)
+
+
+# ─────────────── Granskningsfynd fas 2 (adversariell review) ─────────────────
+
+
+def test_disabled_user_sees_no_tools_and_is_denied(monkeypatch):
+    """Fynd 1: kill-switch måste gälla i bryggan, inte bara vid enforce —
+    en avstängd användare får varken se scheman eller nå anrop."""
+    clear_registry()
+    register(
+        Capability(key="mem.recall", area="memory", title_key="t", summary_key="s",
+                   tools=("memory_search",), example_prompts_key="e",
+                   needs_role="reader", needs_resource="vault", tags=()),
+    )
+    acl = Acl(
+        users={"spärrad": {"grants": {"acme": "owner"}, "disabled": True}},
+        projects={"acme": {"vault": "/tmp/v"}},
+    )
+    tools = [_FakeTool("memory_search", lambda project, query: [])]
+    bridge = ToolBridge("spärrad", _mcp=_FakeMCP(tools), _acl=acl, _audit=_Audit())
+    assert bridge.schemas() == [], "avstängd ser inga verktyg"
+    outcome = bridge.call("memory_search", {"project": "acme", "query": "x"})
+    assert outcome["ok"] is False, "avstängd nekas vid grinden"
+    clear_registry()
+
+
+def test_single_turn_cannot_blow_past_daily_cap(rig, tmp_path):
+    """Fynd 2: mid-tur-omkontroll — en tur med många rundor stoppas när
+    ackumulerad förbrukning når taket, inte först vid bokföring efteråt."""
+    mk, _, _ = rig
+    heavy = {"content": None, "usage": 300, "tool_calls": [
+        {"id": "x", "name": "calendar_list", "args": {"project": "acme"}}]}
+    client = _ScriptedClient([heavy] * 8)
+    budget = DailyBudget(str(tmp_path / "chat.db"))
+    with pytest.raises(LLMError) as exc:
+        run_turn("jimmy", [{"role": "user", "content": "loopa dyrt"}],
+                 cfg=_cfg(max_rounds=8, max_tokens_per_day=1000),
+                 client=client, bridge=mk("jimmy"), budget=budget)
+    assert "tak" in str(exc.value)
+    # och förbrukningen bokfördes trots avbrottet (ingen gratis-tur)
+    assert budget.spent("jimmy") > 0
+
+
+def test_aborted_turn_still_charges_budget(rig, tmp_path):
+    """Round-cap-turen bokför sina tokens (annars kringgås taket via retry)."""
+    mk, _, _ = rig
+    endless = {"content": None, "usage": 50, "tool_calls": [
+        {"id": "x", "name": "calendar_list", "args": {"project": "acme"}}]}
+    budget = DailyBudget(str(tmp_path / "chat.db"))
+    with pytest.raises(LLMError):
+        run_turn("jimmy", [{"role": "user", "content": "loopa"}],
+                 cfg=_cfg(max_rounds=3, max_tokens_per_day=100000),
+                 client=_ScriptedClient([endless] * 3), bridge=mk("jimmy"), budget=budget)
+    assert budget.spent("jimmy") == 150  # 3 rundor × 50

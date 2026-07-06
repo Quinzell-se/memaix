@@ -23,11 +23,19 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
+from collections import defaultdict
 from pathlib import Path
 
 from .client import LLMClient, LLMError
 from .toolbridge import ToolBridge
+
+# Per-användare-lås: serialiserar check→kör→bokför så två samtidiga turer för
+# SAMMA användare inte båda kan passera taket innan någon hunnit skriva
+# (TOCTOU). Processlokalt — single-worker-antagandet gäller hela gatewayn
+# (se brief-schemaläggarens not i server.py).
+_USER_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
 
 _DEFAULT_LIMITS = {
     "max_rounds": 8,
@@ -106,59 +114,76 @@ def run_turn(
     bridge = bridge or ToolBridge(user)
     budget = budget or DailyBudget()
     limits = _limits(cfg)
+    cap = limits["max_tokens_per_day"]
 
-    if budget.spent(user) >= limits["max_tokens_per_day"]:
-        raise LLMError(
-            f"dagens token-tak nått ({limits['max_tokens_per_day']}) — höj "
-            f"model.limits.max_tokens_per_day eller vänta till imorgon"
-        )
+    # Serialisera hela turen per användare: check, körning och bokföring blir
+    # odelbara, så samtidiga turer inte kan smita förbi taket (granskningsfynd).
+    with _USER_LOCKS[user]:
+        if budget.spent(user) >= cap:
+            raise LLMError(
+                f"dagens token-tak nått ({cap}) — höj "
+                f"model.limits.max_tokens_per_day eller vänta till imorgon"
+            )
 
-    tools = bridge.schemas() if client.supports_tools else None
-    if not client.supports_tools:
-        emit("warning", {"message": "modellen saknar verktygsstöd i v1 (google) — svarar utan verktyg"})
+        tools = bridge.schemas() if client.supports_tools else None
+        if not client.supports_tools:
+            emit("warning", {"message": "modellen saknar verktygsstöd i v1 (google) — svarar utan verktyg"})
 
-    from ..tools.whoami import MEMORY_RULES
+        from ..tools.whoami import MEMORY_RULES
 
-    name = ((cfg.get("brand") or {}).get("name")) or "Memaix"
-    system = _SYSTEM_PROMPT.format(name=name, user=user, memory_rules=MEMORY_RULES)
-    messages = [{"role": "system", "content": system}, *history]
+        name = ((cfg.get("brand") or {}).get("name")) or "Memaix"
+        system = _SYSTEM_PROMPT.format(name=name, user=user, memory_rules=MEMORY_RULES)
+        messages = [{"role": "system", "content": system}, *history]
 
-    total_tokens = 0
-    calls_made = 0
-    for round_no in range(limits["max_rounds"]):
-        reply = client.complete(messages, max_tokens=limits["max_tokens_per_turn"], tools=tools)
-        total_tokens += reply.get("usage", 0)
+        total_tokens = 0
+        calls_made = 0
+        try:
+            for round_no in range(limits["max_rounds"]):
+                # Mid-tur-omkontroll: en enskild tur får inte spränga taket med
+                # upp till max_rounds×max_tokens_per_turn innan bokföring.
+                if budget.spent(user) + total_tokens >= cap:
+                    raise LLMError(
+                        f"dagens token-tak nått under turen ({cap}) — "
+                        f"höj model.limits.max_tokens_per_day eller vänta"
+                    )
+                reply = client.complete(
+                    messages, max_tokens=limits["max_tokens_per_turn"], tools=tools
+                )
+                total_tokens += reply.get("usage", 0)
 
-        if not reply["tool_calls"]:
-            budget.add(user, total_tokens)
-            return {
-                "content": reply["content"] or "",
-                "rounds": round_no + 1,
-                "tool_calls": calls_made,
-                "tokens": total_tokens,
-                "messages": [*messages[1:]],  # utan systemprompten
-            }
+                if not reply["tool_calls"]:
+                    return {
+                        "content": reply["content"] or "",
+                        "rounds": round_no + 1,
+                        "tool_calls": calls_made,
+                        "tokens": total_tokens,
+                        "messages": [*messages[1:]],  # utan systemprompten
+                    }
 
-        messages.append({
-            "role": "assistant",
-            "content": reply["content"],
-            "tool_calls": reply["tool_calls"],
-        })
-        for call in reply["tool_calls"]:
-            emit("tool_start", {"name": call["name"]})
-            outcome = bridge.call(call["name"], call["args"])
-            calls_made += 1
-            emit("tool_result", {"name": call["name"], "ok": outcome["ok"]})
-            # Verktygsresultat är DATA — märkt som sådan även strukturellt.
-            body = outcome.get("result") if outcome["ok"] else {"error": outcome["error"]}
-            messages.append({
-                "role": "tool",
-                "call_id": call["id"],
-                "name": call["name"],
-                "content": json.dumps(body, ensure_ascii=False, default=str)[:8000],
-            })
+                messages.append({
+                    "role": "assistant",
+                    "content": reply["content"],
+                    "tool_calls": reply["tool_calls"],
+                })
+                for call in reply["tool_calls"]:
+                    emit("tool_start", {"name": call["name"]})
+                    outcome = bridge.call(call["name"], call["args"])
+                    calls_made += 1
+                    emit("tool_result", {"name": call["name"], "ok": outcome["ok"]})
+                    # Verktygsresultat är DATA — märkt som sådan även strukturellt.
+                    body = outcome.get("result") if outcome["ok"] else {"error": outcome["error"]}
+                    messages.append({
+                        "role": "tool",
+                        "call_id": call["id"],
+                        "name": call["name"],
+                        "content": json.dumps(body, ensure_ascii=False, default=str)[:8000],
+                    })
 
-    budget.add(user, total_tokens)
-    raise LLMError(
-        f"turen nådde taket på {limits['max_rounds']} verktygsrundor utan slutsvar"
-    )
+            raise LLMError(
+                f"turen nådde taket på {limits['max_rounds']} verktygsrundor utan slutsvar"
+            )
+        finally:
+            # Bokför ALLTID förbrukningen — även vid tak/undantag/krasch — så en
+            # avbruten tur inte blir gratis (annars kringgås taket med retries).
+            if total_tokens:
+                budget.add(user, total_tokens)

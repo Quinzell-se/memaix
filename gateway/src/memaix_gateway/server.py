@@ -19,13 +19,13 @@ from mcp.server.fastmcp import FastMCP
 
 from . import config
 from .acl import AccessDenied, Acl
+from .capabilities.catalog import register_defaults as _register_default_capabilities
 
 # Agentloopens identitetskontext (FEATURE-LLM-ENGINE Fas 2) — definieras i
 # llm/identity.py (ett kontrakt, en definition; llm-lagret slipper MCP-
 # beroendet). Sätts enbart av ToolBridge.call() från en verifierad
 # webbsession, per-task-isolerad, alltid återställd i finally.
 from .llm.identity import AGENT_USER as _AGENT_USER
-from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
 from .tools import account as t_account
