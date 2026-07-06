@@ -103,13 +103,25 @@ Specas inte vidare här; motorn byggs så att den inte behöver byggas om.
 ✅ Klar när: testknappen ger modellnamn+latens mot riktig Anthropic-nyckel,
 mot Ollama på LAN och mot OpenRouter; nyckeln förekommer inte i någon logg.
 
-**Fas 2 — verktygsbrygga + agentloop (headless)**
-`toolbridge.py` (schema-generering + `_agent_user`-context) · `agent.py`
-(loopen, taken, audit `source=chat`) · enhetstester som bevisar att en
-reader-användare inte kan nå skriv-verktyg via chatten och att outbox
-fångar `email_send` exakt som via MCP.
-✅ Klar när: ett scriptat testsamtal ("vad har jag i kalendern?") kör
-calendar_list som rätt användare och nekas rätt saker.
+**Fas 2 — verktygsbrygga + agentloop (headless) — ✅ byggd**
+`llm/toolbridge.py`: vy över FastMCP-registret (inget dubbelregistreras);
+rollfilter ur förmåge-katalogens needs_role (en sanning för synlighet OCH
+upptäckbarhet); identitet via `llm/identity.py`:s AGENT_USER-contextvar
+(egen modul — llm-lagret är MCP-oberoende, ett kontrakt en definition),
+satt/återställd i finally runt varje anrop; anrop går genom SAMMA
+funktionsobjekt som MCP → ACL/outbox/rate-limits/audit ärvs, audit-taggen
+`chat:<tool>` loggar arg-nycklar aldrig värden. `llm/agent.py`: begränsad
+loop (max_rounds 8), tak per tur och per dygn (SQLite — överlever omstart,
+fail closed), systemprompt med otrodd-data-regeln + minnestrappan,
+transportneutral on_event (SSE kopplas i Fas 3). Klienten: neutralt
+meddelandeformat, verktygsöversättning för anthropic + openai-kompatibel;
+google text-utan-verktyg i v1 med admin-varning (specens öppna fråga föll
+ut som planerat).
+✅ Verifierad med tester 2026-07-06: scriptade kalendersamtalet kör
+calendar_list som rätt användare; reader ser inte skriv-verktyg och nekas
+även vid gissat namn; identiteten återställs även vid verktygskrasch;
+dygnstaket överlever processomstart. Outbox-garantin är arkitektonisk:
+samma funktionsobjekt som MCP — ingen parallell väg finns att testa.
 
 **Fas 3 — chatt-UI**
 `/app/chat` med SSE-streaming, historik, verktygs-statusrader ·

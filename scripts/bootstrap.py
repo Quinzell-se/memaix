@@ -456,6 +456,10 @@ def run_doctor() -> None:
         model = cfg.get("model") or {}
         if model.get("provider"):
             label = f"AI-val: {model['provider']}/{model.get('name', '?')}"
+            if not model.get("limits"):
+                check(f"{label} — kostnadstak satta", False,
+                      "sätt model.limits (max_rounds/max_tokens_per_turn/"
+                      "max_tokens_per_day) — defaults gäller men bör vara medvetna val")
             ref = model.get("api_key_ref", "")
             if ref:
                 if ref.startswith("file:"):
