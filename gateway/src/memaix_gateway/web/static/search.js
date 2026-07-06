@@ -31,6 +31,13 @@
         src.className = 'muted';
         src.textContent = ` — ${r.project} · ${r.source_type} · ${r.ref}`;
         head.append(title, src);
+        if (r.status === 'hypotes') {
+          // Minnestrappan: en obekräftad notering ska aldrig se ut som fakta.
+          const badge = document.createElement('span');
+          badge.className = 'muted';
+          badge.textContent = ` ⚠ ${t('web_search_hypothesis')}`;
+          head.append(badge);
+        }
         const snip = document.createElement('div');
         snip.className = 'muted';
         snip.textContent = r.snippet ?? '';

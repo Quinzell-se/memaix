@@ -71,7 +71,9 @@ def test_memory_notes_and_note_roundtrip(rig):
     memory_write(acl, "alice", "proj", "a.md", "# Title\n\nbody")
     resp = client.get("/app/api/memory/notes?project=proj")
     assert resp.status_code == 200
-    assert resp.json() == [{"path": "a.md", "mtime": resp.json()[0]["mtime"]}]
+    assert resp.json() == [
+        {"path": "a.md", "mtime": resp.json()[0]["mtime"], "status": "hypotes"}
+    ]
 
     note = client.get("/app/api/memory/note?project=proj&path=a.md")
     assert note.status_code == 200

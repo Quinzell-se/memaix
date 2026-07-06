@@ -1175,14 +1175,25 @@ def memory_search(project: str, query: str) -> list:
 
 
 @mcp.tool()
-def memory_write(project: str, note: str, content: str) -> dict:
-    """Write (overwrite) a memory note."""
-    return _tool_call("memory_write", project, t_memory.memory_write, note, content)
+def memory_write(project: str, note: str, content: str, status: str | None = None) -> dict:
+    """Write (overwrite) a memory note. status: 'hypotes' (default) eller
+    'verifierad' — sätt verifierad ENDAST efter källbekräftelse eller
+    mänskligt besked (minnestrappan, se whoami.memory_rules)."""
+    return _tool_call("memory_write", project, t_memory.memory_write, note, content, status)
+
+
+@mcp.tool()
+def memory_set_status(project: str, note: str, status: str) -> dict:
+    """Flytta en notering i minnestrappan: 'hypotes' eller 'verifierad',
+    utan att ändra innehållet. Befordra aldrig för att något låter rimligt —
+    bara efter bekräftelse i källa/verktyg eller från en människa."""
+    return _tool_call("memory_set_status", project, t_memory.memory_set_status, note, status)
 
 
 @mcp.tool()
 def memory_append(project: str, note: str, text: str) -> dict:
-    """Append text to a memory note (creates if absent)."""
+    """Append text to a memory note (creates if absent). En ny notering föds
+    som hypotes (minnestrappan)."""
     return _tool_call("memory_append", project, t_memory.memory_append, note, text)
 
 

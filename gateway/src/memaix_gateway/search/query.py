@@ -66,6 +66,23 @@ def _reciprocal_rank_fusion(rank_lists: list[list[dict]], k: int = 60) -> list[d
     return [{**payload[key], "score": score} for key, score in ordered]
 
 
+def _memory_status(acl, project: str, ref: str) -> str:
+    """Aktuell trapp-status för en memory-träff — slås upp vid frågetillfället
+    (indexet kan vara äldre än en färsk befordran)."""
+    from pathlib import Path
+
+    from ..backends.memory_store import MemoryStore
+    from ..tools.memory import note_status
+
+    try:
+        vault = acl.resource(project, "vault")
+        if not vault:
+            return "hypotes"
+        return note_status(MemoryStore.for_vault(Path(vault)).read(ref) or "")
+    except Exception:
+        return "hypotes"
+
+
 def search_all(
     acl, user: str, cfg: dict | None, store, embedder,
     query: str, projects: list[str] | None = None, limit: int = 8,
@@ -125,14 +142,19 @@ def search_all(
 
     results = []
     for item in fused:
-        results.append({
+        hit = {
             "project": item["project"],
             "source_type": item["source_type"],
             "ref": item["ref"],
             "title": item.get("title", ""),
             "snippet": (item.get("text") or "")[:200],
             "score": round(item.get("score", 0.0), 6),
-        })
+        }
+        # Minnestrappan: memory-träffar bär sin status så en hypotes aldrig
+        # presenteras som faktum i sökresultat (SELF-IMPROVING-SYSTEM Fas B).
+        if item["source_type"] == "memory":
+            hit["status"] = _memory_status(acl, item["project"], item["ref"])
+        results.append(hit)
         if len(results) >= limit:
             break
 

@@ -34,7 +34,7 @@ def register_defaults() -> None:
             key="memory.remember", area="memory",
             title_key="cap.memory.remember.title",
             summary_key="cap.memory.remember.summary",
-            tools=("memory_write", "memory_append"),
+            tools=("memory_write", "memory_append", "memory_set_status"),
             example_prompts_key="cap.memory.remember.examples",
             needs_role="collaborator", needs_resource="vault",
             tags=("minne", "anteckning", "memory", "note"),

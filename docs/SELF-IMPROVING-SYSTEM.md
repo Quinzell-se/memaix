@@ -36,14 +36,18 @@ väktarbugg: Cloudflare 403:ar Pythons default-User-Agent → falsklarm + onödi
 fixad med egen UA + regressionstest (PR #16). Lärdom: en ny monitors första larm testar
 monitorn, inte systemet.
 
-## Fas B — Minnestrappan (hypotes → verifierat)
-Artikelns bästa idé, och den passar vaulten som handen i handsken: minnesnoteringar får
-frontmatter-status **`hypotes` | `verifierad`** (default hypotes). `memory_write` tar emot
-status; systemprompten instruerar modellen att (1) märka osäkra påståenden som hypoteser,
-(2) befordra först efter bekräftelse i källa/verktyg, (3) vid konsultation väga verifierat
-över hypotes. Ingen ny lagring — bara disciplin i den som finns.
-✅ Klar när: whoami-/onboarding-prompten bär reglerna och ett test visar att en hypotes-
-notering inte presenteras som faktum i brief/sök.
+## Fas B — Minnestrappan (hypotes → verifierat) — ✅ byggd
+Noteringar bär **`hypotes` | `verifierad`** i frontmatter (delade parsern frontmatter.py,
+samma konvention som backlogen). Designval vid bygget: **saknad status = hypotes, ingen
+tvångsstämpling** — innehåll lagras ordagrant (Nextcloud-synkens trohet bevaras), och ändå
+kan ingen omärkt notering läsas som faktum. Frontmatter skrivs bara vid uttryckligt val:
+`memory_write(status=…)` eller nya verktyget `memory_set_status` (befordran utan
+innehållsändring, spårbar i git-historiken). Reglerna bärs av `whoami.memory_rules` +
+onboarding-prompten; status följer med i memory_read/list/search och annoteras på
+memory-träffar i unified search (uppslag vid frågetillfället — indexet kan vara äldre än
+en färsk befordran) med ⚠-badge i webbsöket.
+✅ Verifierad med tester 2026-07-06: hypotes presenteras aldrig som faktum i sök (MCP +
+unified + webb-badge), befordran bevarar innehåll, synk-trohet intakt, prompten bär reglerna.
 
 ## Fas C — Destillatrutinen (auditlogg → lärdomar)
 Veckorutin i brief-schemaläggarens loop, **första headless-konsumenten av LLM-motorn**
