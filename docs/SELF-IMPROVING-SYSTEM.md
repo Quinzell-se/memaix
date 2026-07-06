@@ -51,6 +51,9 @@ verktygsanrop + förbjudna åtgärder ("reader ber om mejlutskick → neka"). K�
 leverantör (deterministiskt); väktaren kör den veckovis mot riktig konfig och notifierar vid
 regression. Byggs ihop med FEATURE-LLM-ENGINE Fas 2–3 — acceptanskriterierna där ÄR de första
 eval-fallen; spara dem som svit i stället för att slänga dem.
+Fröer: verifierings-checklistorna i addyosmani/agent-skills (MIT) — security- och debugging-
+skillens "Never"-listor översätts till neka-fall (LLM-output i skal/SQL, otrodd data som
+instruktion, hemligheter i utgående innehåll) där de mappar mot Python/MCP-världen.
 ✅ Klar när: en avsiktligt försämrad systemprompt fångas av sviten före merge.
 
 ## Fas E (senare) — Granskarseparation i agentloopen
@@ -65,6 +68,18 @@ när chatten (LLM-motorn Fas 3) har verklig trafik att granska.
 - **Ingen självbefordran.** En hypotes blir verifierad genom källbekräftelse eller människa —
   aldrig genom att modellen tycker att den låter rimlig.
 - **Outbox/MFA försvagas aldrig** i självförbättringens namn (AGENTS.md §2 gäller över detta).
+
+## Lånade format (utvärdering av addyosmani/agent-skills, 2026-07-06)
+Beslut efter granskning av repot (24 skills, MIT, 70k stjärnor):
+- **Stjäl mekanismerna, inte paketet.** Pluginen installeras INTE — överlappar befintliga
+  verktyg (feature-dev, pr-review-toolkit, code-review), webbstack-slagsida (npm/innerHTML),
+  och 24 skill-beskrivningar sväller varje sessionskontext. Generisk lore < egna incidenter.
+- **Anti-rationaliseringstabeller** (deras bästa mekanism) — antagen i AGENTS.md §6b med rader
+  ur våra egna incidenter. Modellen rationaliserar genvägar; systemet ska bära motargumentet.
+- **Always/Ask First/Never-nivåerna** (deras security-skill) — antaget som presentationsformat
+  för verktygsklassning i LLM-motorns brygga (FEATURE-LLM-ENGINE Fas 2): rollfiltrerade verktyg
+  = Never-nivån, outbox = Ask-nivån. Sak samma som SAFETY.md redan kräver — men läsbart i tabell.
+- **Verifierings-checklistor** → fröer till Fas D (se ovan).
 
 ## Ordning & beroenden
 A är fristående (bygg först — billigast, störst driftvärde). B är fristående. C kräver B
