@@ -41,6 +41,19 @@ ENV = ROOT / ".env"
 _ASSET = ROOT / "gateway" / "src" / "memaix_gateway" / "web" / "static" / "app.js"
 _ASSET_REF = re.compile(r"app\.js\?v=([0-9a-f]+)")
 
+# Cloudflare 403:ar Pythons default-User-Agent (bot-skydd) — curl passerar men
+# "Python-urllib/3.x" stoppas. Upptäckt vid första skarpa körningen: väktaren
+# falsklarmade "publik nere" och startade om en frisk tunnel. Egen UA på ALLA
+# anrop, annars övervakar vi Cloudflares botfilter i stället för Memaix.
+_UA = "memaix-watchdog/1.0"
+
+
+def _open(url: str, timeout: int, data: bytes | None = None, headers: dict | None = None):
+    hdrs = {"User-Agent": _UA, **(headers or {})}
+    return urllib.request.urlopen(
+        urllib.request.Request(url, data=data, headers=hdrs), timeout=timeout
+    )
+
 # Tjänst → hur felet läks. frontend/skrivbar/drift läks inte av omstart
 # (kräver rebuild/compose-ändring/deploy = människans beslut) — bara notis.
 _RESTARTABLE = ("gateway", "hydra", "public")
@@ -116,7 +129,7 @@ def _env_get(key: str) -> str:
 
 def _http_ok(url: str, timeout: int = 10) -> bool:
     try:
-        urllib.request.urlopen(url, timeout=timeout)
+        _open(url, timeout)
         return True
     except Exception:
         return False
@@ -138,7 +151,7 @@ def run_checks() -> dict:
     html = ""
     if public:
         try:
-            html = urllib.request.urlopen(f"{public}/app", timeout=15).read().decode()
+            html = _open(f"{public}/app", 15).read().decode()
             results["public"] = True
         except Exception:
             results["public"] = False
@@ -181,9 +194,7 @@ def notify(subject: str, body: str) -> None:
     fmt = _env_get("WATCHDOG_WEBHOOK_FMT") or "raw"
     target, data, headers = build_webhook_request(url, fmt, subject, body)
     try:
-        urllib.request.urlopen(
-            urllib.request.Request(target, data=data, headers=headers), timeout=15
-        )
+        _open(target, 15, data=data, headers=headers)
     except Exception as exc:
         print(f"watchdog: notis misslyckades: {type(exc).__name__}", file=sys.stderr)
 

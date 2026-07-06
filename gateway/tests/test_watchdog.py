@@ -66,3 +66,23 @@ def test_webhook_request_formats():
 
     _, data, headers = watchdog.build_webhook_request("https://ntfy.sh/t", "raw", "Ämne", "rad1")
     assert data.decode().startswith("Ämne") and "text/plain" in headers["Content-Type"]
+
+
+def test_all_http_goes_through_custom_user_agent(monkeypatch):
+    # Cloudflare 403:ar Pythons default-UA — utan egen UA övervakar väktaren
+    # Cloudflares botfilter i stället för Memaix (falsklarm + onödig omstart).
+    captured = {}
+
+    class _Resp:
+        status = 200
+
+        def read(self):
+            return b""
+
+    def fake_urlopen(req, timeout=None):
+        captured["ua"] = req.headers.get("User-agent", "")
+        return _Resp()
+
+    monkeypatch.setattr(watchdog.urllib.request, "urlopen", fake_urlopen)
+    assert watchdog._http_ok("https://example.com", 5) is True
+    assert captured["ua"].startswith("memaix-watchdog/"), captured
