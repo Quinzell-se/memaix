@@ -30,8 +30,11 @@ deploy är människans beslut (anti-hype-listan).
 Notis v1: `WATCHDOG_WEBHOOK_URL` (+ `WATCHDOG_WEBHOOK_FMT: raw|discord`) i `.env` — samma
 semantik som notify-lagrets WebhookChannel; utan URL loggas till journalen. Byte till
 notify-lagret när Fas C landar.
-✅ Klar när: en avsiktligt stoppad gateway självläker utan människa, och en avsiktligt
-cachetrasig frontend ger notis inom 6 h. *(Verifieras vid driftsättning.)*
+✅ **Verifierad i drift 2026-07-06:** avsiktligt stoppad gateway självläkte utan människa
+(upptäckt → omstart → omkontroll → "Självläkte"-notis). Driftsättningen fångade även en
+väktarbugg: Cloudflare 403:ar Pythons default-User-Agent → falsklarm + onödig tunnelomstart;
+fixad med egen UA + regressionstest (PR #16). Lärdom: en ny monitors första larm testar
+monitorn, inte systemet.
 
 ## Fas B — Minnestrappan (hypotes → verifierat)
 Artikelns bästa idé, och den passar vaulten som handen i handsken: minnesnoteringar får
