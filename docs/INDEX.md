@@ -38,6 +38,7 @@ Läs i den ordning som passar din roll.
    · [FEATURE-NEXTCLOUD-BACKEND.md](FEATURE-NEXTCLOUD-BACKEND.md) — funktion #8: Nextcloud som förstklassig backend (design + byggspec).
    · [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md) — funktion #9: PM-planeringsmotor & agent (byggspec).
    · [FEATURE-LLM-ENGINE.md](FEATURE-LLM-ENGINE.md) — funktion #10: LLM-motorn — server-side modell, verktygsbrygga, egen chatt (design + byggspec).
+   · [SELF-IMPROVING-SYSTEM.md](SELF-IMPROVING-SYSTEM.md) — inriktning: självövervakning, minnestrappan, destillatrutin, eval-svit (loopar över befintliga organ).
    · [ROADMAP.md](ROADMAP.md) — implementeringsroadmap: bygg-ordning, faser, beroenden.
    · [WEB-UI-SPEC.md](WEB-UI-SPEC.md) — webb-UI helhetspec: IA, rollmatris, ASCII-mockups, komponentbibliotek, byggordning (Fable-genererad).
    · [FEATURE-WEB-UI-FOUNDATION.md](FEATURE-WEB-UI-FOUNDATION.md) — MEX-022 Fas A: mörkt tema, app-shell, hem-dashboard (design + byggspec).
