@@ -19,6 +19,12 @@ from mcp.server.fastmcp import FastMCP
 
 from . import config
 from .acl import AccessDenied, Acl
+
+# Agentloopens identitetskontext (FEATURE-LLM-ENGINE Fas 2) — definieras i
+# llm/identity.py (ett kontrakt, en definition; llm-lagret slipper MCP-
+# beroendet). Sätts enbart av ToolBridge.call() från en verifierad
+# webbsession, per-task-isolerad, alltid återställd i finally.
+from .llm.identity import AGENT_USER as _AGENT_USER
 from .capabilities.catalog import register_defaults as _register_default_capabilities
 from .safety.audit import AuditLog
 from .safety.rate_limit import rate_limiter as _rate_limiter
@@ -145,13 +151,6 @@ def _http_mode() -> bool:
     """True when the gateway is served over HTTP (vs stdio) — MEMAIX_TRANSPORT
     or --http. In HTTP mode identity MUST come from a verified OAuth token."""
     return os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
-
-
-# Agentloopens identitetskontext (FEATURE-LLM-ENGINE Fas 2) — definieras i
-# llm/identity.py (ett kontrakt, en definition; llm-lagret slipper MCP-
-# beroendet). Sätts enbart av ToolBridge.call() från en verifierad webb-
-# session, per-task-isolerad, alltid återställd i finally.
-from .llm.identity import AGENT_USER as _AGENT_USER
 
 
 def _user() -> str:
