@@ -84,6 +84,18 @@ Gemensam nämnare: felen var osynliga i kanalen vi tittade i, uppenbara i kanale
    (här i 6b, i relevant spec, eller i byggarens beständiga minne). En bugg som bara fixas är en
    bugg som återkommer i ny kostym.
 
+**Anti-rationalisering** (format lånat från addyosmani/agent-skills, MIT; raderna är våra egna
+incidenter — läs tabellen INNAN du formulerar ursäkten, den står redan här):
+
+| Ursäkten du är på väg att ge | Verkligheten |
+|---|---|
+| "CI är grön, alltså funkar det" | CI bevisar vad testerna frågar om. Admin-skrivvägarna var trasiga i veckor med grön CI (regel 2). |
+| "Deployen gick igenom, klart" | Cloudflare serverade förra veckans frontend i timmar efter en lyckad deploy (regel 1). |
+| "Dokumentet säger att det är byggt/planerat" | Statuskolumnerna sa 'planerad' om byggt och lovade obyggda kommandon — samtidigt (regel 3). |
+| "Jag har själv granskat min ändring noga" | Den som byggt resonemanget är investerad i det. :ro-mounten överlevde varje självgranskning (regel 4). |
+| "Buggen är fixad, vi går vidare" | Ofärdig lärdom = samma bugg i ny kostym. Admin-flaggan som saknades i wizarden VAR en sådan repris (regel 5). |
+| "Det är bara en liten docs-/config-ändring" | :ro var en rad i en compose-fil. Wizardens fel var en utebliven YAML-rad. Små rader, veckolånga fel. |
+
 ## 7. När något är otydligt
 Specarna är skrivna av en planerings-session och kan ha luckor. Om en spec säger emot en annan, eller
 en detalj saknas: **stanna och fråga Alice** — gissa inte kring auth, RBAC, säkerhet eller licens.

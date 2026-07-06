@@ -54,7 +54,11 @@ Ett interface: `complete(messages, tools=None, stream=False) → text | tool_cal
   som `/app`), aldrig från requestdata. → ACL, rate-limits, outbox och audit
   träffas exakt som idag.
 - Verktygsurval per tur: rollfiltrerat (readers får inte se skriv-verktyg i
-  schemat — inte bara nekas vid anrop).
+  schemat — inte bara nekas vid anrop). Klassningen presenteras i tre nivåer
+  (format från agent-skills-utvärderingen, SELF-IMPROVING-SYSTEM.md):
+  **Never** = utanför schemat för rollen · **Ask** = via outbox (mänsklig
+  bekräftelse) · **Always** = fritt för rollen. Samma regler som SAFETY.md —
+  bara läsbart.
 
 ### Lager 3 — `agent.py` (turn-motorn)
 - Begränsad loop: max `N` verktygsrundor per tur (default 8), max-tokens per
