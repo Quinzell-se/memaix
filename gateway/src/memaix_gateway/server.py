@@ -147,7 +147,21 @@ def _http_mode() -> bool:
     return os.environ.get("MEMAIX_TRANSPORT") == "http" or "--http" in sys.argv
 
 
+# Agentloopens identitetskontext (FEATURE-LLM-ENGINE Fas 2) — definieras i
+# llm/identity.py (ett kontrakt, en definition; llm-lagret slipper MCP-
+# beroendet). Sätts enbart av ToolBridge.call() från en verifierad webb-
+# session, per-task-isolerad, alltid återställd i finally.
+from .llm.identity import AGENT_USER as _AGENT_USER
+
+
 def _user() -> str:
+    # Agentloopen (server-side chatt): process-intern identitet, satt av
+    # verktygsbryggan från en autentiserad webbsession. Kollas FÖRE OAuth —
+    # i en agentkörning finns ingen MCP-token att läsa.
+    _agent_user = _AGENT_USER.get()
+    if _agent_user:
+        return _agent_user
+
     # HTTP mode: resolve identity from the OAuth token injected by MCP SDK middleware.
     try:
         from mcp.server.auth.middleware.auth_context import get_access_token

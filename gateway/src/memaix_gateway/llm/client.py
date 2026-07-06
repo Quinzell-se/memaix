@@ -101,14 +101,31 @@ class LLMClient:
 
     # ------------------------------------------------------------------
 
-    def complete(self, messages: list, max_tokens: int = 1024) -> str:
-        """En icke-strömmande tur utan verktyg (Fas 1). messages:
-        [{"role": "user"|"assistant"|"system", "content": str}, …]"""
+    @property
+    def supports_tools(self) -> bool:
+        """Gemini-adapterns verktygsformat avviker mest — i v1 kör google
+        text-utan-verktyg (specens öppna fråga; agentloopen varnar admin)."""
+        return self.provider != "google"
+
+    def complete(self, messages: list, max_tokens: int = 1024, tools: list | None = None) -> dict:
+        """En icke-strömmande tur. Neutralt format in och ut (Fas 2):
+
+        messages: [{"role": "system"|"user", "content": str}
+                   | {"role": "assistant", "content": str|None,
+                      "tool_calls": [{"id","name","args"}]}
+                   | {"role": "tool", "call_id", "name", "content": str}]
+        tools:    [{"name", "description", "input_schema"}] (JSON Schema)
+        →         {"content": str|None, "tool_calls": [...], "usage": int}
+
+        Adaptrarna äger översättningen till leverantörens format — agent-
+        loopen ser aldrig leverantörsspecifika strukturer."""
+        if tools and not self.supports_tools:
+            tools = None
         if self.provider == "anthropic":
-            return self._anthropic(messages, max_tokens)
+            return self._anthropic(messages, max_tokens, tools)
         if self.provider == "google":
             return self._google(messages, max_tokens)
-        return self._openai_compatible(messages, max_tokens)
+        return self._openai_compatible(messages, max_tokens, tools)
 
     def test(self) -> dict:
         """Minimalt riktigt anrop — admin-knappen och doctor. Hemlighetsfritt svar."""
@@ -121,7 +138,7 @@ class LLMClient:
             "provider": self.provider,
             "model": self.model,
             "latency_ms": int((time.monotonic() - started) * 1000),
-            "reply": reply.strip()[:80],
+            "reply": (reply["content"] or "").strip()[:80],
         }
 
     # ------------------------------------------------------------------
@@ -146,15 +163,36 @@ class LLMClient:
         except ValueError:
             raise LLMError(f"{self.provider} svarade inte med JSON")
 
-    def _anthropic(self, messages: list, max_tokens: int) -> str:
+    def _anthropic(self, messages: list, max_tokens: int, tools: list | None = None) -> dict:
         system = "\n".join(m["content"] for m in messages if m["role"] == "system")
-        payload = {
-            "model": self.model,
-            "max_tokens": max_tokens,
-            "messages": [m for m in messages if m["role"] != "system"],
-        }
+        converted = []
+        for m in messages:
+            if m["role"] == "system":
+                continue
+            if m["role"] == "assistant" and m.get("tool_calls"):
+                blocks = []
+                if m.get("content"):
+                    blocks.append({"type": "text", "text": m["content"]})
+                blocks += [
+                    {"type": "tool_use", "id": c["id"], "name": c["name"], "input": c["args"]}
+                    for c in m["tool_calls"]
+                ]
+                converted.append({"role": "assistant", "content": blocks})
+            elif m["role"] == "tool":
+                converted.append({"role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": m["call_id"], "content": m["content"],
+                }]})
+            else:
+                converted.append({"role": m["role"], "content": m["content"]})
+        payload = {"model": self.model, "max_tokens": max_tokens, "messages": converted}
         if system:
             payload["system"] = system
+        if tools:
+            payload["tools"] = [
+                {"name": t["name"], "description": t["description"],
+                 "input_schema": t["input_schema"]}
+                for t in tools
+            ]
         base = self.endpoint or "https://api.anthropic.com"
         data = self._post(
             f"{base}/v1/messages",
@@ -162,29 +200,74 @@ class LLMClient:
             payload,
         )
         blocks = data.get("content") or []
-        return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        usage = data.get("usage") or {}
+        return {
+            "content": "".join(b.get("text", "") for b in blocks if b.get("type") == "text") or None,
+            "tool_calls": [
+                {"id": b["id"], "name": b["name"], "args": b.get("input") or {}}
+                for b in blocks if b.get("type") == "tool_use"
+            ],
+            "usage": int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0)),
+        }
 
-    def _openai_compatible(self, messages: list, max_tokens: int) -> str:
+    def _openai_compatible(self, messages: list, max_tokens: int, tools: list | None = None) -> dict:
+        import json as _json
+
         base = self.endpoint or _DEFAULT_ENDPOINTS.get(self.provider, "")
         if not base:
             raise LLMError(f"{self.provider} kräver en endpoint-URL")
         # Ollama m.fl. anges ofta utan /v1 — normalisera i stället för att gissa fel.
         if not base.endswith("/v1"):
             base = f"{base}/v1"
+        converted = []
+        for m in messages:
+            if m["role"] == "assistant" and m.get("tool_calls"):
+                converted.append({
+                    "role": "assistant", "content": m.get("content"),
+                    "tool_calls": [
+                        {"id": c["id"], "type": "function",
+                         "function": {"name": c["name"], "arguments": _json.dumps(c["args"])}}
+                        for c in m["tool_calls"]
+                    ],
+                })
+            elif m["role"] == "tool":
+                converted.append({"role": "tool", "tool_call_id": m["call_id"],
+                                  "content": m["content"]})
+            else:
+                converted.append({"role": m["role"], "content": m["content"]})
+        payload: dict = {"model": self.model, "max_tokens": max_tokens, "messages": converted}
+        if tools:
+            payload["tools"] = [
+                {"type": "function", "function": {
+                    "name": t["name"], "description": t["description"],
+                    "parameters": t["input_schema"],
+                }}
+                for t in tools
+            ]
         headers = {}
         if self._key:
             headers["Authorization"] = f"Bearer {self._key}"
-        data = self._post(
-            f"{base}/chat/completions",
-            headers,
-            {"model": self.model, "max_tokens": max_tokens, "messages": messages},
-        )
+        data = self._post(f"{base}/chat/completions", headers, payload)
         choices = data.get("choices") or []
         if not choices:
             raise LLMError(f"{self.provider}: tomt svar (inga choices)")
-        return (choices[0].get("message") or {}).get("content") or ""
+        msg = choices[0].get("message") or {}
+        calls = []
+        for c in msg.get("tool_calls") or []:
+            fn = c.get("function") or {}
+            try:
+                args = _json.loads(fn.get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            calls.append({"id": c.get("id", ""), "name": fn.get("name", ""), "args": args})
+        usage = data.get("usage") or {}
+        return {
+            "content": msg.get("content") or None,
+            "tool_calls": calls,
+            "usage": int(usage.get("total_tokens", 0)),
+        }
 
-    def _google(self, messages: list, max_tokens: int) -> str:
+    def _google(self, messages: list, max_tokens: int) -> dict:
         contents = [
             {"role": "model" if m["role"] == "assistant" else "user",
              "parts": [{"text": m["content"]}]}
@@ -207,4 +290,9 @@ class LLMClient:
         if not candidates:
             raise LLMError("google: tomt svar (inga candidates)")
         parts = (candidates[0].get("content") or {}).get("parts") or []
-        return "".join(p.get("text", "") for p in parts)
+        meta = data.get("usageMetadata") or {}
+        return {
+            "content": "".join(p.get("text", "") for p in parts) or None,
+            "tool_calls": [],
+            "usage": int(meta.get("totalTokenCount", 0)),
+        }
