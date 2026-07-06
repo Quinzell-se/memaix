@@ -19,14 +19,19 @@ Memaix har redan delarna ett självförbättrande system behöver:
 
 Inriktningen: **koppla ihop organen till loopar** — inte bygga nya organ.
 
-## Fas A — Väktaren (självövervakning → självreparation)
-En systemd-timer på värden (var 6:e timme + vid boot): kör doctor; **röd → \
-`docker compose restart` av felande tjänst → doctor igen; fortfarande röd → notis** via
-notify-lagret (samma kanal som briefen). Kontrollerna utökas med arbetsflödesregeln
-(AGENTS.md §6b): publik URL serverar färsk frontend (hash-jämförelse mot disk), config-mounten
-är skrivbar, klonen driver inte mot origin.
+## Fas A — Väktaren (självövervakning → självreparation) — ✅ byggd
+`scripts/watchdog.py` + `ops/memaix-watchdog.{service,timer}` (systemd user-units, var 6:e
+timme + vid boot; installationskommandon i .service-filen). Kontroller: gateway/hydra lokalt,
+publik URL genom tunneln, **publikt serverad frontend-hash == diskens app.js** (§6b regel 1),
+**config skrivbar i containern** (§6b regel 2), klon-drift mot origin (info). Fel i
+gateway/hydra/tunnelkedja → `docker compose restart` av felande tjänst, EN gång → omkontroll →
+notis bara vid avvikelse. Frontend/skrivbarhet/drift läks aldrig automatiskt — rebuild och
+deploy är människans beslut (anti-hype-listan).
+Notis v1: `WATCHDOG_WEBHOOK_URL` (+ `WATCHDOG_WEBHOOK_FMT: raw|discord`) i `.env` — samma
+semantik som notify-lagrets WebhookChannel; utan URL loggas till journalen. Byte till
+notify-lagret när Fas C landar.
 ✅ Klar när: en avsiktligt stoppad gateway självläker utan människa, och en avsiktligt
-cachetrasig frontend ger notis inom 6 h.
+cachetrasig frontend ger notis inom 6 h. *(Verifieras vid driftsättning.)*
 
 ## Fas B — Minnestrappan (hypotes → verifierat)
 Artikelns bästa idé, och den passar vaulten som handen i handsken: minnesnoteringar får
