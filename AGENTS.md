@@ -64,6 +64,26 @@ Från `BUILD.md` med v2-deltan: **1)** skelett + ACL (stdio) + RBAC-bevis → **
 SQLite + git async) → **3)** safety-motorn *parallellt* → **4)** remote + Hydra, doctor grön →
 **5)** RBAC skarpt + onboarding + per-user-OAuth. Hoppa inte över RBAC-beviset eller safety-motorn.
 
+## 6b. Loopar, verifiering & lärande (självförbättrande arbetsflöde)
+Destillerat ur verkliga incidenter (juli 2026: CDN-cachad gammal frontend; admin-skrivvägar tyst
+brutna av :ro-mount; wizard som byggde en föråldrad säkerhetsmodell dokumenten inte avslöjade).
+Gemensam nämnare: felen var osynliga i kanalen vi tittade i, uppenbara i kanalen bredvid.
+1. **Verifiera det publicerade, inte det deployade.** Deploy som ändrar klientkod är inte klar
+   förrän den publika URL:en (genom CDN/tunnel) bevisat serverar nya innehållet. Serverhälsa ≠
+   användarupplevelse.
+2. **Motionera nya skrivvägar i drift.** En skrivande funktion är inte levererad förrän den körts
+   en gång på riktigt i målmiljön (eller monteringen/skrivrätten verifierats där). Läsning som
+   funkar + grön CI bevisar ingenting om skrivvägen.
+3. **Diffa spec mot kod före spec-styrt bygge.** Statuskolumner ljuger åt båda hållen. Bygg aldrig
+   "enligt dokumentet" utan att först verifiera dokumentets påståenden mot koden — och uppdatera
+   statusen **i samma PR** som bygget, aldrig i efterhand.
+4. **Separat granskare för känsliga ändringar.** PR som rör auth, ACL, hemligheter eller egress
+   får en adversariell granskning av en annan agent/instans än den som skrev koden — utöver CI.
+   Självkritik är strukturellt partisk; granskaren har ingen investering i resonemanget.
+5. **Fixen till repot, regeln till systemet.** Varje icke-trivial bugg destilleras till en regel
+   (här i 6b, i relevant spec, eller i byggarens beständiga minne). En bugg som bara fixas är en
+   bugg som återkommer i ny kostym.
+
 ## 7. När något är otydligt
 Specarna är skrivna av en planerings-session och kan ha luckor. Om en spec säger emot en annan, eller
 en detalj saknas: **stanna och fråga Alice** — gissa inte kring auth, RBAC, säkerhet eller licens.
