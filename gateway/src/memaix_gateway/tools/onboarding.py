@@ -49,9 +49,12 @@ def build_interview_prompt(user_id: str, vault: Path | None, cfg: dict | None = 
     outro = (cfg or {}).get("memaix", {}).get("onboarding", {}).get(
         "outro", "Tack! Sammanställ nu en kondenserad profil (löptext + punkter, inte råa svar) och anropa verktyget `onboarding_complete` med texten som `profile_content`. Hoppa inte över det steget — det är det som markerar onboarding som klar."  # noqa: E501
     )
+    from .whoami import MEMORY_RULES
+
     return (
         f"{template}\n\n"
-        f"Fråga en fråga i taget. När alla är besvarade:\n{outro}"
+        f"Fråga en fråga i taget. När alla är besvarade:\n{outro}\n\n"
+        f"Från och med nu gäller även: {MEMORY_RULES}"
     )
 
 

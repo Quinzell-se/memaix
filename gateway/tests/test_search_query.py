@@ -133,3 +133,33 @@ def test_max_candidates_from_cfg_is_respected(store, embedder, acl):
     # Can't directly observe candidate cap from results shape, but this
     # should not error and should still return results.
     assert isinstance(result["results"], list)
+
+
+def test_memory_hits_carry_ladder_status(tmp_path, store, acl):
+    """Minnestrappan i sök: memory-träffar bär status, uppslagen vid
+    frågetillfället — en hypotes kan aldrig se ut som faktum (Fas B)."""
+    from memaix_gateway.acl import Acl
+    from memaix_gateway.backends.memory_store import MemoryStore
+    from memaix_gateway.tools.memory import memory_write
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    MemoryStore._clear_instances()
+    real_acl = Acl(
+        users={"alice": {"grants": {"proj": "owner"}}},
+        projects={"proj": {"vault": str(vault)}},
+    )
+    memory_write(real_acl, "alice", "proj", "obekraftad.md", "kunden gillar blått kanske")
+    memory_write(real_acl, "alice", "proj", "bekraftad.md", "kunden gillar blått bevisligen",
+                 status="verifierad")
+    index_upsert(store, None, "proj", "memory", "obekraftad.md", "obekraftad.md",
+                 "kunden gillar blått kanske")
+    index_upsert(store, None, "proj", "memory", "bekraftad.md", "bekraftad.md",
+                 "kunden gillar blått bevisligen")
+    index_upsert(store, None, "proj", "file", "f.txt", "f.txt", "blått dokument")
+
+    result = search_all(real_acl, "alice", None, store, None, "blått")
+    by_ref = {r["ref"]: r for r in result["results"]}
+    assert by_ref["obekraftad.md"]["status"] == "hypotes"
+    assert by_ref["bekraftad.md"]["status"] == "verifierad"
+    assert "status" not in by_ref["f.txt"], "bara memory-träffar bär trapp-status"

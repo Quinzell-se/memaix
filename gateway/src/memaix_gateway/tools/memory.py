@@ -8,15 +8,53 @@ Path rules for notes:
   - Must be relative (no leading /)
   - Must not contain '..' components
   - e.g. "ideas/feature-x.md", "standup/2024-06-29.md"
+
+Minnestrappan (SELF-IMPROVING-SYSTEM.md Fas B): en notering är `hypotes`
+eller `verifierad`, buret i frontmatter (samma konvention och parser som
+backlogens items — frontmatter.py). **Saknad status = hypotes**: det säkra
+defaultet gör att innehåll aldrig behöver tvångsstämplas — externa flöden
+(Nextcloud-synk) behåller sin innehållstrohet, och ändå kan ingen omärkt
+notering läsas som faktum. Frontmatter skrivs bara vid uttryckligt statusval
+(memory_write med status, memory_set_status). Befordran till verifierad
+kräver källbekräftelse eller mänskligt besked, aldrig "låter rimligt"
+(anti-hype-listan).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
+from .. import frontmatter as fm
 from ..acl import Acl
 from ..backends.memory_store import MemoryStore
 from ..paths import validate_relative_path
+
+VALID_STATUS = ("hypotes", "verifierad")
+
+
+def note_status(content: str) -> str:
+    """Statusen ur en noterings frontmatter — okänd/ogiltig/saknad → hypotes."""
+    try:
+        meta, _ = fm.split(content or "")
+    except yaml.YAMLError:
+        return "hypotes"
+    status = meta.get("status")
+    return status if status in VALID_STATUS else "hypotes"
+
+
+def set_note_status(content: str, status: str) -> str:
+    """Returnera innehållet med status satt i frontmatter (skapas vid behov).
+    Övriga frontmatter-fält bevaras."""
+    if status not in VALID_STATUS:
+        raise ValueError(f"status must be one of {VALID_STATUS}, got {status!r}")
+    try:
+        meta, body = fm.split(content or "")
+    except yaml.YAMLError:
+        meta, body = {}, (content or "").strip()
+    meta["status"] = status
+    return fm.join(meta, body)
 
 # ------------------------------------------------------------------
 # Validation
@@ -40,32 +78,40 @@ def _get_store(acl: Acl, project: str) -> MemoryStore:
 
 
 def memory_list(acl: Acl, user_id: str, project: str) -> list[dict]:
-    """List all notes in the project vault. Returns [{path, mtime}] where
-    mtime is the store's updated_at timestamp (empty string if unknown)."""
+    """List all notes in the project vault. Returns [{path, mtime, status}]
+    where mtime is the store's updated_at timestamp (empty string if unknown)."""
     acl.enforce(user_id, project, "reader")
     store = _get_store(acl, project)
     return [
-        {"path": note, "mtime": store.get_updated_at(note) or ""}
+        {
+            "path": note,
+            "mtime": store.get_updated_at(note) or "",
+            "status": note_status(store.read(note) or ""),
+        }
         for note in store.list_all()
     ]
 
 
 def memory_read(acl: Acl, user_id: str, project: str, note: str) -> dict:
-    """Return {path, content} for a note.  Raises FileNotFoundError if absent."""
+    """Return {path, content, status} for a note. Raises FileNotFoundError if absent."""
     acl.enforce(user_id, project, "reader")
     _validate_note_path(note)
     store = _get_store(acl, project)
     content = store.read(note)
     if content is None:
         raise FileNotFoundError(f"note not found: {note!r}")
-    return {"path": note, "content": content}
+    return {"path": note, "content": content, "status": note_status(content)}
 
 
 def memory_search(acl: Acl, user_id: str, project: str, query: str) -> list[dict]:
-    """FTS5 search.  Returns [{path, snippet}]."""
+    """FTS5 search.  Returns [{path, snippet, status}] — statusen följer med
+    så en hypotes aldrig kan citeras som faktum utan att det syns."""
     acl.enforce(user_id, project, "reader")
     store = _get_store(acl, project)
-    return store.search(query)
+    return [
+        {**hit, "status": note_status(store.read(hit["path"]) or "")}
+        for hit in store.search(query)
+    ]
 
 
 def memory_history(
@@ -87,25 +133,53 @@ def memory_history(
 
 
 def memory_write(
-    acl: Acl, user_id: str, project: str, note: str, content: str
+    acl: Acl, user_id: str, project: str, note: str, content: str,
+    status: str | None = None,
 ) -> dict:
-    """Overwrite note.  Returns {path, commit}."""
+    """Overwrite note.  Returns {path, commit, status}.
+
+    status=None: innehållet skrivs orört (extern trohet — synkflöden);
+    dess status läses ur befintlig frontmatter, saknas den gäller hypotes.
+    Explicit status stämplas i frontmatter och vinner över innehållets."""
     acl.enforce(user_id, project, "collaborator")
     _validate_note_path(note)
+    if status is not None:
+        content = set_note_status(content, status)
     store = _get_store(acl, project)
     commit = store.write(note, content, user_id)
-    return {"path": note, "commit": commit}
+    return {"path": note, "commit": commit, "status": note_status(content)}
 
 
 def memory_append(
     acl: Acl, user_id: str, project: str, note: str, text: str
 ) -> dict:
-    """Append text to note (creates if absent).  Returns {path, commit}."""
+    """Append text to note (creates if absent).  Returns {path, commit, status}.
+    Ny notering utan uttalad status är hypotes (defaultet, ingen stämpel)."""
     acl.enforce(user_id, project, "collaborator")
     _validate_note_path(note)
     store = _get_store(acl, project)
     commit = store.append(note, text, user_id)
-    return {"path": note, "commit": commit}
+    return {"path": note, "commit": commit,
+            "status": note_status(store.read(note) or "")}
+
+
+def memory_set_status(
+    acl: Acl, user_id: str, project: str, note: str, status: str
+) -> dict:
+    """Flytta en notering i trappan (hypotes ↔ verifierad) utan att röra
+    innehållet. Befordran till verifierad förutsätter källbekräftelse eller
+    mänskligt besked — det kontraktet bärs av prompten (whoami.memory_rules),
+    spårbarheten av git-historiken. Returns {path, commit, status}."""
+    acl.enforce(user_id, project, "collaborator")
+    _validate_note_path(note)
+    if status not in VALID_STATUS:
+        raise ValueError(f"status must be one of {VALID_STATUS}, got {status!r}")
+    store = _get_store(acl, project)
+    content = store.read(note)
+    if content is None:
+        raise FileNotFoundError(f"note not found: {note!r}")
+    commit = store.write(note, set_note_status(content, status), user_id)
+    return {"path": note, "commit": commit, "status": status}
 
 
 def memory_revert(

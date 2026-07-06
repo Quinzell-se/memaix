@@ -309,6 +309,7 @@
   "web_admin_filter": "Filter",
   "web_admin_more": "Load more",
   "web_admin_grants": "Grants",
+  "web_search_hypothesis": "hypothesis — unverified",
   "web_admin_llm_test": "Test connection",
   "web_admin_llm_testing": "Testing …",
   "web_admin_llm_title": "AI model",
