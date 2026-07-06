@@ -1,0 +1,19 @@
+# Memaix väktare — Fas A (docs/SELF-IMPROVING-SYSTEM.md)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Installeras som ANVÄNDAR-unit (kräver linger för drift utan inloggning):
+#   mkdir -p ~/.config/systemd/user
+#   cp /srv/memaix/ops/memaix-watchdog.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now memaix-watchdog.timer
+# Kör direkt / se logg:
+#   systemctl --user start memaix-watchdog.service
+#   journalctl --user -u memaix-watchdog.service -n 50
+
+[Unit]
+Description=Memaix väktare — självövervakning & självläkning
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/memaix
+ExecStart=/usr/bin/python3 /srv/memaix/scripts/watchdog.py

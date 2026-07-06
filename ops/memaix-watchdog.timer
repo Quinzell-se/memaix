@@ -1,0 +1,15 @@
+# Memaix väktare — var 6:e timme + 5 min efter boot. Persistent=true tar
+# igen missade körningar efter avstängning. Se .service-filen för install.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[Unit]
+Description=Memaix väktare (var 6:e timme)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
