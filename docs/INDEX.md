@@ -39,6 +39,7 @@ Läs i den ordning som passar din roll.
    · [FEATURE-PM-ENGINE.md](FEATURE-PM-ENGINE.md) — funktion #9: PM-planeringsmotor & agent (byggspec).
    · [FEATURE-LLM-ENGINE.md](FEATURE-LLM-ENGINE.md) — funktion #10: LLM-motorn — server-side modell, verktygsbrygga, egen chatt (design + byggspec).
    · [SELF-IMPROVING-SYSTEM.md](SELF-IMPROVING-SYSTEM.md) — inriktning: självövervakning, minnestrappan, destillatrutin, eval-svit (loopar över befintliga organ).
+   · [FEATURE-AGENT-TEAM.md](FEATURE-AGENT-TEAM.md) — funktion #11: agent-teamet — flera agenter som ett lag runt boarden, handoff via vaulten, läge B (design + byggspec).
    · [ROADMAP.md](ROADMAP.md) — implementeringsroadmap: bygg-ordning, faser, beroenden.
    · [WEB-UI-SPEC.md](WEB-UI-SPEC.md) — webb-UI helhetspec: IA, rollmatris, ASCII-mockups, komponentbibliotek, byggordning (Fable-genererad).
    · [FEATURE-WEB-UI-FOUNDATION.md](FEATURE-WEB-UI-FOUNDATION.md) — MEX-022 Fas A: mörkt tema, app-shell, hem-dashboard (design + byggspec).
