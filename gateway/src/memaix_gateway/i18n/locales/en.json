@@ -18,6 +18,7 @@
   "board_loading": "Loading…",
   "board_load_error": "Could not load.",
   "board_all_items": "All items",
+  "board_my_tasks": "My tasks",
   "board_active_sprint": "Active sprint",
   "board_col_empty": "Empty",
   "board_move_error": "Could not move card",
@@ -135,6 +136,9 @@
   "cap.backlog.decide.examples": [
     "Approve this backlog item"
   ],
+  "cap.backlog.assign.title": "Assign to agent",
+  "cap.backlog.assign.summary": "Assign a backlog item to an agent or person (owner only). The basis of the agent team — the PM allocates work, the team member picks up their items.",
+  "cap.backlog.assign.examples": ["Assign this item to the backend agent"],
   "cap.backlog.deck_sync.title": "Sync with Nextcloud Deck",
   "cap.backlog.deck_sync.summary": "Two-way sync between a Nextcloud Deck board and the backlog — new cards become backlog items, and changes on either side are kept in sync (most-recently-changed wins on conflict). Owner only.",
   "cap.backlog.deck_sync.examples": [

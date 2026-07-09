@@ -34,6 +34,7 @@ def _card_view(meta: dict) -> dict:
         "title":       meta.get("title", ""),
         "category":    meta.get("category") or "",
         "status":      meta.get("status", "inbox"),
+        "assignee":    meta.get("assignee") or "",
         "value":       meta.get("value"),
         "complexity":  meta.get("complexity"),
         "risk":        meta.get("risk"),
@@ -58,7 +59,7 @@ def list_backlog(vault: Path) -> list[dict]:
         except Exception:
             cards.append({
                 "id": p.stem, "title": f"⚠ parse error: {p.name}",
-                "category": "", "status": "inbox", "value": None,
+                "category": "", "status": "inbox", "assignee": "", "value": None,
                 "complexity": None, "risk": None, "sprint": "",
                 "estimate": None, "updated_at": "", "version": None,
             })

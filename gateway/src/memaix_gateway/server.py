@@ -1279,6 +1279,18 @@ def backlog_set_status(project: str, id: str, status: str, expected_version: int
     )
 
 
+@mcp.tool()
+def backlog_assign(project: str, id: str, assignee: str | None, expected_version: int) -> dict:
+    """Assign a backlog item to an agent/user (owner only, optimistic locking).
+    assignee must be a user in acl.yaml, or empty to unassign. The PM/owner
+    allocates work; a team member picks up items assigned to them
+    (FEATURE-AGENT-TEAM fas 1)."""
+    return _tool_call(
+        "backlog_assign", project, t_backlog.backlog_assign,
+        id, assignee, expected_version,
+    )
+
+
 # ------------------------------------------------------------------
 # PM tools
 # ------------------------------------------------------------------
