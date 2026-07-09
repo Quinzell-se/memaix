@@ -196,6 +196,15 @@ def register_defaults() -> None:
             tags=("backlog", "godkänn", "approve"),
         ),
         Capability(
+            key="backlog.assign", area="backlog",
+            title_key="cap.backlog.assign.title",
+            summary_key="cap.backlog.assign.summary",
+            tools=("backlog_assign",),
+            example_prompts_key="cap.backlog.assign.examples",
+            needs_role="owner", needs_resource="vault",
+            tags=("backlog", "tilldela", "assign", "team", "agent"),
+        ),
+        Capability(
             key="backlog.deck_sync", area="backlog",
             title_key="cap.backlog.deck_sync.title",
             summary_key="cap.backlog.deck_sync.summary",

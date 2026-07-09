@@ -63,6 +63,11 @@ header select:focus{outline:none;border-color:var(--primary)}
 .sprint-badge{font-size:.65rem;color:var(--primary);background:var(--primary-light);padding:.1rem .35rem;border-radius:4px;font-weight:600}
 .est-badge{font-size:.65rem;color:#7c3aed;background:#ede9fe;padding:.1rem .35rem;border-radius:4px;font-weight:600}
 .card-id{font-size:.65rem;color:#cbd5e1;font-family:monospace;margin-top:.3rem;text-align:right}
+.assignee-badge{font-size:.65rem;padding:.05rem .35rem;border-radius:10px;background:#e2e8f0;color:#475569;font-weight:600}
+.assignee-mine{background:var(--primary-light,#c7d2fe);color:#3730a3}
+.card.dimmed{opacity:.35}
+.mine-filter{font-size:.75rem;padding:.2rem .5rem;border-radius:6px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#fff);cursor:pointer}
+.mine-filter.active{background:var(--primary,#4f46e5);color:#fff;border-color:var(--primary,#4f46e5)}
 #activity-panel{width:260px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 #activity-panel h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.75rem 1rem .5rem}
 #activity-list{overflow-y:auto;flex:1;padding:0 .75rem .75rem}
@@ -121,6 +126,7 @@ header select:focus{outline:none;border-color:var(--primary)}
     <span class="logo">Memaix</span>
     <select id="project-select"></select>
     <select id="sprint-select"></select>
+    <button class="mine-filter" id="mine-btn" data-i18n="board_my_tasks">Mina tasks</button>
     <button class="icon-btn" id="refresh-btn">&#x21BB;</button>
     <div class="spacer"></div>
     <span id="user-badge"></span>
@@ -151,7 +157,7 @@ header select:focus{outline:none;border-color:var(--primary)}
 var I18N=window.I18N||{};
 function t(k){return I18N[k]||k;}
 
-var _user=null,_project=null,_sprint='',_activityTimer=null,_lastTs='',_dragId=null,_dragFrom=null;
+var _user=null,_project=null,_sprint='',_activityTimer=null,_lastTs='',_dragId=null,_dragFrom=null,_mineOnly=false;
 
 function gid(id){return document.getElementById(id);}
 
@@ -358,8 +364,11 @@ function buildCard(card){
   if(card.risk!=null)meta.appendChild(score('R'+card.risk,'score-r'));
   if(card.sprint)meta.appendChild(el('span','sprint-badge',card.sprint));
   if(card.estimate!=null)meta.appendChild(el('span','est-badge',card.estimate+'p'));
+  if(card.assignee){var a=el('span','assignee-badge','@'+card.assignee);
+    if(card.assignee===_user)a.className='assignee-badge assignee-mine';meta.appendChild(a);}
   div.appendChild(meta);div.appendChild(el('div','card-id',card.id));
   div.addEventListener('click',function(){openModal(card.id);});
+  if(_mineOnly&&card.assignee!==_user)div.classList.add('dimmed');
   return div;
 }
 
@@ -503,6 +512,9 @@ gid('modal-close').addEventListener('click',closeModal);
 gid('modal-overlay').addEventListener('click',function(e){if(!e.target.closest('.modal'))closeModal();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
 gid('refresh-btn').addEventListener('click',function(){loadBoard();pollActivity();});
+gid('mine-btn').addEventListener('click',function(){
+  _mineOnly=!_mineOnly;this.classList.toggle('active',_mineOnly);loadBoard();
+});
 gid('project-select').addEventListener('change',function(){
   _project=gid('project-select').value;_sprint='';_lastTs='';
   localStorage.setItem('mb_proj',_project);loadSprints().then(loadBoard);

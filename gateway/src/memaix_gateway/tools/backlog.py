@@ -261,3 +261,38 @@ def backlog_set_status(
         item["updated_at"] = _now_iso()
         _write_item(path, item)
     return {"id": id, "status": status, "commit": "local"}
+
+
+def backlog_assign(
+    acl: Acl,
+    user_id: str,
+    project: str,
+    id: str,
+    assignee: str | None,
+    expected_version: int,
+) -> dict:
+    """Assign an item to an agent/user (or None to unassign). Requires owner —
+    only the PM/owner allocates work, mirroring backlog_set_status. Optimistic
+    version lock. Returns {id, assignee, version} or a conflict dict.
+
+    FEATURE-AGENT-TEAM fas 1. The assignee must be a user that exists in the
+    project's ACL (or empty) — you can't hand work to a stranger."""
+    acl.enforce(user_id, project, "owner")
+    validate_id(id, kind="backlog id")
+    assignee = (assignee or "").strip() or None
+    if assignee is not None and assignee not in acl.users:
+        raise ValueError(f"unknown assignee: {assignee!r} (not a user in acl.yaml)")
+    bl_dir = _backlog_dir(acl, project)
+    lock = _get_lock(str(bl_dir.parent.resolve()))
+    path = bl_dir / f"{id}.md"
+    with lock:
+        if not path.exists():
+            raise FileNotFoundError(f"backlog item not found: {id!r}")
+        item = _parse_item(path)
+        if item.get("version") != expected_version:
+            return {"conflict": True, "current_version": item.get("version")}
+        item["assignee"] = assignee
+        item["version"] = expected_version + 1
+        item["updated_at"] = _now_iso()
+        _write_item(path, item)
+    return {"id": id, "assignee": assignee, "version": item["version"], "commit": "local"}

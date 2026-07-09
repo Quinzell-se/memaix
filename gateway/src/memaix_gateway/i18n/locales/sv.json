@@ -18,6 +18,7 @@
   "board_loading": "Laddar…",
   "board_load_error": "Kunde inte ladda.",
   "board_all_items": "Alla items",
+  "board_my_tasks": "Mina tasks",
   "board_active_sprint": "Aktiv sprint",
   "board_col_empty": "Tom",
   "board_move_error": "Kunde inte flytta kortet",
@@ -135,6 +136,9 @@
   "cap.backlog.decide.examples": [
     "Godkänn det här backlog-itemet"
   ],
+  "cap.backlog.assign.title": "Tilldela till agent",
+  "cap.backlog.assign.summary": "Tilldela ett backlog-item till en agent eller person (endast ägare). Grunden för agent-teamet — PM:en fördelar arbetet, teammedlemmen plockar upp sina items.",
+  "cap.backlog.assign.examples": ["Tilldela det här itemet till backend-agenten"],
   "cap.backlog.deck_sync.title": "Synka med Nextcloud Deck",
   "cap.backlog.deck_sync.summary": "Tvåvägssynk mellan en Nextcloud Deck-tavla och backloggen — nya kort blir backlog-items, och ändringar på båda håll hålls i synk (senast ändrad vinner vid konflikt). Endast ägare.",
   "cap.backlog.deck_sync.examples": [

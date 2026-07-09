@@ -36,6 +36,7 @@ class BacklogItem(BaseModel):
     value: int | None = Field(default=None, ge=1, le=5)
     complexity: int | None = Field(default=None, ge=1, le=5)
     risk: int | None = Field(default=None, ge=1, le=5)
+    assignee: str | None = None  # agent-/användarnamn (FEATURE-AGENT-TEAM fas 1); None = otilldelad
     version: int = Field(ge=1)
     created_at: str
     updated_at: str

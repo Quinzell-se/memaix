@@ -11,6 +11,7 @@ import pytest
 from memaix_gateway.acl import Acl, AccessDenied
 from memaix_gateway.tools.backlog import (
     backlog_add,
+    backlog_assign,
     backlog_comment,
     backlog_get,
     backlog_list,
@@ -257,3 +258,51 @@ def test_backlog_write_outside_vault_is_blocked(acl, vault, tmp_path):
         backlog_get(acl, "alice", "proj", "../../secret")
     # The outside file is untouched.
     assert "TOP SECRET" in outside.read_text()
+
+
+# ------------------------------------------------------------------
+# Assignment — FEATURE-AGENT-TEAM fas 1
+# ------------------------------------------------------------------
+
+
+def test_assign_to_known_user(acl):
+    r = backlog_add(acl, "carol", "proj", "Build API", "desc")
+    result = backlog_assign(acl, "alice", "proj", r["id"], "carol", expected_version=1)
+    assert result["assignee"] == "carol" and result["version"] == 2
+    item = backlog_get(acl, "bob", "proj", r["id"])
+    assert item["assignee"] == "carol"
+
+
+def test_assign_surfaces_on_board_card(acl, vault):
+    from memaix_gateway.board import store
+
+    r = backlog_add(acl, "carol", "proj", "Wire auth", "desc")
+    backlog_assign(acl, "alice", "proj", r["id"], "carol", expected_version=1)
+    card = next(c for c in store.list_backlog(vault) if c["id"] == r["id"])
+    assert card["assignee"] == "carol", "boarden visar vem som äger raden"
+
+
+def test_unassign_with_empty(acl):
+    r = backlog_add(acl, "carol", "proj", "t", "d")
+    backlog_assign(acl, "alice", "proj", r["id"], "carol", expected_version=1)
+    result = backlog_assign(acl, "alice", "proj", r["id"], "", expected_version=2)
+    assert result["assignee"] is None
+
+
+def test_assign_unknown_user_rejected(acl):
+    r = backlog_add(acl, "carol", "proj", "t", "d")
+    with pytest.raises(ValueError, match="unknown assignee"):
+        backlog_assign(acl, "alice", "proj", r["id"], "spöke", expected_version=1)
+
+
+def test_assign_denied_for_non_owner(acl):
+    r = backlog_add(acl, "carol", "proj", "t", "d")
+    with pytest.raises(AccessDenied):
+        backlog_assign(acl, "carol", "proj", r["id"], "carol", expected_version=1)  # collaborator
+
+
+def test_assign_optimistic_lock_conflict(acl):
+    r = backlog_add(acl, "carol", "proj", "t", "d")
+    backlog_assign(acl, "alice", "proj", r["id"], "carol", expected_version=1)
+    stale = backlog_assign(acl, "alice", "proj", r["id"], "bob", expected_version=1)
+    assert stale == {"conflict": True, "current_version": 2}
