@@ -55,6 +55,48 @@ def test_is_admin_flag():
     assert acl.is_admin("nonexistent") is False
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["false", "no", "off", "0", "True", 1, 0.1, [1], {"a": 1}],
+    ids=["str-false", "str-no", "str-off", "str-0", "str-True", "int-1", "float", "list", "dict"],
+)
+def test_admin_requires_a_real_bool(value):
+    """A quoted or mistyped admin flag must not grant admin.
+
+    bool() accepts every one of these. Since admin is an implicit owner on
+    every project, `admin: "false"` would have granted full access — the
+    opposite of what the operator wrote.
+    """
+    acl = Acl(
+        users={"mallory": {"admin": value, "grants": {}}},
+        projects={"acme": {"vault": "/tmp/acme"}},
+    )
+    assert acl.is_admin("mallory") is False
+    with pytest.raises(AccessDenied):
+        acl.enforce("mallory", "acme", "reader")
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["true", "yes", 1],
+    ids=["str-true", "str-yes", "int-1"],
+)
+def test_disabled_stays_permissive(value):
+    """The kill-switch keeps truthiness on purpose — it denies, so it fails open.
+
+    Tightening this to `is True` would silently re-enable an account the
+    operator believed was switched off. Granting checks fail closed, denying
+    checks fail open.
+    """
+    acl = Acl(
+        users={"alice": {"grants": {"acme": "owner"}, "disabled": value}},
+        projects={"acme": {"vault": "/tmp/acme"}},
+    )
+    assert acl.is_disabled("alice") is True
+    with pytest.raises(AccessDenied, match="disabled"):
+        acl.enforce("alice", "acme", "reader")
+
+
 def test_disabled_user_denied_everything():
     """Kill-switch: a disabled user is denied every project, at every level."""
     acl = Acl(
