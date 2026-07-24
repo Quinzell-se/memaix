@@ -47,11 +47,31 @@ class Acl:
         return self.users.get(user_id, {}).get("grants", {})
 
     def is_admin(self, user_id: str) -> bool:
-        """Return True if the user has the global admin flag set in acl.yaml."""
-        return bool(self.users.get(user_id, {}).get("admin", False))
+        """Return True if the user has the global admin flag set in acl.yaml.
+
+        Strict identity check, deliberately not truthiness. ``bool()`` grants
+        admin on any non-empty value: ``admin: "false"``, ``admin: "no"`` and
+        ``admin: 0.1`` all coerce to True. Quoting a YAML boolean is an easy
+        slip, and admin is an implicit owner on *every* project (see enforce),
+        so a typo here must not widen access.
+
+        Contrast is_disabled below: identical shape, opposite risk direction.
+        This one grants, so it fails closed on anything but a real ``True``.
+        """
+        return self.users.get(user_id, {}).get("admin", False) is True
 
     def is_disabled(self, user_id: str) -> bool:
-        """Return True if the user is disabled (kill-switch, users.<id>.disabled)."""
+        """Return True if the user is disabled (kill-switch, users.<id>.disabled).
+
+        Truthiness is correct here, and is not an oversight. This check *denies*
+        access, so a malformed value should still lock the user out:
+        ``disabled: "true"``, ``disabled: "yes"`` and ``disabled: 1`` all mean
+        the operator wanted this account off. Tightening this to ``is True``
+        would silently re-enable an account someone believed was disabled.
+
+        The rule across both methods: granting checks fail closed, denying
+        checks fail open. Same code, opposite direction, on purpose.
+        """
         return bool(self.users.get(user_id, {}).get("disabled", False))
 
     def enforce(self, user_id: str, project: str, need: str = "reader") -> None:
