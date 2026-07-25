@@ -54,6 +54,28 @@ def validate_external_url(url: str, *, resolve: bool = True) -> str:
     and blocks if ANY resolved address is non-public. resolve=False
     (config-time) skips DNS and only validates scheme/host shape — so setting
     a URL doesn't depend on the name resolving right then.
+
+    CALLERS MUST DISABLE REDIRECTS.
+
+    This function validates the URL you are about to request. It cannot see
+    where a 3xx sends you afterwards. ``requests`` follows redirects by default
+    on every verb except HEAD, so a validated public host can answer::
+
+        302 Location: http://169.254.169.254/latest/meta-data/...
+
+    and the guard never runs against the real target. A 307 additionally
+    preserves the POST body, forwarding the whole payload.
+
+    Every call site that fetches must therefore pass ``allow_redirects=False``
+    (requests) or ``follow_redirects=False`` (httpx). Current call sites:
+
+        tools/calendar.py       iCal fetch
+        notify/channels.py      webhook + ntfy POST
+        llm/client.py           already correct
+
+    If a caller genuinely needs to follow a redirect, it has to re-validate the
+    Location header before making the next request. Nothing here does that
+    today, which is why the blanket rule is "no redirects".
     """
     if not url or not isinstance(url, str):
         raise BlockedURLError("empty or non-string URL")

@@ -164,7 +164,10 @@ class _ICalAdapter:
         from ..safety.net import validate_external_url
 
         validate_external_url(self._url)  # authoritative SSRF check before fetching the secret iCal URL
-        r = requests.get(self._url, timeout=10)
+        # allow_redirects=False: validate_external_url() prövar bara URL:en vi skickar.
+        # requests följer annars 3xx vart som helst, och guarden ser aldrig målet —
+        # en angriparkontrollerad iCal-värd kan svara 302 mot 169.254.169.254.
+        r = requests.get(self._url, timeout=10, allow_redirects=False)
         r.raise_for_status()
         cal = vobject.readOne(r.text)
         events: list[dict] = []

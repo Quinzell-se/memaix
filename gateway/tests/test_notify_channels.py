@@ -105,3 +105,32 @@ def test_build_channels_skips_broken_spec_but_builds_others():
 def test_build_channels_unknown_type_is_skipped():
     channels = build_channels([{"type": "carrier-pigeon"}])
     assert channels == []
+
+
+# ── SSRF: redirects får inte följas ──────────────────────────────────────────
+#
+# validate_external_url() prövar bara URL:en vi skickar. Följer klienten en 3xx
+# ser guarden aldrig målet, och en validerad publik värd kan svara
+#   302 Location: http://169.254.169.254/latest/meta-data/...
+# En 307 bevarar dessutom POST-body och skickar hela nyttolasten vidare.
+#
+# Testerna nedan låser fast att båda kanalerna skickar allow_redirects=False.
+# Motsvarande anrop i tools/calendar.py:170 använder requests direkt utan
+# injektionspunkt och täcks därför inte här — se safety/net.py:s docstring för
+# den fullständiga listan över call sites.
+
+
+def test_webhook_does_not_follow_redirects():
+    http = _FakeHttp()
+    ch = WebhookChannel("https://example.com/hook", "raw", _http=http)
+    ch.send("Subj", "md", "txt")
+    _, kwargs = http.calls[0]
+    assert kwargs["allow_redirects"] is False
+
+
+def test_ntfy_does_not_follow_redirects():
+    http = _FakeHttp()
+    ch = NtfyChannel("memaix-alice", server="https://ntfy.sh", _http=http)
+    ch.send("Subj", "md", "hello")
+    _, kwargs = http.calls[0]
+    assert kwargs["allow_redirects"] is False

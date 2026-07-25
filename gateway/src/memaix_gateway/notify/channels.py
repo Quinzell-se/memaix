@@ -77,7 +77,9 @@ class WebhookChannel:
             {"text": f"*{subject}*\n{text}"} if self._fmt == "slack"
             else {"subject": subject, "text": text, "markdown": markdown}
         )
-        resp = http.post(self._url, json=payload, timeout=10)
+        # allow_redirects=False — se kommentaren i safety/net.py. 307 bevarar POST-body,
+        # så en omdirigering skickar hela nyttolasten vidare till målet.
+        resp = http.post(self._url, json=payload, timeout=10, allow_redirects=False)
         raise_for_status = getattr(resp, "raise_for_status", None)
         if raise_for_status:
             raise_for_status()
@@ -97,7 +99,14 @@ class NtfyChannel:
             http = requests
             from ..safety.net import validate_external_url
             validate_external_url(url)  # authoritative SSRF check before the real request
-        resp = http.post(url, data=text.encode("utf-8"), headers={"Title": subject}, timeout=10)
+        # allow_redirects=False — se kommentaren i safety/net.py.
+        resp = http.post(
+            url,
+            data=text.encode("utf-8"),
+            headers={"Title": subject},
+            timeout=10,
+            allow_redirects=False,
+        )
         raise_for_status = getattr(resp, "raise_for_status", None)
         if raise_for_status:
             raise_for_status()
