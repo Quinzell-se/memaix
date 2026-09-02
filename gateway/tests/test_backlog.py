@@ -197,9 +197,18 @@ def test_invalid_status_raises_value_error(acl):
 
 
 def test_score_out_of_range_raises_value_error(acl):
+    """Taket är 10 sedan schemat vidgades till den skala vaultarna använder.
+    8 är numera ett giltigt värde — det som ska avvisas är 11."""
     r = backlog_add(acl, "carol", "proj", "title", "desc")
     with pytest.raises(ValueError):
-        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=11)
+
+
+def test_score_pa_ovre_halvan_av_skalan_accepteras(acl):
+    r = backlog_add(acl, "carol", "proj", "title", "desc")
+    res = backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+    assert "conflict" not in res
+    assert backlog_get(acl, "carol", "proj", r["id"])["value"] == 8
 
 
 def test_score_zero_raises_value_error(acl):
@@ -363,3 +372,27 @@ def test_verkligt_trasigt_item_hoppas_over_men_loggas(acl, vault, caplog):
 
     assert ids == ["MEX-001"]
     assert any("MEX-002" in r.getMessage() for r in caplog.records)
+
+
+def test_hela_1_10_skalan_och_todo_accepteras(acl, vault):
+    """Befintliga vaults använder 1-10 och statusen 'todo'. Schemat sa 1-5 och
+    kände inte till 'todo', vilket gjorde posterna oläsbara."""
+    (vault / "backlog" / "MEX-022.md").write_text(
+        "---\nid: MEX-022\ntitle: Webb-UI fas A\nstatus: todo\n"
+        "value: 9\ncomplexity: 8\nrisk: 4\nversion: 1\n"
+        "created_at: 2026-07-03T00:00:00+00:00\nupdated_at: 2026-07-03T00:00:00+00:00\n"
+        "---\n\nKropp.\n"
+    )
+    item = backlog_get(acl, "alice", "proj", "MEX-022")
+    assert (item["status"], item["value"], item["complexity"]) == ("todo", 9, 8)
+    assert [i["id"] for i in backlog_list(acl, "alice", "proj")] == ["MEX-022"]
+
+
+def test_poang_over_10_avvisas_fortfarande(acl, vault):
+    """Taket flyttades, det togs inte bort."""
+    (vault / "backlog" / "MEX-099.md").write_text(
+        "---\nid: MEX-099\ntitle: Orimlig poäng\nstatus: inbox\nvalue: 11\nversion: 1\n"
+        "created_at: 2026-07-03T00:00:00+00:00\nupdated_at: 2026-07-03T00:00:00+00:00\n"
+        "---\n\nKropp.\n"
+    )
+    assert backlog_list(acl, "alice", "proj") == []

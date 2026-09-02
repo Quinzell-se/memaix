@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------
 
 VALID_STATUSES: frozenset[str] = frozenset(
-    {"inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done"}
+    {"inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done", "todo"}
 )
 
 # ------------------------------------------------------------------
