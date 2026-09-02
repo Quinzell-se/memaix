@@ -335,8 +335,8 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     secret = secret_line.inner_text().split(":", 1)[1].strip()
     code = totp_mod.totp_at(secret, time.time())
     page.locator(".modal-box input").fill(code)
-    page.locator(".modal-box button", has_text="Confirm").click()
-    page.wait_for_url("**/app/admin")  # reloads after enrollment
+    with page.expect_navigation():  # same-URL reload after enrollment
+        page.locator(".modal-box button", has_text="Confirm").click()
     assert page.request.get("/app/api/admin/mfa").json()["enrolled"] is True
 
     # 2) Verify endpoint accepts a fresh real code (and rejects a wrong one).
@@ -353,8 +353,8 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     assert page.request.get("/app/api/admin/mfa").json()["verified"] is True
 
     # 3) Kill-switch: disable bob from the UI…
-    page.locator("button", has_text="Disable: bob").click()
-    page.wait_for_url("**/app/admin")
+    with page.expect_navigation():
+        page.locator("button", has_text="Disable: bob").click()
     users = page.request.get("/app/api/admin/users").json()
     assert next(u for u in users if u["id"] == "bob")["disabled"] is True
 
@@ -369,8 +369,8 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     login_as(context, "alice")
     _inject_mfa_cookie(context, "alice")
     page.goto("/app/admin")
-    page.locator("button", has_text="Enable: bob").click()
-    page.wait_for_url("**/app/admin")
+    with page.expect_navigation():
+        page.locator("button", has_text="Enable: bob").click()
     users = page.request.get("/app/api/admin/users").json()
     assert next(u for u in users if u["id"] == "bob")["disabled"] is False
 
