@@ -3,7 +3,7 @@
 
 frontmatter.py's split()/join() only guarantee "a dict came out of the YAML
 block" — nothing checks that `status` is one of the real lifecycle values,
-or that `value`/`complexity`/`risk` are the 1-5 scores MCP-API.md documents.
+or that `value`/`complexity`/`risk` are the 1-10 scores MCP-API.md documents.
 A hand-edited file or a slightly-off tool call could otherwise write
 `status: 42` or `value: "high"` and have it propagate silently into every
 reader (backlog_list, the board UI, reports).
@@ -23,7 +23,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-BacklogStatus = Literal["inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done"]
+# "todo" är inte en fas i livscykeln nedan utan en äldre, lösare markering som
+# finns i befintliga vaults. Den accepteras för att posterna ska gå att läsa;
+# nya items skrivs i lifecycle-värdena.
+BacklogStatus = Literal[
+    "inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done", "todo"
+]
 
 
 class BacklogItem(BaseModel):
@@ -37,9 +42,9 @@ class BacklogItem(BaseModel):
     author: str = ""
     category: str | None = None
     status: BacklogStatus = "inbox"
-    value: int | None = Field(default=None, ge=1, le=5)
-    complexity: int | None = Field(default=None, ge=1, le=5)
-    risk: int | None = Field(default=None, ge=1, le=5)
+    value: int | None = Field(default=None, ge=1, le=10)
+    complexity: int | None = Field(default=None, ge=1, le=10)
+    risk: int | None = Field(default=None, ge=1, le=10)
     assignee: str | None = None  # agent-/användarnamn (FEATURE-AGENT-TEAM fas 1); None = otilldelad
     version: int = Field(ge=1)
     created_at: str
