@@ -18,9 +18,10 @@ functions that construct/serialise the dict.
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 BacklogStatus = Literal["inbox", "triaged", "evaluated", "approved", "rejected", "in-dev", "done"]
 
@@ -30,7 +31,10 @@ class BacklogItem(BaseModel):
 
     id: str
     title: str = Field(min_length=1)
-    author: str
+    # Tomt som default: items skrivna innan fältet fanns saknar det, och en
+    # obligatorisk author gjorde hela den befintliga backloggen oläsbar.
+    # Skrivvägen sätter alltid ett riktigt värde.
+    author: str = ""
     category: str | None = None
     status: BacklogStatus = "inbox"
     value: int | None = Field(default=None, ge=1, le=5)
@@ -40,4 +44,16 @@ class BacklogItem(BaseModel):
     version: int = Field(ge=1)
     created_at: str
     updated_at: str
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _stamp_to_iso(cls, v: object) -> object:
+        """YAML tolkar en ociterad ISO-tidsstämpel som datetime, inte str.
+
+        Fälten lagras som text, men varje handredigerad fil — och allt som
+        skrivits av ett äldre verktyg — ger ett datetime-objekt tillbaka.
+        Att kräva str där gjorde giltiga poster ogiltiga."""
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        return v
     description: str = ""

@@ -15,6 +15,7 @@ ID format: uuid4().hex[:8]  (8 lowercase hex chars, e.g. "a1b2c3d4")
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +27,8 @@ from .. import frontmatter as fm
 from ..acl import Acl
 from ..backlog_schema import BacklogItem
 from ..paths import validate_id
+
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Constants
@@ -147,7 +150,10 @@ def backlog_list(
     for p in sorted(bl_dir.glob("*.md")):
         try:
             item = _parse_item(p)
-        except (ValueError, yaml.YAMLError):
+        except (ValueError, yaml.YAMLError) as exc:
+            # Hoppa över posten, men aldrig tyst: ett schemafel gjorde en gång
+            # hela backloggen osynlig utan ett enda spår i loggen.
+            logger.warning("hoppar över backlog-item %s: %s", p.name, exc)
             continue
         if status and item.get("status") != status:
             continue

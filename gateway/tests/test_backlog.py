@@ -306,3 +306,60 @@ def test_assign_optimistic_lock_conflict(acl):
     backlog_assign(acl, "alice", "proj", r["id"], "carol", expected_version=1)
     stale = backlog_assign(acl, "alice", "proj", r["id"], "bob", expected_version=1)
     assert stale == {"conflict": True, "current_version": 2}
+
+
+# ------------------------------------------------------------------
+# Regression: schema-drift gjorde en hel backlog osynlig
+# ------------------------------------------------------------------
+
+
+def _legacy_item(vault, name: str, extra: str = "") -> None:
+    """Ett item skrivet som de faktiskt ligger i memaix-src-vaulten:
+    ociterade tidsstämplar (YAML ger datetime, inte str) och inget
+    author-fält, eftersom det inte fanns när posterna skapades."""
+    (vault / "backlog" / f"{name}.md").write_text(
+        "---\n"
+        f"id: {name}\n"
+        "title: Ett äldre item\n"
+        "category: chore\n"
+        "status: done\n"
+        "value: 5\n"
+        "complexity: 2\n"
+        "risk: 1\n"
+        "version: 2\n"
+        "created_at: 2026-06-30T11:00:00+00:00\n"
+        "updated_at: 2026-06-30T20:00:00+00:00\n"
+        f"{extra}"
+        "---\n\nBrödtext.\n"
+    )
+
+
+def test_legacy_item_utan_author_och_med_datetime_gar_att_lasa(acl, vault):
+    """Före fixen: author var obligatoriskt och tidsstämplarna deklarerade
+    som str, medan YAML ger datetime. Båda gjorde model_validate() till ett
+    ValueError som backlog_list svalde — 25 poster försvann spårlöst."""
+    _legacy_item(vault, "MEX-001")
+
+    item = backlog_get(acl, "alice", "proj", "MEX-001")
+    assert item["id"] == "MEX-001"
+    assert item["author"] == ""
+    assert item["created_at"] == "2026-06-30T11:00:00+00:00"
+    assert isinstance(item["updated_at"], str)
+
+    assert [i["id"] for i in backlog_list(acl, "alice", "proj")] == ["MEX-001"]
+
+
+def test_verkligt_trasigt_item_hoppas_over_men_loggas(acl, vault, caplog):
+    """Att hoppa över skräp är rätt. Att göra det tyst var felet."""
+    _legacy_item(vault, "MEX-001")
+    (vault / "backlog" / "MEX-002.md").write_text(
+        "---\nid: MEX-002\ntitle: Ogiltig status\nstatus: bananer\nversion: 1\n"
+        "created_at: 2026-06-30T11:00:00+00:00\nupdated_at: 2026-06-30T11:00:00+00:00\n"
+        "---\n\nKropp.\n"
+    )
+
+    with caplog.at_level("WARNING"):
+        ids = [i["id"] for i in backlog_list(acl, "alice", "proj")]
+
+    assert ids == ["MEX-001"]
+    assert any("MEX-002" in r.getMessage() for r in caplog.records)
