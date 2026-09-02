@@ -84,7 +84,7 @@ gatewayen implementerar (se `BUILD.md` för bygg-ordning). PM-modulens verktyg d
 | `backlog_set_status` | `project, id, status` | uppdaterat item | **owner** |
 
 > Statusflöde: `inbox → triaged → evaluated → approved/rejected → in-dev → done`.
-> Poäng 1–5: `value` (nytta), `complexity` (komplexitet), `risk` (säkerhet/risk).
+> Poäng 1–10: `value` (nytta), `complexity` (komplexitet), `risk` (säkerhet/risk).
 
 ## Konto  (länka externa OAuth-konton)
 
