@@ -5,7 +5,9 @@ description = "Memaix — self-hosted, AI-agnostic assistant gateway (MCP)"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
-    "mcp",
+    # Låst till 1.x med flit: server.py bygger på FastMCP, som i mcp 2.x
+    # döptes om till MCPServer med ändrat API. Lyft först efter migrering.
+    "mcp>=1.2,<2",
     "httpx",
     "uvicorn>=0.29",
     "pyyaml",
