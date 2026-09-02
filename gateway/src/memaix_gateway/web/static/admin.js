@@ -52,7 +52,8 @@
 
   // --- Users -------------------------------------------------------------
   try {
-    const users = await api('GET', '/app/api/admin/users');
+    const usersRaw = await api('GET', '/app/api/admin/users');
+    const users = Array.isArray(usersRaw) ? usersRaw : [];
     const rows = users.map((u) => [
       u.id,
       u.admin ? '🛡' : '',
@@ -286,7 +287,12 @@
   note.textContent = t('web_mfa_active');
   bar.append(note);
 
-  const users = await api('GET', '/app/api/admin/users').catch(() => []);
+  // .catch() fångar bara ett avvisat löfte. Ett anrop som *resolvar* med ett
+  // felobjekt — vilket händer när sessionen dött och API:t svarar 401/403 —
+  // gav en icke-lista rakt in i for...of, som kastade utanför try-blocket och
+  // dog som ett obehandlat JS-fel i konsolen.
+  const usersRaw = await api('GET', '/app/api/admin/users').catch(() => []);
+  const users = Array.isArray(usersRaw) ? usersRaw : [];
   for (const u of users) {
     if (u.id === me.user) continue;
     const btn = document.createElement('button');
