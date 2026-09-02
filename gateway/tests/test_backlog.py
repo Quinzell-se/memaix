@@ -206,8 +206,9 @@ def test_score_out_of_range_raises_value_error(acl):
 
 def test_score_pa_ovre_halvan_av_skalan_accepteras(acl):
     r = backlog_add(acl, "carol", "proj", "title", "desc")
-    got = backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
-    assert got["value"] == 8
+    res = backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+    assert "conflict" not in res
+    assert backlog_get(acl, "carol", "proj", r["id"])["value"] == 8
 
 
 def test_score_zero_raises_value_error(acl):
