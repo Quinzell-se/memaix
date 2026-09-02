@@ -197,9 +197,17 @@ def test_invalid_status_raises_value_error(acl):
 
 
 def test_score_out_of_range_raises_value_error(acl):
+    """Taket är 10 sedan schemat vidgades till den skala vaultarna använder.
+    8 är numera ett giltigt värde — det som ska avvisas är 11."""
     r = backlog_add(acl, "carol", "proj", "title", "desc")
     with pytest.raises(ValueError):
-        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+        backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=11)
+
+
+def test_score_pa_ovre_halvan_av_skalan_accepteras(acl):
+    r = backlog_add(acl, "carol", "proj", "title", "desc")
+    got = backlog_score(acl, "carol", "proj", r["id"], expected_version=1, value=8)
+    assert got["value"] == 8
 
 
 def test_score_zero_raises_value_error(acl):
