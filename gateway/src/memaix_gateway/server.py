@@ -46,6 +46,28 @@ from .tools.calendar import CalendarAuthRequired, _FreeBusyAdapter, _ICalAdapter
 
 logger = logging.getLogger(__name__)
 
+
+# RFC 7591 §3.2.1: valfri klientmetadata *utelämnas* när den saknas. Hydra
+# skickar istället tomma strängar för de valfria URI-fälten och null för
+# osatta listor. En klient som validerar svaret — Claude Code gör det —
+# avvisar då hela registreringen:
+#   client_uri: ""    -> "Invalid URL" / "URL must be parseable"
+#   contacts:   null  -> "expected array, received null"
+# Det gick obemärkt förbi tills någon försökte ansluta med en strikt klient.
+_DCR_URI_FALT = ("client_uri", "policy_uri", "tos_uri", "logo_uri", "jwks_uri")
+
+
+def _stada_dcr_svar(data: object) -> object:
+    """Ta bort osatta valfria fält ur Hydras registreringssvar."""
+    if not isinstance(data, dict):
+        return data
+    ut = {k: v for k, v in data.items() if v is not None}
+    for falt in _DCR_URI_FALT:
+        if ut.get(falt) == "":
+            ut.pop(falt)
+    return ut
+
+
 _acl: Acl | None = None
 _audit: AuditLog | None = None
 _token_store: "TokenStore | None" = None  # type: ignore[name-defined]
@@ -2278,7 +2300,7 @@ def build_http_app():
                     headers={"Content-Type": "application/json"},
                     timeout=10.0,
                 )
-                return JSONResponse(resp.json(), status_code=resp.status_code)
+                return JSONResponse(_stada_dcr_svar(resp.json()), status_code=resp.status_code)
         except Exception as exc:
             logger.warning("DCR proxy error: %s", exc)
             return JSONResponse({"error": "server_error"}, status_code=500)
