@@ -94,6 +94,14 @@ services:
       LOG_LEAK_SENSITIVE_VALUES: "true"
       STRATEGIES_ACCESS_TOKEN: jwt
       OIDC_DYNAMIC_CLIENT_REGISTRATION_ENABLED: "true"
+      # Hydra i --dev sätter inte Secure på sina kakor, men defaultar till
+      # SameSite=None — en kombination varje modern webbläsare avvisar. Kakan
+      # lagras då aldrig, och nästa steg i flödet dör med
+      # "No CSRF value available in the session cookie".
+      # Lax kräver inte Secure och räcker här: login och consent ligger på
+      # samma host som Hydra, och Lax släpper igenom top-level-navigeringen
+      # in från klienten.
+      SERVE_COOKIES_SAME_SITE_MODE: "Lax"
       SERVE_PUBLIC_CORS_ENABLED: "true"
       SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: "https://claude.ai,https://api.claude.ai"
       SERVE_PUBLIC_CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
