@@ -379,6 +379,21 @@ class _RealDavAdapter:
         description: str | None = None,
     ) -> dict:
         import vobject
+        from vobject.icalendar import utc as vobject_utc
+
+        # vobject only recognizes its own utc tzinfo (dateutil's tzutc())
+        # when picking a TZID at serialize() time — a stdlib
+        # datetime.timezone.utc-aware datetime (what booking_create and
+        # calendar_create's _parse_dt/normalization produce) makes it raise
+        # VObjectError("Unable to guess TZID..."). Pre-existing bug, found
+        # while adding a second, unrelated vobject.iCalendar() caller
+        # (booking/routes.py._build_ics, card 14666e8a) that hit the same
+        # crash and made it obvious this path was never exercised
+        # end-to-end against a real CalDAV target with a UTC time.
+        if start.tzinfo is not None:
+            start = start.astimezone(vobject_utc)
+        if end.tzinfo is not None:
+            end = end.astimezone(vobject_utc)
 
         cal = vobject.iCalendar()
         event = cal.add("vevent")
