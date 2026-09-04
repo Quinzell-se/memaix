@@ -127,7 +127,16 @@ def _locale(request: Request) -> str:
 # read as one dark application, FEATURE-WEB-UI-FOUNDATION.md §1).
 _BOARD_DARK_STYLE = (
     "<style>:root{--bg:#0f1117;--surface:#1a1d27;--border:#2d3044;"
-    "--text:#e2e8f0;--muted:#94a3b8;--card-shadow:0 1px 3px rgba(0,0,0,.5)}</style>"
+    "--text:#e2e8f0;--muted:#94a3b8;--card-shadow:0 1px 3px rgba(0,0,0,.5)}"
+    # .md-content code/pre keep their light #f1f5f9 background from board.html's
+    # own stylesheet even in dark mode, so the inherited --text (near-white)
+    # became unreadable light-on-light. Give them an explicit dark-mode pair.
+    ".md-content code,.md-content pre{background:#262a3a;color:#e2e8f0}"
+    # The shell's sidebar (bottom-left) already shows the project picker,
+    # user badge and logout button — board.html's own header duplicated all
+    # three plus the wordmark. Hide the duplicates inside the frame only.
+    "header .logo,header #project-select,header #user-badge,"
+    "header #logout-btn{display:none}</style>"
 )
 
 
