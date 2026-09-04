@@ -107,6 +107,17 @@
   "cap.calendar.connect.examples": [
     "Koppla min Google-kalender"
   ],
+  "cap.calendar.events_view.title": "Se enskilda händelser och deras status",
+  "cap.calendar.events_view.summary": "Lista källhändelser i en period med vad källkalendern sa och vad som faktiskt gäller efter eventuell manuell justering.",
+  "cap.calendar.events_view.examples": [
+    "Visa mina möten nästa vecka och deras status"
+  ],
+  "cap.calendar.events_override.title": "Justera en händelses status manuellt",
+  "cap.calendar.events_override.summary": "Markera en enskild händelse (eller en hel mötesserie) som Upptagen eller Tillgänglig oavsett vad källkalendern säger.",
+  "cap.calendar.events_override.examples": [
+    "Markera konferensen som Tillgänglig trots att den ligger som heldag",
+    "Blockera hela den här mötesserien"
+  ],
   "cap.files.manage.title": "Jobba med projektfiler",
   "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
   "cap.files.manage.examples": [

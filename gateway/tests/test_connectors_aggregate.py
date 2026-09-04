@@ -9,8 +9,10 @@ import pytest
 
 from memaix_gateway.connectors.aggregate import (
     BusyInterval,
+    CalendarEvent,
     CalendarSourceError,
     busy_from_backend,
+    events_from_backend,
     free_slots,
     merge_busy,
     to_utc,
@@ -98,3 +100,44 @@ def test_busy_from_backend_wraps_adapter_failure():
         busy_from_backend(backend, "src1", _dt(0), _dt(23))
     assert exc_info.value.label == "src1"
     assert isinstance(exc_info.value.cause, RuntimeError)
+
+
+def test_events_from_backend_preserves_identity_and_series_fields():
+    backend = _FakeBackend(events=[{
+        "id": "ev1", "title": "Sync", "start": "2026-01-05T09:00:00+00:00", "end": "2026-01-05T10:00:00+00:00",
+        "series_id": "series-1", "is_exception": True, "source_busy": False,
+    }])
+    result = events_from_backend(backend, "src1", _dt(0), _dt(23))
+    assert result == [
+        CalendarEvent(
+            uid="ev1", start=_dt(9), end=_dt(10), source="src1", title="Sync",
+            series_id="series-1", is_exception=True, source_busy=False,
+        )
+    ]
+
+
+def test_events_from_backend_defaults_missing_series_fields():
+    backend = _FakeBackend(events=[{"id": "ev1", "start": "2026-01-05T09:00:00+00:00", "end": "2026-01-05T10:00:00+00:00"}])
+    result = events_from_backend(backend, "src1", _dt(0), _dt(23))
+    assert result == [CalendarEvent(uid="ev1", start=_dt(9), end=_dt(10), source="src1")]
+
+
+def test_events_from_backend_synthesizes_uid_when_missing():
+    """An event with no id still counts (matches busy_from_backend's old
+    unconditional behavior) — it just gets a synthetic, non-stable uid."""
+    backend = _FakeBackend(events=[{"start": "2026-01-05T09:00:00+00:00", "end": "2026-01-05T10:00:00+00:00"}])
+    result = events_from_backend(backend, "src1", _dt(0), _dt(23))
+    assert len(result) == 1
+    assert result[0].uid == "src1-0"
+
+
+def test_events_from_backend_skips_malformed_event():
+    backend = _FakeBackend(events=[{"id": "ev1", "start": "not-a-date", "end": "2026-01-05T10:00:00+00:00"}])
+    assert events_from_backend(backend, "src1", _dt(0), _dt(23)) == []
+
+
+def test_events_from_backend_wraps_adapter_failure():
+    backend = _FakeBackend(raises=RuntimeError("boom"))
+    with pytest.raises(CalendarSourceError) as exc_info:
+        events_from_backend(backend, "src1", _dt(0), _dt(23))
+    assert exc_info.value.label == "src1"

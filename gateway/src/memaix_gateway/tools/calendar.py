@@ -82,6 +82,14 @@ class _PerUserGoogleAdapter:
     def _to_dict(item: dict) -> dict:
         start = item.get("start", {})
         end = item.get("end", {})
+        # originalStartTime is present on an expanded singleEvents=true
+        # instance iff Google materialized a distinct event object for it —
+        # i.e. it was individually modified (title, attendees, time, ...).
+        # A clean occurrence of a series never has this key at all. Do NOT
+        # compare against start: an exception whose *time* is unchanged
+        # (e.g. only its title changed) would otherwise be misclassified as
+        # a normal occurrence and wrongly inherit a series override.
+        is_exception = bool(item.get("originalStartTime"))
         return {
             "id": item.get("id", ""),
             "title": item.get("summary", ""),
@@ -89,6 +97,13 @@ class _PerUserGoogleAdapter:
             "end": end.get("dateTime") or end.get("date", ""),
             "location": item.get("location", ""),
             "description": item.get("description", ""),
+            # memaix-src card c7698ff3 — series identity for per-event overrides.
+            # singleEvents=true (list_events below) expands recurrences and
+            # populates recurringEventId on each instance of a series.
+            "series_id": item.get("recurringEventId"),
+            "is_exception": is_exception,
+            # Google: transparency:"transparent" == Free, default "opaque" == Busy.
+            "source_busy": item.get("transparency", "opaque") != "transparent",
         }
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
@@ -170,10 +185,23 @@ class _ICalAdapter:
         r = requests.get(self._url, timeout=10, allow_redirects=False)
         r.raise_for_status()
         cal = vobject.readOne(r.text)
+        vevents = [c for c in cal.components() if c.name == "VEVENT"]
+
+        # memaix-src card c7698ff3 — series identity. vobject's readOne does
+        # not expand RRULE, so what we see is masters (RRULE) + any explicit
+        # exception instances (RECURRENCE-ID) sharing the master's UID. A UID
+        # is a series iff any component under it carries either marker.
+        def _uid_of(c) -> str:
+            return str(getattr(c, "uid", "")).strip()
+
+        series_uids = {
+            _uid_of(c)
+            for c in vevents
+            if _uid_of(c) and (hasattr(c, "rrule") or hasattr(c, "recurrence_id"))
+        }
+
         events: list[dict] = []
-        for component in cal.components():
-            if component.name != "VEVENT":
-                continue
+        for component in vevents:
             dtstart = component.dtstart.value
             dtend = getattr(component, "dtend", None)
             dtend = dtend.value if dtend else dtstart
@@ -184,13 +212,19 @@ class _ICalAdapter:
             if isinstance(dtend, date) and not isinstance(dtend, datetime):
                 dtend = datetime(dtend.year, dtend.month, dtend.day, tzinfo=timezone.utc)
 
+            uid = _uid_of(component)
+            transp = str(getattr(component, "transp", "")).strip().upper()
+
             events.append({
-                "id": str(getattr(component, "uid", "")).strip() or f"ical-{len(events)}",
+                "id": uid or f"ical-{len(events)}",
                 "title": str(getattr(component, "summary", "")).strip(),
                 "start": dtstart.isoformat() if isinstance(dtstart, datetime) else str(dtstart),
                 "end": dtend.isoformat() if isinstance(dtend, datetime) else str(dtend),
                 "location": str(getattr(component, "location", "")).strip(),
                 "description": str(getattr(component, "description", "")).strip(),
+                "series_id": uid if uid in series_uids else None,
+                "is_exception": hasattr(component, "recurrence_id"),
+                "source_busy": transp != "TRANSPARENT",
                 "_dtstart": dtstart,
                 "_dtend": dtend,
             })
@@ -311,6 +345,11 @@ class _RealDavAdapter:
 
     def _event_to_dict(self, event) -> dict:
         ve = self._vevent(event)
+        transp = str(ve.transp.value).strip().upper() if hasattr(ve, "transp") else ""
+        # memaix-src card c7698ff3 — same UID-based series detection as
+        # _ICalAdapter (date_search(expand=True) expands recurrences, so an
+        # instance carries RECURRENCE-ID + shares its master's UID).
+        has_series_marker = hasattr(ve, "rrule") or hasattr(ve, "recurrence_id")
         return {
             "id": str(ve.uid.value),
             "title": str(ve.summary.value) if hasattr(ve, "summary") else "",
@@ -318,6 +357,9 @@ class _RealDavAdapter:
             "end": str(ve.dtend.value) if hasattr(ve, "dtend") else "",
             "location": str(ve.location.value) if hasattr(ve, "location") else "",
             "description": str(ve.description.value) if hasattr(ve, "description") else "",
+            "series_id": str(ve.uid.value) if has_series_marker else None,
+            "is_exception": hasattr(ve, "recurrence_id"),
+            "source_busy": transp != "TRANSPARENT",
         }
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
@@ -488,13 +530,40 @@ def calendar_free_busy(
             "note": "Ingen synk har körts än för denna kalender",
         }
 
-    from ..connectors.aggregate import BusyInterval, to_utc
+    from ..connectors.aggregate import BusyInterval, CalendarEvent, merge_busy, to_utc
+    from ..connectors.calendar_event_overrides import EventOverrideStore
     from ..connectors.calendar_overrides import OverrideStore
 
     ws, we = to_utc(_parse_dt(start)), to_utc(_parse_dt(end))
-    intervals = [
-        BusyInterval(to_utc(b["start"]), to_utc(b["end"]), b.get("source", "")) for b in cache["busy"]
-    ]
+
+    cached_events = cache.get("events")
+    if cached_events is not None:
+        # memaix-src card c7698ff3 — resolve each source event against its
+        # per-event override (if any) before merging, so a forced-busy event
+        # (e.g. a Tentative meeting) or forced-free event (e.g. a misflagged
+        # all-day "Konferens") is reflected in the aggregate. Falls back to
+        # the pre-merged "busy" list below for a cache written before this
+        # card (no "events" key yet).
+        event_store = EventOverrideStore(acl, project, user_id)
+        busy_events = []
+        for ev in cached_events:
+            event = CalendarEvent(
+                uid=ev["uid"], start=to_utc(ev["start"]), end=to_utc(ev["end"]), source=ev.get("source", ""),
+                title=ev.get("title", ""), series_id=ev.get("series_id"),
+                is_exception=bool(ev.get("is_exception", False)), source_busy=bool(ev.get("source_busy", True)),
+                stable_id=bool(ev.get("stable_id", True)),
+            )
+            decision = event_store.resolve(event)
+            if decision == "free":
+                continue
+            if decision == "busy" or event.source_busy:
+                busy_events.append(event)
+        intervals = merge_busy([BusyInterval(e.start, e.end, e.source) for e in busy_events])
+    else:
+        intervals = [
+            BusyInterval(to_utc(b["start"]), to_utc(b["end"]), b.get("source", "")) for b in cache["busy"]
+        ]
+
     intervals = OverrideStore(acl, project, user_id).apply(intervals)
     intervals = [b for b in intervals if b.start < we and b.end > ws]
 
@@ -589,6 +658,104 @@ def calendar_public_link_remove(acl: Acl, user_id: str, project: str, id: str) -
 
     removed = SourceSelectionStore(acl, project, user_id).remove_public_link(id)
     return {"ok": True, "removed": removed}
+
+
+def calendar_events_list(acl: Acl, user_id: str, project: str, start: str, end: str, *, _cache=None) -> dict:
+    """Every cached source event in [start, end] with its resolved override
+    state — memaix-src card c7698ff3. This is what a click-to-override UI
+    renders: `in_series` tells the client whether to ask "just this
+    instance, or the whole series?" before calling
+    calendar_event_override_set; `overridable=False` marks events whose uid
+    was synthesized at sync time (the source gave no real id) — setting an
+    override against one could silently drift onto a different event on the
+    next sync if the source reorders its results."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.aggregate import CalendarEvent, to_utc
+    from ..connectors.calendar_cache import read_cache
+    from ..connectors.calendar_event_overrides import EventOverrideStore
+
+    cache = _cache if _cache is not None else read_cache(acl, project, user_id)
+    if cache is None:
+        return {"events": [], "synced_at": None, "stale": True}
+
+    ws, we = to_utc(_parse_dt(start)), to_utc(_parse_dt(end))
+    store = EventOverrideStore(acl, project, user_id)
+
+    out = []
+    for ev in cache.get("events", []):
+        event = CalendarEvent(
+            uid=ev["uid"], start=to_utc(ev["start"]), end=to_utc(ev["end"]), source=ev.get("source", ""),
+            title=ev.get("title", ""), series_id=ev.get("series_id"),
+            is_exception=bool(ev.get("is_exception", False)), source_busy=bool(ev.get("source_busy", True)),
+            stable_id=bool(ev.get("stable_id", True)),
+        )
+        if not (event.start < we and event.end > ws):
+            continue
+        override = store.resolve(event)
+        effective_busy = (override == "busy") or (override is None and event.source_busy)
+        out.append({
+            "uid": event.uid, "source": event.source, "title": event.title,
+            "start": event.start.isoformat(), "end": event.end.isoformat(),
+            "source_busy": event.source_busy, "override": override, "effective_busy": effective_busy,
+            "series_id": event.series_id, "is_exception": event.is_exception,
+            "in_series": event.series_id is not None, "overridable": event.stable_id,
+        })
+
+    synced_at = cache.get("synced_at")
+    stale = True
+    if synced_at:
+        from datetime import timezone as _tz
+        stale = (datetime.now(_tz.utc) - datetime.fromisoformat(synced_at)).total_seconds() > 3600
+    return {"events": out, "synced_at": synced_at, "stale": stale}
+
+
+def calendar_event_override_set(
+    acl: Acl, user_id: str, project: str, source: str, state: str, scope: str = "instance",
+    uid: str | None = None, series_id: str | None = None, note: str = "",
+) -> dict:
+    """Force one event (scope="instance", needs uid) or a whole recurring
+    series (scope="series", needs series_id) to Upptagen/Tillgänglig
+    regardless of what the source calendar said — card c7698ff3. An
+    exception instance never inherits a series override (see
+    EventOverrideStore.resolve); it must be set individually via
+    scope="instance"."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.calendar_event_overrides import VALID_STATES, EventOverrideStore
+
+    if state not in VALID_STATES:
+        return {"ok": False, "error": f"ogiltigt state {state!r}, välj busy eller free"}
+    store = EventOverrideStore(acl, project, user_id)
+    if scope == "instance":
+        if not uid:
+            return {"ok": False, "error": "uid krävs för scope=instance"}
+        store.set_instance(source, uid, state, note)
+        return {"ok": True, "scope": scope, "source": source, "uid": uid, "state": state}
+    if scope == "series":
+        if not series_id:
+            return {"ok": False, "error": "series_id krävs för scope=series"}
+        store.set_series(source, series_id, state, note)
+        return {"ok": True, "scope": scope, "source": source, "series_id": series_id, "state": state}
+    return {"ok": False, "error": f"okänt scope {scope!r}, välj instance eller series"}
+
+
+def calendar_event_override_clear(
+    acl: Acl, user_id: str, project: str, source: str, scope: str = "instance",
+    uid: str | None = None, series_id: str | None = None,
+) -> dict:
+    """Remove a previously-set event/series override — card c7698ff3."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.calendar_event_overrides import EventOverrideStore
+
+    store = EventOverrideStore(acl, project, user_id)
+    if scope == "instance":
+        if not uid:
+            return {"ok": False, "error": "uid krävs för scope=instance"}
+        return {"ok": True, "removed": store.clear_instance(source, uid)}
+    if scope == "series":
+        if not series_id:
+            return {"ok": False, "error": "series_id krävs för scope=series"}
+        return {"ok": True, "removed": store.clear_series(source, series_id)}
+    return {"ok": False, "error": f"okänt scope {scope!r}, välj instance eller series"}
 
 
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
