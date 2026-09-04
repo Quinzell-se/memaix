@@ -800,6 +800,24 @@ def calendar_working_hours_set(acl: Acl, user_id: str, project: str, tz: str, we
     return {"ok": True, "tz": tz, "week": week}
 
 
+def calendar_booking_enabled_get(acl: Acl, user_id: str, project: str) -> dict:
+    """Whether the meeting booker is switched on for this user — card
+    9e035c73. {"enabled": False} if never configured; off by default."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.booking_settings import BookingSettingsStore
+
+    return BookingSettingsStore(acl, project, user_id).get()
+
+
+def calendar_booking_enabled_set(acl: Acl, user_id: str, project: str, enabled: bool) -> dict:
+    """Turn the meeting booker on or off for this user — card 9e035c73."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.booking_settings import BookingSettingsStore
+
+    BookingSettingsStore(acl, project, user_id).set(enabled)
+    return {"ok": True, "enabled": bool(enabled)}
+
+
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
     """Return a {"pending": ...} dict if this action should be queued, else None."""
     from ..outbox.policy import action_mode
