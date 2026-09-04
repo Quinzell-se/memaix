@@ -478,6 +478,13 @@ def calendar_find_free(
     outside the user's configured working hours (card e21fde31) are
     excluded — a schedule only ever narrows this result, it can never
     surface a busy block as free.
+
+    Known limitation (memaix-src d0a1f633): once a user has configured
+    working hours, this can never return a slot longer than one day,
+    because apply_working_hours() chops every free gap into day-sized
+    windows before the duration filter below runs. A caller asking for a
+    multi-day duration_min will silently get [] for such users. Not fixed
+    here — tracked as a separate risk, not this card's scope.
     """
     acl.enforce(user_id, project, "collaborator")
     ws = _parse_dt(within_start)
@@ -816,6 +823,43 @@ def calendar_booking_enabled_set(acl: Acl, user_id: str, project: str, enabled: 
 
     BookingSettingsStore(acl, project, user_id).set(enabled)
     return {"ok": True, "enabled": bool(enabled)}
+
+
+def calendar_meeting_type_list(acl: Acl, user_id: str, project: str) -> list[dict]:
+    """The user's named meeting-type presets (duration/interval shortcuts)
+    — card d0a1f633. [] if never configured. Purely advisory: this does
+    not change what calendar_find_free returns, a caller still passes
+    duration_min itself."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.meeting_types import MeetingTypesStore
+
+    return MeetingTypesStore(acl, project, user_id).get()
+
+
+def calendar_meeting_type_set(acl: Acl, user_id: str, project: str, types: list[dict]) -> dict:
+    """Replace the full list of meeting-type presets — card d0a1f633.
+    Each type needs slug (lowercase alphanumeric/hyphen), name, and
+    duration_min (1..43200 minutes); interval_min defaults to
+    duration_min. At most one type may be marked default; if none is,
+    the first is auto-promoted."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.meeting_types import MeetingTypesStore
+
+    try:
+        normalized = MeetingTypesStore(acl, project, user_id).set(types)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "types": normalized}
+
+
+def calendar_meeting_type_delete(acl: Acl, user_id: str, project: str, slug: str) -> dict:
+    """Remove one meeting-type preset by slug — card d0a1f633. A no-op if
+    the slug isn't present."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.meeting_types import MeetingTypesStore
+
+    remaining = MeetingTypesStore(acl, project, user_id).delete(slug)
+    return {"ok": True, "types": remaining}
 
 
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:

@@ -172,6 +172,19 @@ def register_defaults() -> None:
             tags=("kalender", "bokning", "på/av", "calendar", "booking", "toggle"),
         ),
         Capability(
+            key="calendar.meeting_types", area="calendar",
+            title_key="cap.calendar.meeting_types.title",
+            summary_key="cap.calendar.meeting_types.summary",
+            tools=(
+                "calendar_meeting_type_list",
+                "calendar_meeting_type_set",
+                "calendar_meeting_type_delete",
+            ),
+            example_prompts_key="cap.calendar.meeting_types.examples",
+            needs_role="collaborator", needs_resource="calendar",
+            tags=("kalender", "mötestyp", "längd", "calendar", "meeting type", "duration"),
+        ),
+        Capability(
             key="calendar.connect", area="calendar",
             title_key="cap.calendar.connect.title",
             summary_key="cap.calendar.connect.summary",
