@@ -212,10 +212,15 @@ async def booking_create(request: Request) -> JSONResponse:
         acl, host_user, project, int(duration.total_seconds() // 60),
         start.isoformat(), (end + timedelta(minutes=1)).isoformat(), _dav=dav,
     )
-    if not any(
-        _parse_dt(s["start"]) <= start and _parse_dt(s["end"]) >= end
-        for s in still_free
-    ):
+    def _covers(s: dict) -> bool:
+        s_start, s_end = _parse_dt(s.get("start", "")), _parse_dt(s.get("end", ""))
+        # Unparseable start/end -> not a usable free slot. Never crash the
+        # public handler on a malformed calendar row; treat it as no cover.
+        if s_start is None or s_end is None:
+            return False
+        return s_start <= start and s_end >= end
+
+    if not any(_covers(s) for s in still_free):
         return _json(request, {"error": "slot_unavailable"}, status_code=409)
 
     title = link.get("title_template", "Möte").format(name=name) if "{name}" in link.get("title_template", "") else link.get("title_template", "Möte")
