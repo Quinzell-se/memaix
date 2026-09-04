@@ -50,6 +50,12 @@ def test_approve_is_idempotent(tmp_path):
     assert approved_clients.is_approved("jimmy", "claude-client", db_path=db) is True
 
 
+def test_is_approved_false_for_empty_client_id_even_if_approved_empty(tmp_path):
+    db = str(tmp_path / "approved.db")
+    approved_clients.approve("jimmy", "", db_path=db)
+    assert approved_clients.is_approved("jimmy", "", db_path=db) is False
+
+
 def test_creates_parent_directory_if_missing(tmp_path):
     db = str(tmp_path / "nested" / "dir" / "approved.db")
     approved_clients.approve("jimmy", "claude-client", db_path=db)

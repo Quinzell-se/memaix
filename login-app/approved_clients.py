@@ -36,6 +36,12 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def is_approved(subject: str, client_id: str, *, db_path: str = _DB_PATH) -> bool:
+    if not subject or not client_id:
+        # An empty client_id would let two different clients that both fail
+        # to report one share a single "" row — the exact leak this store
+        # exists to prevent. Hydra always sets client_id in practice, but
+        # never trust a missing value as approval.
+        return False
     with _connect(db_path) as conn:
         row = conn.execute(
             "SELECT 1 FROM approved_clients WHERE subject = ? AND client_id = ?",
