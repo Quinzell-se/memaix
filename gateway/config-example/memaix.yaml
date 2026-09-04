@@ -15,3 +15,9 @@ server:
 #     client_id: "..."
 #     client_secret_ref: "env:GOOGLE_CLIENT_SECRET"
 #     scopes: ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly"]
+
+# booking: den publika bokningssidans inställningar (memaix-src card
+# 2bef1062). Utan turnstile_secret_ref vägrar /book/{slug} varje bokning —
+# captcha är obligatoriskt, inte valfritt, för den publika ytan.
+# booking:
+#   turnstile_secret_ref: "env:TURNSTILE_SECRET"
