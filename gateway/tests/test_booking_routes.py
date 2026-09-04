@@ -151,11 +151,50 @@ def test_create_booking_succeeds_and_stores_event(rig):
         json={
             "start": _dt(10).isoformat(), "end": _dt(10, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker till lagring i 1 år.",
         },
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
     assert any(e["title"] == "Möte med Bob" for e in dav._events)
+
+
+def test_create_booking_without_consent_is_rejected(rig):
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(19).isoformat(), "end": _dt(19, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "consent_required"
+    assert not any(e["start"] == _dt(19).isoformat() for e in dav._events)
+
+
+def test_create_booking_records_consent(rig, monkeypatch, tmp_path):
+    from memaix_gateway.booking.consent_store import ConsentStore
+    import memaix_gateway.booking.routes as booking_routes_mod
+
+    store = ConsentStore(tmp_path / "consent.db")
+    monkeypatch.setattr(booking_routes_mod, "get_consent_store", lambda: store)
+
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(20).isoformat(), "end": _dt(20, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker.",
+        },
+    )
+    assert resp.status_code == 200
+    rows = store.due(int(_dt(20, 30).timestamp()) + 366 * 86400)
+    assert len(rows) == 1
+    assert rows[0]["project"] == "proj"
+    assert rows[0]["host_user"] == "alice"
+    assert rows[0]["visitor_email"] == "bob@example.com"
 
 
 def test_create_booking_passes_purpose_as_description(rig):
@@ -165,7 +204,7 @@ def test_create_booking_passes_purpose_as_description(rig):
         json={
             "start": _dt(13).isoformat(), "end": _dt(13, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
-            "purpose": "Prata om samarbete kring X.",
+            "purpose": "Prata om samarbete kring X.", "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -180,6 +219,7 @@ def test_create_booking_without_purpose_stores_no_description(rig):
         json={
             "start": _dt(14).isoformat(), "end": _dt(14, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -194,7 +234,7 @@ def test_create_booking_truncates_overlong_purpose(rig):
         json={
             "start": _dt(15).isoformat(), "end": _dt(15, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
-            "purpose": "x" * 900,
+            "purpose": "x" * 900, "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -211,7 +251,7 @@ def test_create_booking_sends_confirmation_to_visitor_and_host(rig):
         json={
             "start": _dt(9).isoformat(), "end": _dt(9, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
-            "purpose": "Prata om X.", "timezone": "Europe/Stockholm",
+            "purpose": "Prata om X.", "timezone": "Europe/Stockholm", "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -241,6 +281,7 @@ def test_create_booking_without_host_email_only_emails_visitor(rig, tmp_path):
         json={
             "start": _dt(17).isoformat(), "end": _dt(17, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -263,6 +304,7 @@ def test_create_booking_succeeds_even_if_confirmation_email_fails(rig, monkeypat
         json={
             "start": _dt(18).isoformat(), "end": _dt(18, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
         },
     )
     assert resp.status_code == 200
@@ -277,6 +319,7 @@ def test_create_booking_rejects_when_slot_no_longer_free(rig):
         json={
             "start": _dt(10).isoformat(), "end": _dt(10, 30).isoformat(),
             "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
         },
     )
     assert resp.status_code == 409
@@ -302,6 +345,7 @@ def test_concurrent_bookings_for_same_slot_only_one_wins(rig):
     payload = {
         "start": _dt(16).isoformat(), "end": _dt(16, 30).isoformat(),
         "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+        "consent": True,
     }
 
     with ThreadPoolExecutor(max_workers=2) as pool:
