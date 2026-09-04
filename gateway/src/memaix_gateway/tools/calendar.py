@@ -474,7 +474,10 @@ def calendar_find_free(
 ) -> list[dict]:
     """Find free slots of *duration_min* minutes within [within_start, within_end].
 
-    Returns [{start, end}] for each free block (minimum duration).
+    Returns [{start, end}] for each free block (minimum duration). Blocks
+    outside the user's configured working hours (card e21fde31) are
+    excluded — a schedule only ever narrows this result, it can never
+    surface a busy block as free.
     """
     acl.enforce(user_id, project, "collaborator")
     ws = _parse_dt(within_start)
@@ -496,6 +499,13 @@ def calendar_find_free(
             cursor = ev_end
     if we > cursor + duration:
         free.append({"start": cursor.isoformat(), "end": we.isoformat()})
+
+    if acl.resource(project, "vault"):
+        from ..connectors.working_hours import WorkingHoursStore, apply_working_hours
+
+        hours = WorkingHoursStore(acl, project, user_id).get()
+        free = apply_working_hours(free, hours.get("week", {}), hours.get("tz", ""))
+        free = [slot for slot in free if _parse_dt(slot["end"]) - _parse_dt(slot["start"]) >= duration]
     return free
 
 
@@ -756,6 +766,38 @@ def calendar_event_override_clear(
             return {"ok": False, "error": "series_id krävs för scope=series"}
         return {"ok": True, "removed": store.clear_series(source, series_id)}
     return {"ok": False, "error": f"okänt scope {scope!r}, välj instance eller series"}
+
+
+def calendar_working_hours_get(acl: Acl, user_id: str, project: str) -> dict:
+    """The user's configured bookable weekly schedule — card e21fde31.
+    {} (no tz/week) if never configured, which callers should treat as
+    wide-open (every time bookable)."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.working_hours import WorkingHoursStore
+
+    return WorkingHoursStore(acl, project, user_id).get()
+
+
+def calendar_working_hours_set(acl: Acl, user_id: str, project: str, tz: str, week: dict) -> dict:
+    """Set the bookable weekly schedule — card e21fde31. *week* maps
+    mon/tue/wed/thu/fri/sat/sun to a list of {start, end} local HH:MM
+    windows (24h, half-open); an empty or omitted day has nothing
+    bookable. *tz* must be a resolvable IANA zone (e.g. "Europe/Stockholm")
+    — that's the frame the weekly schedule is expressed in. This only
+    restricts calendar_find_free's bookable output; it never changes what
+    the calendar itself reports as busy/free."""
+    acl.enforce(user_id, project, "collaborator")
+    from zoneinfo import ZoneInfoNotFoundError
+
+    from ..connectors.working_hours import WorkingHoursStore
+
+    try:
+        WorkingHoursStore(acl, project, user_id).set(tz, week)
+    except ZoneInfoNotFoundError:
+        return {"ok": False, "error": f"okänd tidszon {tz!r}"}
+    except (ValueError, KeyError) as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "tz": tz, "week": week}
 
 
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:

@@ -118,6 +118,12 @@
     "Markera konferensen som Tillgänglig trots att den ligger som heldag",
     "Blockera hela den här mötesserien"
   ],
+  "cap.calendar.working_hours.title": "Sätt bokningsbara tider",
+  "cap.calendar.working_hours.summary": "Begränsa vilka veckodagar och klockslag som går att boka, oavsett vad kalendern visar som ledigt.",
+  "cap.calendar.working_hours.examples": [
+    "Sätt mina bokningsbara tider till vardagar 9-17",
+    "Ta bort lördagar helt från vad som går att boka"
+  ],
   "cap.files.manage.title": "Jobba med projektfiler",
   "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
   "cap.files.manage.examples": [
