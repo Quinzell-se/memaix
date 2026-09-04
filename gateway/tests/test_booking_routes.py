@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from starlette.testclient import TestClient
 from memaix_gateway import config
 from memaix_gateway.acl import Acl
 from memaix_gateway.connectors.booking_settings import BookingSettingsStore
+from memaix_gateway.tools import email as email_mod
 
 
 def _dt(h: int, m: int = 0) -> datetime:
@@ -38,14 +40,34 @@ def _parse(s):
     return datetime.fromisoformat(s) if isinstance(s, str) else s
 
 
+class _MockSmtp:
+    def __init__(self) -> None:
+        self.sent: list = []
+
+    def send_message(self, msg) -> None:
+        self.sent.append(msg)
+
+
 @pytest.fixture()
 def rig(tmp_path, monkeypatch):
     from memaix_gateway import server as server_mod
 
     vault = tmp_path / "vault"
+    smtp = _MockSmtp()
     acl = Acl(
         users={"alice": {"grants": {"proj": "owner"}}},
-        projects={"proj": {"vault": str(vault), "calendar": {"type": "caldav"}}},
+        projects={"proj": {
+            "vault": str(vault),
+            "calendar": {"type": "caldav"},
+            "mailbox": {"host": "imap.example.com", "user": "alice@example.com", "password_ref": "env:FAKE_MAILBOX_PW"},
+            "allow_send": True,
+        }},
+    )
+    monkeypatch.setenv("FAKE_MAILBOX_PW", "shh")
+    import memaix_gateway.booking.routes as booking_routes_mod
+    monkeypatch.setattr(
+        booking_routes_mod.t_email, "email_send",
+        functools.partial(email_mod.email_send, _smtp=smtp),
     )
     monkeypatch.setattr(server_mod, "_acl", acl)
     monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
@@ -54,6 +76,7 @@ def rig(tmp_path, monkeypatch):
     links_dir.mkdir(parents=True)
     (links_dir / "alice-30.json").write_text(json.dumps({
         "project": "proj", "user": "alice", "duration_min": 30, "title_template": "Möte med {name}",
+        "host_email": "alice@example.com", "host_timezone": "Europe/Stockholm",
     }))
 
     BookingSettingsStore(acl, "proj", "alice").set(True)
@@ -86,6 +109,7 @@ def rig(tmp_path, monkeypatch):
 
     app = server_mod.build_http_app()
     client = TestClient(app)
+    client.smtp = smtp
     return client, dav
 
 
@@ -176,6 +200,73 @@ def test_create_booking_truncates_overlong_purpose(rig):
     assert resp.status_code == 200
     ev = next(e for e in dav._events if e["start"] == _dt(15).isoformat())
     assert len(ev["description"]) == 500
+
+
+def test_create_booking_sends_confirmation_to_visitor_and_host(rig):
+    client, dav = rig
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._windows.pop("booking:testclient", None)
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(9).isoformat(), "end": _dt(9, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "purpose": "Prata om X.", "timezone": "Europe/Stockholm",
+        },
+    )
+    assert resp.status_code == 200
+    assert len(client.smtp.sent) == 2
+    recipients = {msg["To"] for msg in client.smtp.sent}
+    assert recipients == {"bob@example.com", "alice@example.com"}
+    for msg in client.smtp.sent:
+        attachments = list(msg.iter_attachments())
+        assert len(attachments) == 1
+        assert attachments[0].get_filename() == "moete.ics"
+        ics_content = attachments[0].get_content()
+        ics_text = ics_content.decode("utf-8") if isinstance(ics_content, bytes) else ics_content
+        assert "BEGIN:VEVENT" in ics_text
+        assert "Prata om X." in msg.get_body(preferencelist=("plain",)).get_content()
+
+
+def test_create_booking_without_host_email_only_emails_visitor(rig, tmp_path):
+    client, dav = rig
+    from memaix_gateway import config
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._windows.pop("booking:testclient", None)
+    (config.CONFIG_DIR / "booking_links" / "no-host-email.json").write_text(json.dumps({
+        "project": "proj", "user": "alice", "duration_min": 30, "title_template": "Möte",
+    }))
+    resp = client.post(
+        "/book/no-host-email",
+        json={
+            "start": _dt(17).isoformat(), "end": _dt(17, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+        },
+    )
+    assert resp.status_code == 200
+    assert len(client.smtp.sent) == 1
+    assert client.smtp.sent[0]["To"] == "bob@example.com"
+
+
+def test_create_booking_succeeds_even_if_confirmation_email_fails(rig, monkeypatch):
+    client, dav = rig
+    import memaix_gateway.booking.routes as booking_routes_mod
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._windows.pop("booking:testclient", None)
+
+    def _boom(*a, **kw):
+        raise RuntimeError("smtp exploded")
+
+    monkeypatch.setattr(booking_routes_mod.t_email, "email_send", _boom)
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(18).isoformat(), "end": _dt(18, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
 
 
 def test_create_booking_rejects_when_slot_no_longer_free(rig):
