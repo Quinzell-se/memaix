@@ -39,6 +39,7 @@ _TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteveri
 _MIN_DURATION_MIN = 15
 _MAX_DURATION_MIN = 240
 _MAX_WINDOW_DAYS = 30
+_MAX_PURPOSE_LEN = 500
 
 
 def _get_acl():
@@ -158,7 +159,7 @@ async def booking_slots(request: Request) -> JSONResponse:
 
 
 async def booking_create(request: Request) -> JSONResponse:
-    """POST /book/{slug} — {start, end, name, email, turnstile_token}."""
+    """POST /book/{slug} — {start, end, name, email, turnstile_token, purpose?}."""
     client_ip = _client_ip(request)
     if not _rate_limiter().check(f"booking:{client_ip}", limit=10, window_s=60):
         return _json(request, {"error": "rate_limited"}, status_code=429)
@@ -180,6 +181,7 @@ async def booking_create(request: Request) -> JSONResponse:
 
     name = str(body.get("name") or "").strip()
     email = str(body.get("email") or "").strip()
+    purpose = str(body.get("purpose") or "").strip()[:_MAX_PURPOSE_LEN]
     start = _parse_dt(str(body.get("start") or ""))
     end = _parse_dt(str(body.get("end") or ""))
     if not name or not email or start is None or end is None or end <= start:
@@ -227,7 +229,7 @@ async def booking_create(request: Request) -> JSONResponse:
     event = t_cal.calendar_create(
         acl, host_user, project, title,
         start.isoformat(), end.isoformat(),
-        attendees=[email], _dav=dav, _confirmed=True,
+        attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
     )
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
