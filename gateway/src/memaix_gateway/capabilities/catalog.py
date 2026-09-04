@@ -103,7 +103,7 @@ def register_defaults() -> None:
             key="calendar.view", area="calendar",
             title_key="cap.calendar.view.title",
             summary_key="cap.calendar.view.summary",
-            tools=("calendar_list", "calendar_find_free"),
+            tools=("calendar_list", "calendar_find_free", "calendar_free_busy"),
             example_prompts_key="cap.calendar.view.examples",
             needs_role="collaborator", needs_resource="calendar",
             tags=("kalender", "möte", "calendar", "meeting"),
