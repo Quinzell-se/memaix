@@ -41,7 +41,7 @@ class _MockMessage:
         self.to = ("to@example.com",)
         self.cc = ()
         self.date_str = date_str
-        self.seen = seen
+        self.flags = ("\\Seen",) if seen else ()
         self.text = text
         self.html = None
 

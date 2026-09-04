@@ -7,7 +7,7 @@ smtplib.SMTP connection is created from project config.
 
 _imap duck type (must implement):
   fetch(criteria='ALL', *, mark_seen=False, limit=None) -> Iterable[msg]
-    where msg has: uid, subject, from_, to, cc, date_str, seen, text, html
+    where msg has: uid, subject, from_, to, cc, date_str, flags, text, html
   folder.set(name: str)
   append(msg_bytes: bytes, flags: str, *, folder: str)
   logout()
@@ -76,7 +76,7 @@ def _msg_to_dict(m, full: bool = False) -> dict:
         "subject": m.subject,
         "from": m.from_,
         "date": m.date_str,
-        "seen": m.seen,
+        "seen": "\\Seen" in m.flags,
     }
     if full:
         base.update(

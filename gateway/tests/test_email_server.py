@@ -28,7 +28,7 @@ class _Msg:
         self.to = ["me@example.com"]
         self.cc = []
         self.date_str = "2025-01-06"
-        self.seen = False
+        self.flags = ()
         self.text = text
         self.html = ""
 
