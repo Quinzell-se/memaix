@@ -83,6 +83,19 @@ def test_free_slots_fully_busy_range():
     assert free_slots(busy, _dt(9), _dt(10), timedelta(minutes=30)) == []
 
 
+def test_free_slots_never_leaks_source_or_event_identity():
+    # memaix-src card de858332 — an external booking view merges busy
+    # intervals from every calendar source in the aggregate, but must only
+    # ever expose whether a slot is free, never which source or event it
+    # came from. BusyInterval carries a "source" tag for internal merge
+    # logic (merge_busy) — assert it never reaches free_slots' output.
+    busy = [BusyInterval(_dt(9), _dt(9, 30), "google:alice@example.com")]
+    slots = free_slots(busy, _dt(9), _dt(11), timedelta(minutes=30))
+    assert len(slots) >= 1
+    for s in slots:
+        assert set(s.keys()) == {"start", "end"}
+
+
 def test_busy_from_backend_normalises_events():
     backend = _FakeBackend(events=[{"start": "2026-01-05T09:00:00+00:00", "end": "2026-01-05T10:00:00+00:00"}])
     result = busy_from_backend(backend, "src1", _dt(0), _dt(23))

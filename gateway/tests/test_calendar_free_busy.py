@@ -63,6 +63,26 @@ def test_calendar_free_busy_filters_out_events_outside_requested_range(acl):
     assert result["busy"] == []
 
 
+def test_calendar_free_busy_source_field_requires_reader_grant(acl):
+    # memaix-src card de858332 — calendar_free_busy deliberately includes
+    # `source` (which calendar account a busy block came from), which is
+    # fine for the calendar's own owner/collaborators (enforced above by
+    # test_calendar_free_busy_denied_without_grant) but must NOT be passed
+    # through unfiltered to any future public/external caller — see the
+    # PRIVACY note on calendar_free_busy's docstring. This test pins the
+    # current contract (source present, reader-gated) so a future change
+    # that drops the ACL check or exposes this function publicly gets
+    # caught here, forcing a conscious field-stripping decision.
+    cache = {
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "busy": [{"start": _dt(9).isoformat(), "end": _dt(10).isoformat(), "source": "google:alice@example.com"}],
+        "source_count": 1,
+        "errors": [],
+    }
+    result = calendar_free_busy(acl, "alice", "proj", _dt(0).isoformat(), _dt(23).isoformat(), _cache=cache)
+    assert result["busy"][0]["source"] == "google:alice@example.com"
+
+
 def test_calendar_free_busy_stale_when_cache_older_than_an_hour(acl):
     old = datetime.now(timezone.utc) - timedelta(hours=2)
     cache = {"synced_at": old.isoformat(), "busy": [], "source_count": 1, "errors": []}

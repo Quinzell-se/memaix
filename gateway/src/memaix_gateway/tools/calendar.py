@@ -529,7 +529,18 @@ def calendar_free_busy(
     the 5-15 minute sync band, meaning the background sync loop is stuck or
     hasn't run — callers should treat the data as unreliable, not refuse it
     outright (the fail-closed call for the actual booking flow belongs to
-    the public-booking-page card, 2bef1062, not this read API)."""
+    the public-booking-page card, 2bef1062, not this read API).
+
+    PRIVACY: this is a reader-scoped API for the calendar's own
+    owner/collaborators, and its busy blocks intentionally include
+    `source` (which calendar account the block came from, e.g.
+    "google:alice@example.com") — useful to an authenticated owner,
+    but identifying. memaix-src card de858332 requires the external
+    booking view to reveal only free/busy, never who or what. When
+    2bef1062 builds that public surface, it MUST NOT pass this
+    function's `busy` list straight through — strip `source` (and any
+    other field beyond start/end), the same shape calendar_find_free
+    and connectors.aggregate.free_slots already guarantee."""
     acl.enforce(user_id, project, "reader")
     from ..connectors.calendar_cache import read_cache
 

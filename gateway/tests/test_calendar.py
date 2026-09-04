@@ -265,6 +265,37 @@ def test_calendar_find_free_returns_slots(acl, dav):
         assert "end" in s
 
 
+def test_calendar_find_free_never_leaks_event_details(acl):
+    # memaix-src card de858332 — the external booking view must only ever
+    # see whether a slot is free, never what the busy event actually was
+    # (title/attendees/description/location). Assert this at the source:
+    # even when the underlying calendar events carry that data, it must
+    # not survive into calendar_find_free's output.
+    dav_with_details = _MockDav(
+        [
+            {
+                "id": "ev-secret",
+                "title": "Läkarbesök — konfidentiellt",
+                "start": "2024-06-03T09:00:00+00:00",
+                "end": "2024-06-03T09:30:00+00:00",
+                "location": "Vårdcentralen",
+                "description": "Uppföljning, se journal",
+                "attendees": ["alice@example.com", "doctor@example.com"],
+            },
+        ]
+    )
+    slots = calendar_find_free(
+        acl, "carol", "proj",
+        duration_min=30,
+        within_start="2024-06-03T08:00:00+00:00",
+        within_end="2024-06-03T18:00:00+00:00",
+        _dav=dav_with_details,
+    )
+    assert len(slots) >= 1
+    for s in slots:
+        assert set(s.keys()) == {"start", "end"}
+
+
 # ------------------------------------------------------------------
 # Validation
 # ------------------------------------------------------------------
