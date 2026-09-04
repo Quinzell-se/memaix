@@ -154,6 +154,15 @@ def register_defaults() -> None:
             tags=("kalender", "upptagen", "tillgänglig", "serie", "calendar", "override", "busy", "series"),
         ),
         Capability(
+            key="calendar.working_hours", area="calendar",
+            title_key="cap.calendar.working_hours.title",
+            summary_key="cap.calendar.working_hours.summary",
+            tools=("calendar_working_hours_get", "calendar_working_hours_set"),
+            example_prompts_key="cap.calendar.working_hours.examples",
+            needs_role="collaborator", needs_resource="calendar",
+            tags=("kalender", "arbetstid", "veckoschema", "calendar", "working hours", "schedule"),
+        ),
+        Capability(
             key="calendar.connect", area="calendar",
             title_key="cap.calendar.connect.title",
             summary_key="cap.calendar.connect.summary",

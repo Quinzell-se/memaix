@@ -2112,6 +2112,35 @@ def calendar_event_override_clear(
 
 
 @mcp.tool()
+def calendar_working_hours_get(project: str) -> dict:
+    """The user's configured bookable weekly schedule — memaix-src card
+    e21fde31. {} if never configured (wide-open, every time bookable)."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_working_hours_get",
+        t_cal.calendar_working_hours_get,
+        _get_acl(), user, project,
+    )
+
+
+@mcp.tool()
+def calendar_working_hours_set(project: str, tz: str, week: dict) -> dict:
+    """Set the bookable weekly schedule — memaix-src card e21fde31. *week*
+    maps mon/tue/wed/thu/fri/sat/sun to a list of {start, end} local HH:MM
+    windows; an empty/omitted day has nothing bookable. *tz* is an IANA
+    zone (e.g. "Europe/Stockholm"). Only narrows calendar_find_free's
+    output — never changes what the calendar itself reports as busy/free."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_working_hours_set",
+        t_cal.calendar_working_hours_set,
+        _get_acl(), user, project, tz, week,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,

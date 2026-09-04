@@ -118,6 +118,12 @@
     "Mark the conference as Free even though it's showing as all-day",
     "Block out this whole meeting series"
   ],
+  "cap.calendar.working_hours.title": "Set bookable hours",
+  "cap.calendar.working_hours.summary": "Restrict which weekdays and times are open for booking at all, regardless of what the calendar shows as free.",
+  "cap.calendar.working_hours.examples": [
+    "Set my bookable hours to weekdays 9-5",
+    "Take Saturdays off the bookable schedule entirely"
+  ],
   "cap.files.manage.title": "Work with project files",
   "cap.files.manage.summary": "List, read, search and write files in the project vault.",
   "cap.files.manage.examples": [
