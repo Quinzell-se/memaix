@@ -2825,6 +2825,30 @@ def build_http_app():
 
         starlette_app.router.lifespan_context = _lifespan_with_calendar_sync
 
+    # Start the booking-consent purge loop (memaix-src card 01cf3b74). Same
+    # lifespan-wrapping pattern as the two loops above — a third,
+    # independent background task, since retention purging has nothing in
+    # common with brief delivery or calendar sync's schedules.
+    if cfg.get("memaix", {}).get("booking", {}).get("purge_enabled", True):
+        import contextlib
+
+        _prior_purge_lifespan = starlette_app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def _lifespan_with_consent_purge(app):
+            import asyncio
+
+            from .booking.purge import consent_purge_loop
+
+            task = asyncio.create_task(consent_purge_loop(_get_acl, _resolve_calendar_dav))
+            try:
+                async with _prior_purge_lifespan(app) as state:
+                    yield state
+            finally:
+                task.cancel()
+
+        starlette_app.router.lifespan_context = _lifespan_with_consent_purge
+
     # Browsers hitting the bare domain get the web UI, not the MCP 401 JSON.
     from .web.routes import BrowserRootRedirect
 

@@ -14,6 +14,16 @@ missing mailbox/allow_send config for the project, or a transient SMTP
 error, is logged and swallowed, never surfaced as a booking failure — the
 booking itself already succeeded by the time email is attempted.
 
+GDPR consent + 1-year retention (card 01cf3b74): booking_create requires
+{"consent": true} in the body — a booking is rejected with 400
+consent_required otherwise, since a frontend checkbox alone is theatre
+without a server-side check. The consent text shown to the visitor is
+recorded verbatim in consent_store.py alongside the event id and meeting
+end time, which purge.py's background loop uses a year later to delete
+the calendar event and scrub the log — see those two modules for why a
+separate log is the only reliable way to find "which calendar events are
+bookings" at all.
+
 The host's own ACL-provisioned user_id (from the link record) is used for
 every calendar_* call, so calendar_find_free/calendar_create's existing
 "collaborator" enforcement is satisfied naturally — there is no anonymous
@@ -31,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import uuid as _uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -45,6 +56,7 @@ from .. import config
 from ..tools import calendar as t_cal
 from ..tools import email as t_email
 from ..tools.calendar import CalendarAuthRequired
+from .consent_store import get_consent_store
 from .links import get_link
 
 logger = logging.getLogger(__name__)
@@ -206,6 +218,14 @@ async def booking_create(request: Request) -> JSONResponse:
     if not await _verify_turnstile(str(body.get("turnstile_token") or ""), client_ip):
         return _json(request, {"error": "captcha_failed"}, status_code=403)
 
+    # Server-side check, not just a frontend checkbox — otherwise "consent"
+    # is theatre. consent_text is stored verbatim below so we can later
+    # prove exactly what the visitor agreed to, not just that some box was
+    # ticked.
+    if body.get("consent") is not True:
+        return _json(request, {"error": "consent_required"}, status_code=400)
+    consent_text = str(body.get("consent_text") or "").strip()
+
     name = str(body.get("name") or "").strip()
     email = str(body.get("email") or "").strip()
     purpose = str(body.get("purpose") or "").strip()[:_MAX_PURPOSE_LEN]
@@ -262,6 +282,11 @@ async def booking_create(request: Request) -> JSONResponse:
             start.isoformat(), end.isoformat(),
             attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
         )
+    get_consent_store().record(
+        project=project, host_user=host_user, event_id=event.get("id"),
+        visitor_email=email, consent_text=consent_text,
+        consent_at=int(time.time()), meeting_end=int(end.timestamp()),
+    )
     # Lock released above — the booking is already committed to the
     # calendar, so email delivery is not part of the race-critical section
     # and its latency must never hold up the next booker for this host.
