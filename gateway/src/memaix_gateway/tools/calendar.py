@@ -457,6 +457,60 @@ def calendar_find_free(
     return free
 
 
+def calendar_free_busy(
+    acl: Acl,
+    user_id: str,
+    project: str,
+    start: str,
+    end: str,
+    *,
+    _cache=None,
+) -> dict:
+    """Aggregated busy view across every calendar source configured for this
+    user/project (memaix-src card 4daa20e2) — served from the periodic sync
+    cache (connectors/calendar_cache.py), never a live query. Distinct from
+    calendar_find_free above, which still queries a single adapter live;
+    this is the multi-source view the booking-page epic builds on.
+
+    Returns {busy: [{start, end, source}], synced_at, stale, source_count,
+    errors}. `stale=True` when the cache is older than an hour — well past
+    the 5-15 minute sync band, meaning the background sync loop is stuck or
+    hasn't run — callers should treat the data as unreliable, not refuse it
+    outright (the fail-closed call for the actual booking flow belongs to
+    the public-booking-page card, 2bef1062, not this read API)."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.calendar_cache import read_cache
+
+    cache = _cache if _cache is not None else read_cache(acl, project, user_id)
+    if cache is None:
+        return {
+            "busy": [], "synced_at": None, "stale": True, "source_count": 0, "errors": [],
+            "note": "Ingen synk har körts än för denna kalender",
+        }
+
+    from ..connectors.aggregate import BusyInterval, to_utc
+    from ..connectors.calendar_overrides import OverrideStore
+
+    ws, we = to_utc(_parse_dt(start)), to_utc(_parse_dt(end))
+    intervals = [
+        BusyInterval(to_utc(b["start"]), to_utc(b["end"]), b.get("source", "")) for b in cache["busy"]
+    ]
+    intervals = OverrideStore(acl, project, user_id).apply(intervals)
+    intervals = [b for b in intervals if b.start < we and b.end > ws]
+
+    synced_at = datetime.fromisoformat(cache["synced_at"])
+    from datetime import timezone as _tz
+
+    age = datetime.now(_tz.utc) - synced_at
+    return {
+        "busy": [{"start": b.start.isoformat(), "end": b.end.isoformat(), "source": b.source} for b in intervals],
+        "synced_at": cache["synced_at"],
+        "stale": age.total_seconds() > 3600,
+        "source_count": cache.get("source_count", 0),
+        "errors": cache.get("errors", []),
+    }
+
+
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
     """Return a {"pending": ...} dict if this action should be queued, else None."""
     from ..outbox.policy import action_mode

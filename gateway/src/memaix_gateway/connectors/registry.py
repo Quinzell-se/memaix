@@ -102,6 +102,74 @@ class ConnectorRegistry:
 
         return spec.factory(acl, project, user, resource_cfg, token)
 
+    def get_all(self, acl, token_store, project: str, capability: str, user: str) -> list[tuple[str, object]]:
+        """Resolve EVERY source configured for this capability, not just one
+        (get()'s single-adapter shape). Added for memaix-src card 4daa20e2
+        (calendar aggregation) — a person/project can have more than one
+        calendar (multiple linked Google accounts, or a shared source
+        alongside a personal one).
+
+        Two origins, combined:
+        1. The base resource_cfg (today's single-resource shape). For
+           auth='per_user' specs this now yields ONE adapter PER linked
+           account of that provider (get() only ever used the first) — this
+           is what makes "aggregate my three Google calendars" possible.
+           For auth='shared' it yields the same single adapter get() would.
+        2. Resource_cfg['sources'] — an optional list of additional shared
+           source configs (each shaped like a resource_cfg), for e.g. a
+           second CalDAV calendar alongside a per-user Google chain.
+
+        Never raises ConnectorAuthRequired or ValueError for missing/unlinked
+        sources — those just contribute zero adapters. An empty result means
+        "nothing configured/linked yet", which callers (calendar_cache.py)
+        treat as zero sources to sync, not an error.
+
+        Returns [(label, adapter), ...]. label is for cache/debugging only,
+        never surfaced as a stable identifier."""
+        resource_cfg = acl.resource(project, RESOURCE_KEYS.get(capability, capability))
+        if not resource_cfg:
+            return []
+
+        results: list[tuple[str, object]] = []
+        base_type = resource_cfg.get("type", DEFAULT_TYPES.get(capability, capability))
+        base_spec = self._specs.get((capability, base_type))
+
+        if base_spec is not None:
+            if base_spec.auth == "per_user":
+                provider = base_spec.provider or base_spec.type
+                accounts = token_store.list_accounts(user)
+                for account in accounts:
+                    if account["provider"] != provider:
+                        continue
+                    token = token_store.load_one(user, provider, account["account"])
+                    if token is None:
+                        continue
+                    label = f"{base_spec.type}:{account['account']}"
+                    results.append((label, base_spec.factory(acl, project, user, resource_cfg, token)))
+            else:
+                label = f"{base_spec.type}:{project}"
+                results.append((label, base_spec.factory(acl, project, user, resource_cfg, None)))
+
+        for i, extra_cfg in enumerate(resource_cfg.get("sources") or []):
+            extra_type = extra_cfg.get("type", base_type)
+            spec = self._specs.get((capability, extra_type))
+            if spec is None:
+                continue
+            token = None
+            if spec.auth == "per_user":
+                provider = spec.provider or spec.type
+                accounts = token_store.list_accounts(user)
+                match = next((a for a in accounts if a["provider"] == provider), None)
+                if match is None:
+                    continue
+                token = token_store.load_one(user, provider, match["account"])
+                if token is None:
+                    continue
+            label = extra_cfg.get("label") or f"{extra_type}:{i}"
+            results.append((label, spec.factory(acl, project, user, extra_cfg, token)))
+
+        return results
+
 
 _registry: ConnectorRegistry | None = None
 

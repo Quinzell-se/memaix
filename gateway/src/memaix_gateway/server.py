@@ -1989,6 +1989,22 @@ def calendar_find_free(
 
 
 @mcp.tool()
+def calendar_free_busy(project: str, start: str, end: str) -> dict:
+    """Aggregated busy view across every calendar source linked for this
+    project (memaix-src card 4daa20e2), from the periodic sync cache —
+    not a live query. Unlike calendar_find_free (single adapter, live),
+    this merges every linked calendar account plus any configured extra
+    sources. Returns {busy, synced_at, stale, source_count, errors}."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_free_busy",
+        t_cal.calendar_free_busy,
+        _get_acl(), user, project, start, end,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,
@@ -2581,6 +2597,31 @@ def build_http_app():
                 task.cancel()
 
         starlette_app.router.lifespan_context = _lifespan_with_scheduler
+
+    # Start the calendar cache/sync loop (memaix-src card 4daa20e2). Same
+    # lifespan-wrapping pattern as the brief scheduler above — a second,
+    # independent background task, since calendar sync and brief delivery
+    # have unrelated schedules and failure isolation is worth two tasks
+    # instead of one that does both.
+    if cfg.get("memaix", {}).get("calendar_sync", {}).get("enabled", True):
+        import contextlib
+
+        _prior_lifespan = starlette_app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def _lifespan_with_calendar_sync(app):
+            import asyncio
+
+            from .connectors.calendar_cache import calendar_sync_loop
+
+            task = asyncio.create_task(calendar_sync_loop(_get_acl, _get_token_store))
+            try:
+                async with _prior_lifespan(app) as state:
+                    yield state
+            finally:
+                task.cancel()
+
+        starlette_app.router.lifespan_context = _lifespan_with_calendar_sync
 
     # Browsers hitting the bare domain get the web UI, not the MCP 401 JSON.
     from .web.routes import BrowserRootRedirect
