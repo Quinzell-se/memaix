@@ -2141,6 +2141,31 @@ def calendar_working_hours_set(project: str, tz: str, week: dict) -> dict:
 
 
 @mcp.tool()
+def calendar_booking_enabled_get(project: str) -> dict:
+    """Whether the meeting booker is on for this user — memaix-src card
+    9e035c73. Off by default."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_booking_enabled_get",
+        t_cal.calendar_booking_enabled_get,
+        _get_acl(), user, project,
+    )
+
+
+@mcp.tool()
+def calendar_booking_enabled_set(project: str, enabled: bool) -> dict:
+    """Turn the meeting booker on or off — memaix-src card 9e035c73."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_booking_enabled_set",
+        t_cal.calendar_booking_enabled_set,
+        _get_acl(), user, project, enabled,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,

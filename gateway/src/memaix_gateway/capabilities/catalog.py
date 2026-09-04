@@ -163,6 +163,15 @@ def register_defaults() -> None:
             tags=("kalender", "arbetstid", "veckoschema", "calendar", "working hours", "schedule"),
         ),
         Capability(
+            key="calendar.booking_enabled", area="calendar",
+            title_key="cap.calendar.booking_enabled.title",
+            summary_key="cap.calendar.booking_enabled.summary",
+            tools=("calendar_booking_enabled_get", "calendar_booking_enabled_set"),
+            example_prompts_key="cap.calendar.booking_enabled.examples",
+            needs_role="collaborator", needs_resource="calendar",
+            tags=("kalender", "bokning", "på/av", "calendar", "booking", "toggle"),
+        ),
+        Capability(
             key="calendar.connect", area="calendar",
             title_key="cap.calendar.connect.title",
             summary_key="cap.calendar.connect.summary",

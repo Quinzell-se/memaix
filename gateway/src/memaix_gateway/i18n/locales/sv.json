@@ -124,6 +124,12 @@
     "Sätt mina bokningsbara tider till vardagar 9-17",
     "Ta bort lördagar helt från vad som går att boka"
   ],
+  "cap.calendar.booking_enabled.title": "Slå på eller av mötesbokaren",
+  "cap.calendar.booking_enabled.summary": "Styr om någon alls kan boka ett möte med dig. Avstängt som standard tills du slår på det.",
+  "cap.calendar.booking_enabled.examples": [
+    "Slå på min mötesbokare",
+    "Stäng av bokning, jag tar inga möten den här veckan"
+  ],
   "cap.files.manage.title": "Jobba med projektfiler",
   "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
   "cap.files.manage.examples": [

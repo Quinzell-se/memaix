@@ -124,6 +124,12 @@
     "Set my bookable hours to weekdays 9-5",
     "Take Saturdays off the bookable schedule entirely"
   ],
+  "cap.calendar.booking_enabled.title": "Turn the meeting booker on or off",
+  "cap.calendar.booking_enabled.summary": "Control whether anyone can book a meeting with you at all. Off by default until you turn it on.",
+  "cap.calendar.booking_enabled.examples": [
+    "Turn on my meeting booker",
+    "Turn off booking, I'm not taking meetings this week"
+  ],
   "cap.files.manage.title": "Work with project files",
   "cap.files.manage.summary": "List, read, search and write files in the project vault.",
   "cap.files.manage.examples": [
