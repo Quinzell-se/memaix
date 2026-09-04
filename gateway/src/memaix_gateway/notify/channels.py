@@ -85,6 +85,19 @@ class WebhookChannel:
             raise_for_status()
 
 
+def _header_safe(value: str) -> str:
+    """HTTP/1.1 header values are latin-1 only (requests/http.client will
+    raise UnicodeEncodeError on anything outside that range). ntfy.sh reads
+    non-ASCII Title values via RFC 2047 encoded-words, so encode only when
+    the value actually needs it — pure-ASCII text passes through untouched."""
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError:
+        from email.header import Header
+        return Header(value, "utf-8").encode()
+    return value
+
+
 class NtfyChannel:
     def __init__(self, topic: str, server: str = "https://ntfy.sh", *, _http=None) -> None:
         self._topic = topic
@@ -103,7 +116,7 @@ class NtfyChannel:
         resp = http.post(
             url,
             data=text.encode("utf-8"),
-            headers={"Title": subject},
+            headers={"Title": _header_safe(subject)},
             timeout=10,
             allow_redirects=False,
         )

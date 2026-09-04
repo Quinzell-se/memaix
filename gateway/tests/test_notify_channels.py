@@ -65,6 +65,29 @@ def test_ntfy_posts_text_to_topic_url():
     assert kwargs["headers"]["Title"] == "Subj"
 
 
+def test_ntfy_ascii_title_is_not_rfc2047_encoded():
+    http = _FakeHttp()
+    ch = NtfyChannel("memaix-alice", server="https://ntfy.sh", _http=http)
+    ch.send("Plain ASCII subject", "md", "hello there")
+    _, kwargs = http.calls[0]
+    assert kwargs["headers"]["Title"] == "Plain ASCII subject"
+
+
+def test_ntfy_non_ascii_title_is_rfc2047_encoded():
+    http = _FakeHttp()
+    ch = NtfyChannel("memaix-alice", server="https://ntfy.sh", _http=http)
+    subject = "Brief — Ny sammanfattning för Åsa"
+    ch.send(subject, "md", "hello there")
+    _, kwargs = http.calls[0]
+    title = kwargs["headers"]["Title"]
+    # must be pure latin-1/ASCII-safe, or requests would raise UnicodeEncodeError
+    title.encode("latin-1")
+    assert title.startswith("=?utf-8?")
+    from email.header import decode_header
+    decoded_bytes, charset = decode_header(title)[0]
+    assert decoded_bytes.decode(charset) == subject
+
+
 def test_email_channel_uses_injected_smtp():
     acl = Acl(
         users={"alice": {"grants": {"shared": "owner"}}},
