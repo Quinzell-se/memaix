@@ -171,6 +171,7 @@ body[data-collapsed="true"] .sidebar-foot { display: none; }
 .topbar-title { font-weight: 600; }
 .topbar-spacer { flex: 1; }
 #project-picker-mobile { display: none; width: auto; }
+#user-badge-mobile { display: none; }
 
 .content { flex: 1; padding: 1.25rem; min-width: 0; }
 
@@ -205,6 +206,7 @@ body[data-collapsed="true"] .sidebar-foot { display: none; }
   .sidebar { display: none; }
   .topbar-logo { display: inline; font-weight: 700; }
   #project-picker-mobile { display: inline-block; }
+  #user-badge-mobile { display: inline-block; }
   .content { padding: .9rem .9rem calc(var(--tab-h) + 1rem); }
 
   .tab-bar {

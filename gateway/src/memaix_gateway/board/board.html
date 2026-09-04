@@ -27,7 +27,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 #board-shell{display:flex;flex-direction:column;height:100vh}
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 1rem;display:flex;align-items:center;gap:.75rem;flex-shrink:0}
 .logo{font-weight:700;font-size:1rem;color:var(--primary);margin-right:.5rem}
-header select{padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);cursor:pointer}
+header select{padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--surface);color:var(--text);cursor:pointer}
 header select:focus{outline:none;border-color:var(--primary)}
 .spacer{flex:1}
 #user-badge{font-size:.8rem;color:var(--muted);background:var(--bg);padding:.3rem .7rem;border-radius:20px}
@@ -66,7 +66,7 @@ header select:focus{outline:none;border-color:var(--primary)}
 .assignee-badge{font-size:.65rem;padding:.05rem .35rem;border-radius:10px;background:#e2e8f0;color:#475569;font-weight:600}
 .assignee-mine{background:var(--primary-light,#c7d2fe);color:#3730a3}
 .card.dimmed{opacity:.35}
-.mine-filter{font-size:.75rem;padding:.2rem .5rem;border-radius:6px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#fff);cursor:pointer}
+.mine-filter{font-size:.75rem;padding:.2rem .5rem;border-radius:6px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#fff);color:var(--text);cursor:pointer}
 .mine-filter.active{background:var(--primary,#4f46e5);color:#fff;border-color:var(--primary,#4f46e5)}
 #activity-panel{width:260px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 #activity-panel h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.75rem 1rem .5rem}
@@ -291,9 +291,12 @@ function fillProjects(projects){
     gid('board-columns').textContent=t('board_no_projects');
     return;
   }
-  var saved=localStorage.getItem('mb_proj');
+  var urlProject=new URLSearchParams(location.search).get('project');
+  var saved=urlProject||localStorage.getItem('mb_proj');
   projects.forEach(function(p){var o=el('option','',p);o.value=p;if(p===saved)o.selected=true;sel.appendChild(o);});
-  _project=sel.value;loadSprints().then(loadBoard);startActivity();
+  _project=sel.value;
+  if(urlProject)localStorage.setItem('mb_proj',_project);
+  loadSprints().then(loadBoard);startActivity();
 }
 
 function loadSprints(){
