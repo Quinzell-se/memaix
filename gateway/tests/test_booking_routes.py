@@ -28,7 +28,7 @@ class _MockDav:
     find_events = list_events
 
     def create_event(self, uid, title, start, end, attendees=None, location=None, description=None):
-        ev = {"id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat()}
+        ev = {"id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(), "description": description}
         self._events.append(ev)
         return ev
 
@@ -131,6 +131,50 @@ def test_create_booking_succeeds_and_stores_event(rig):
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
     assert any(e["title"] == "Möte med Bob" for e in dav._events)
+
+
+def test_create_booking_passes_purpose_as_description(rig):
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(13).isoformat(), "end": _dt(13, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "purpose": "Prata om samarbete kring X.",
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(13).isoformat())
+    assert ev["description"] == "Prata om samarbete kring X."
+
+
+def test_create_booking_without_purpose_stores_no_description(rig):
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(14).isoformat(), "end": _dt(14, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(14).isoformat())
+    assert ev["description"] is None
+
+
+def test_create_booking_truncates_overlong_purpose(rig):
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(15).isoformat(), "end": _dt(15, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "purpose": "x" * 900,
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(15).isoformat())
+    assert len(ev["description"]) == 500
 
 
 def test_create_booking_rejects_when_slot_no_longer_free(rig):
