@@ -27,7 +27,16 @@ def _links_dir() -> Path:
 def get_link(slug: str) -> dict | None:
     """{"project", "user", "duration_min", "title_template"} for *slug*, or
     None if unknown. Never raises on missing/malformed slugs — callers
-    treat both as a 404, not a 500."""
+    treat both as a 404, not a 500.
+
+    Optional fields an operator may add to the JSON file:
+      "host_email": address the host receives their own booking-confirmation
+        email at (card 14666e8a). Omitted -> the host simply isn't emailed;
+        the visitor's own confirmation is unaffected.
+      "host_timezone": IANA name (e.g. "Europe/Stockholm") used to format
+        the time shown in the host's copy of the confirmation email. Omitted
+        -> shown in UTC.
+    """
     if not slug or "/" in slug or ".." in slug:
         return None
     path = _links_dir() / f"{slug}.json"

@@ -185,6 +185,9 @@ def email_send(
     body: str,
     cc: str | None = None,
     *,
+    attachment_filename: str | None = None,
+    attachment_content: bytes | None = None,
+    attachment_mimetype: str = "text/calendar",
     _smtp=None,
     _confirmed: bool = False,
     _outbox=None,
@@ -193,7 +196,11 @@ def email_send(
     """Send a message via SMTP.  Requires owner + allow_send feature flag.
 
     Queued for approval instead of sent when the outbox policy resolves to
-    'review' (see module docstring) — unless _confirmed=True.
+    'review' (see module docstring) — unless _confirmed=True. The outbox
+    preview only ever shows {to, subject, body, cc}; an attachment is never
+    queued for review, so callers passing one should also pass
+    _confirmed=True (system-generated attachments, e.g. booking .ics files,
+    aren't composed by the LLM and don't need a human approval step).
     """
     acl.enforce(user_id, project, "owner")
     # Feature gate
@@ -228,6 +235,14 @@ def email_send(
     if cc:
         msg["Cc"] = cc
     msg.set_content(body)
+    if attachment_content is not None and attachment_filename:
+        maintype, _, subtype = attachment_mimetype.partition("/")
+        msg.add_attachment(
+            attachment_content,
+            maintype=maintype,
+            subtype=subtype or "octet-stream",
+            filename=attachment_filename,
+        )
 
     if _smtp is not None:
         _smtp.send_message(msg)

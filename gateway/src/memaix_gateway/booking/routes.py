@@ -7,6 +7,13 @@ book one. Mirrors the unauthenticated-route pattern established by
 rule_webhook (server.py) — rate-limited per client IP, the slug plays the
 same "token IS the capability" role rule_webhook's token does.
 
+Confirmation email + .ics (card 14666e8a): sent to the visitor and, if the
+link config has a "host_email", to the host too — best-effort, after the
+calendar event is already committed and the booking lock released. A
+missing mailbox/allow_send config for the project, or a transient SMTP
+error, is logged and swallowed, never surfaced as a booking failure — the
+booking itself already succeeded by the time email is attempted.
+
 The host's own ACL-provisioned user_id (from the link record) is used for
 every calendar_* call, so calendar_find_free/calendar_create's existing
 "collaborator" enforcement is satisfied naturally — there is no anonymous
@@ -22,9 +29,12 @@ gateway cross-origin.
 
 from __future__ import annotations
 
+import logging
 import threading
+import uuid as _uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from starlette.requests import Request
@@ -33,8 +43,11 @@ from starlette.routing import Route
 
 from .. import config
 from ..tools import calendar as t_cal
+from ..tools import email as t_email
 from ..tools.calendar import CalendarAuthRequired
 from .links import get_link
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_ORIGINS = {"https://jimlov.se", "https://www.jimlov.se"}
 _TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -196,6 +209,10 @@ async def booking_create(request: Request) -> JSONResponse:
     name = str(body.get("name") or "").strip()
     email = str(body.get("email") or "").strip()
     purpose = str(body.get("purpose") or "").strip()[:_MAX_PURPOSE_LEN]
+    # Display-only: which IANA zone to render times in inside the
+    # confirmation email. Never used for scheduling — start/end below stay
+    # the authoritative UTC instants. Missing/invalid -> emails show UTC.
+    visitor_tz = str(body.get("timezone") or "").strip() or None
     start = _parse_dt(str(body.get("start") or ""))
     end = _parse_dt(str(body.get("end") or ""))
     if not name or not email or start is None or end is None or end <= start:
@@ -245,7 +262,92 @@ async def booking_create(request: Request) -> JSONResponse:
             start.isoformat(), end.isoformat(),
             attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
         )
+    # Lock released above — the booking is already committed to the
+    # calendar, so email delivery is not part of the race-critical section
+    # and its latency must never hold up the next booker for this host.
+    _send_confirmation_emails(acl, project, link, title, event, name, email, purpose, start, end, visitor_tz)
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
+
+
+def _format_dt(dt: datetime, tz_name: str | None) -> str:
+    tz = None
+    if tz_name:
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = None
+    local = dt.astimezone(tz) if tz is not None else dt.astimezone(timezone.utc)
+    suffix = tz_name if tz is not None else "UTC"
+    return f"{local.strftime('%Y-%m-%d %H:%M')} ({suffix})"
+
+
+def _build_ics(uid: str, title: str, start: datetime, end: datetime, description: str | None, attendees: list[str]) -> bytes:
+    import vobject
+    from vobject.icalendar import utc as vobject_utc
+
+    # vobject only recognizes its own utc tzinfo (dateutil's tzutc()) when
+    # picking a TZID to serialize — a stdlib datetime.timezone.utc-aware
+    # datetime makes it raise VObjectError("Unable to guess TZID...").
+    start = start.astimezone(vobject_utc)
+    end = end.astimezone(vobject_utc)
+
+    cal = vobject.iCalendar()
+    vevent = cal.add("vevent")
+    vevent.add("uid").value = uid
+    vevent.add("summary").value = title
+    vevent.add("dtstart").value = start
+    vevent.add("dtend").value = end
+    if description:
+        vevent.add("description").value = description
+    for attendee in attendees:
+        vevent.add("attendee").value = attendee
+    return cal.serialize().encode("utf-8")
+
+
+def _confirmation_body(title: str, name: str, visitor_email: str, when: str, purpose: str) -> str:
+    lines = [f"Mötet är bokat: {title}", f"Tid: {when}"]
+    if purpose:
+        lines.append(f"Syfte: {purpose}")
+    lines.append(f"Bokat av: {name} <{visitor_email}>")
+    lines.append("En kalenderfil (.ics) är bifogad.")
+    return "\n".join(lines)
+
+
+def _send_confirmation_emails(
+    acl, project: str, link: dict, title: str, event: dict,
+    name: str, visitor_email: str, purpose: str,
+    start: datetime, end: datetime, visitor_tz: str | None,
+) -> None:
+    """Best-effort only. The booking already succeeded by the time this
+    runs — a project with no mailbox/allow_send configured yet, or a
+    transient SMTP error, must never turn into a booking failure for the
+    visitor. See the module docstring for why."""
+    try:
+        host_user = link["user"]
+        if not acl.resource(project, "allow_send"):
+            return
+        uid = event.get("id") or _uuid.uuid4().hex
+        ics_bytes = _build_ics(uid, title, start, end, purpose or None, [visitor_email])
+
+        t_email.email_send(
+            acl, host_user, project, visitor_email,
+            f"Bekräftelse: {title}",
+            _confirmation_body(title, name, visitor_email, _format_dt(start, visitor_tz), purpose),
+            attachment_filename="moete.ics", attachment_content=ics_bytes,
+            _confirmed=True,
+        )
+
+        host_email = link.get("host_email")
+        if host_email:
+            t_email.email_send(
+                acl, host_user, project, host_email,
+                f"Ny bokning: {title}",
+                _confirmation_body(title, name, visitor_email, _format_dt(start, link.get("host_timezone")), purpose),
+                attachment_filename="moete.ics", attachment_content=ics_bytes,
+                _confirmed=True,
+            )
+    except Exception:
+        logger.exception("booking confirmation email failed for project=%s slug-host=%s", project, link.get("user"))
 
 
 async def booking_options(request: Request) -> Response:
