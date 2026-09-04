@@ -58,6 +58,16 @@ def _caldav_factory(acl, project, user, resource_cfg, token):
     return _RealDavAdapter(acl, project)
 
 
+def _public_ics_factory(acl, project, user, resource_cfg, token):
+    """Public .ics/webcal link, no auth — memaix-src card 324dd801. Reuses
+    calendar_find_free's existing iCal fetcher (SSRF-checked) rather than a
+    second one; registered so calendar_sources.py's resolver can build one
+    from a user-added link the same way it builds any other source."""
+    from ..tools.calendar import _ICalAdapter
+
+    return _ICalAdapter(resource_cfg["url"])
+
+
 def _microsoft_mail_factory(acl, project, user, resource_cfg, token):
     from .adapters.mail_microsoft import GraphMailAdapter
 
@@ -109,6 +119,7 @@ def register_defaults(registry: ConnectorRegistry) -> None:
         ConnectorSpec(type="imap", capability="mail", auth="shared", factory=_imap_factory),
         ConnectorSpec(type="microsoft", capability="mail", auth="per_user", factory=_microsoft_mail_factory),
         ConnectorSpec(type="caldav", capability="calendar", auth="shared", factory=_caldav_factory),
+        ConnectorSpec(type="public_ics", capability="calendar", auth="shared", factory=_public_ics_factory),
         ConnectorSpec(type="carddav", capability="contacts", auth="shared", factory=_carddav_factory),
         ConnectorSpec(type="webdav", capability="files", auth="shared", factory=_webdav_files_factory),
         ConnectorSpec(type="caldav", capability="tasks", auth="shared", factory=_tasks_caldav_factory),

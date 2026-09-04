@@ -511,6 +511,86 @@ def calendar_free_busy(
     }
 
 
+def _source_kind(label: str) -> str:
+    if label.startswith("public_ics:"):
+        return "public"
+    if ":" in label and "@" in label.split(":", 1)[1]:
+        return "account"
+    return "shared"
+
+
+def calendar_sources_list(acl: Acl, user_id: str, project: str, token_store, *, _registry=None) -> dict:
+    """Every calendar source configured/linked for this user/project, plus
+    which are currently included in the aggregate — memaix-src card
+    324dd801. The (external) booking-page UI renders this as checkboxes."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.calendar_sources import SourceSelectionStore
+    from ..connectors.registry import default_registry
+
+    registry = _registry or default_registry()
+    store = SourceSelectionStore(acl, project, user_id)
+    data = store.list()
+    disabled = set(data["disabled"])
+
+    pairs = registry.get_all(acl, token_store, project, "calendar", user_id)
+    sources = [
+        {"label": label, "kind": _source_kind(label), "enabled": label not in disabled}
+        for label, _adapter in pairs
+    ]
+    public_links = [
+        {
+            "id": link["id"],
+            "label": link["label"],
+            "url": link["url"],
+            "enabled": f"public_ics:{link['id']}" not in disabled,
+        }
+        for link in data["public_links"]
+    ]
+
+    effective_count = sum(1 for s in sources if s["enabled"]) + sum(1 for p in public_links if p["enabled"])
+    result: dict = {"sources": sources, "public_links": public_links}
+    if effective_count == 0:
+        result["warning"] = "Inga kalendrar räknas mot din bokningsbarhet — allt visas som ledigt"
+    return result
+
+
+def calendar_source_set_enabled(
+    acl: Acl, user_id: str, project: str, label: str, enabled: bool
+) -> dict:
+    """Include/exclude one calendar source (by its calendar_sources_list
+    label) from the aggregate — card 324dd801."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.calendar_sources import SourceSelectionStore
+
+    SourceSelectionStore(acl, project, user_id).set_enabled(label, enabled)
+    return {"ok": True, "label": label, "enabled": enabled}
+
+
+def calendar_public_link_add(acl: Acl, user_id: str, project: str, url: str, label: str = "") -> dict:
+    """Add a public .ics/webcal URL as an extra calendar source — card
+    324dd801, väg 2 (no OAuth). The URL is only shape/SSRF-validated here;
+    unreachable feeds surface later via the sync loop's per-source errors,
+    same as any other source."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.calendar_sources import SourceSelectionStore
+    from ..safety.net import BlockedURLError
+
+    try:
+        entry = SourceSelectionStore(acl, project, user_id).add_public_link(url, label)
+    except BlockedURLError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, **entry}
+
+
+def calendar_public_link_remove(acl: Acl, user_id: str, project: str, id: str) -> dict:
+    """Remove a previously-added public calendar link — card 324dd801."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.calendar_sources import SourceSelectionStore
+
+    removed = SourceSelectionStore(acl, project, user_id).remove_public_link(id)
+    return {"ok": True, "removed": removed}
+
+
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
     """Return a {"pending": ...} dict if this action should be queued, else None."""
     from ..outbox.policy import action_mode

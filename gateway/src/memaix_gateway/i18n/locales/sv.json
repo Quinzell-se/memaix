@@ -91,6 +91,17 @@
   "cap.calendar.manage.examples": [
     "Boka ett möte med teamet på torsdag"
   ],
+  "cap.calendar.sources_view.title": "Se vilka kalendrar som räknas",
+  "cap.calendar.sources_view.summary": "Lista varje länkad eller tillagd kalenderkälla och om den räknas i din ledig/upptagen-vy.",
+  "cap.calendar.sources_view.examples": [
+    "Vilka kalendrar räknas för mina bokningar?"
+  ],
+  "cap.calendar.sources_manage.title": "Välj dina kalendrar",
+  "cap.calendar.sources_manage.summary": "Inkludera/uteslut en länkad kalender, eller lägg till en publik .ics/webcal-länk som extra källa.",
+  "cap.calendar.sources_manage.examples": [
+    "Räkna inte min privata kalender mot bokningar",
+    "Lägg till den här publika kalenderlänken som källa"
+  ],
   "cap.calendar.connect.title": "Koppla din kalender",
   "cap.calendar.connect.summary": "Välj hur Memaix får åtkomst till din kalender (Google OAuth, iCal eller ledig/upptagen).",
   "cap.calendar.connect.examples": [

@@ -91,6 +91,17 @@
   "cap.calendar.manage.examples": [
     "Book a meeting with the team on Thursday"
   ],
+  "cap.calendar.sources_view.title": "See which calendars count",
+  "cap.calendar.sources_view.summary": "List every linked or added calendar source and whether it's included in your busy/free view.",
+  "cap.calendar.sources_view.examples": [
+    "Which calendars are counted for my bookings?"
+  ],
+  "cap.calendar.sources_manage.title": "Choose your calendars",
+  "cap.calendar.sources_manage.summary": "Include/exclude a linked calendar, or add a public .ics/webcal link as an extra source.",
+  "cap.calendar.sources_manage.examples": [
+    "Don't count my personal calendar toward bookings",
+    "Add this public calendar link as a source"
+  ],
   "cap.calendar.connect.title": "Connect your calendar",
   "cap.calendar.connect.summary": "Choose how Memaix accesses your calendar (Google OAuth, iCal, or free/busy).",
   "cap.calendar.connect.examples": [

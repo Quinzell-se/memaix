@@ -64,7 +64,9 @@ def sync_user_calendar(
     now: datetime | None = None,
     window: timedelta = DEFAULT_SYNC_WINDOW,
 ) -> dict:
-    """Query every source configured via registry.get_all(), merge their
+    """Query every enabled source (calendar_sources.resolve_effective_sources —
+    registry.get_all() filtered by the user's disabled-set, plus any public
+    .ics links they've added), merge their
     busy intervals, and write the result to the cache file.
 
     Never raises for a single source's failure — those are recorded
@@ -73,13 +75,14 @@ def sync_user_calendar(
     cache write (if any) is overwritten regardless, since a stale full
     cache is judged safer to reason about than a partially-merged one
     (see the card's fail-closed-at-read-time note in calendar_free_busy)."""
+    from .calendar_sources import resolve_effective_sources
     from .registry import default_registry
 
     now = now or datetime.now(timezone.utc)
     registry = registry or default_registry()
     start, end = now, now + window
 
-    sources = registry.get_all(acl, token_store, project, "calendar", user)
+    sources = resolve_effective_sources(acl, token_store, project, user, registry=registry)
     busy: list[BusyInterval] = []
     errors: list[dict] = []
     for label, backend in sources:
