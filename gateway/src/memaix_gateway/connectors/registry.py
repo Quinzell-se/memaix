@@ -102,6 +102,13 @@ class ConnectorRegistry:
 
         return spec.factory(acl, project, user, resource_cfg, token)
 
+    def get_spec(self, capability: str, type_: str) -> "ConnectorSpec | None":
+        """Look up a registered spec directly, bypassing acl.resource(...)
+        resolution — for callers (e.g. calendar_sources.py) building an
+        adapter from a resource_cfg that isn't the project's configured
+        resource (a user-added public link, not acl.yaml)."""
+        return self._specs.get((capability, type_))
+
     def get_all(self, acl, token_store, project: str, capability: str, user: str) -> list[tuple[str, object]]:
         """Resolve EVERY source configured for this capability, not just one
         (get()'s single-adapter shape). Added for memaix-src card 4daa20e2

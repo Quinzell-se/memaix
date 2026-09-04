@@ -2005,6 +2005,60 @@ def calendar_free_busy(project: str, start: str, end: str) -> dict:
 
 
 @mcp.tool()
+def calendar_sources_list(project: str) -> dict:
+    """Every calendar source configured/linked for this user/project, plus
+    which are currently included in the free/busy aggregate — memaix-src
+    card 324dd801. Returns {sources: [{label, kind, enabled}], public_links:
+    [{id, label, url, enabled}]}, plus a warning if nothing is enabled."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_sources_list",
+        t_cal.calendar_sources_list,
+        _get_acl(), user, project, _get_token_store(),
+    )
+
+
+@mcp.tool()
+def calendar_source_set_enabled(project: str, label: str, enabled: bool) -> dict:
+    """Include/exclude one calendar source (label from calendar_sources_list)
+    from the free/busy aggregate — memaix-src card 324dd801."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_source_set_enabled",
+        t_cal.calendar_source_set_enabled,
+        _get_acl(), user, project, label, enabled,
+    )
+
+
+@mcp.tool()
+def calendar_public_link_add(project: str, url: str, label: str = "") -> dict:
+    """Add a public .ics/webcal URL as an extra calendar source, no OAuth
+    needed — memaix-src card 324dd801."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_public_link_add",
+        t_cal.calendar_public_link_add,
+        _get_acl(), user, project, url, label,
+    )
+
+
+@mcp.tool()
+def calendar_public_link_remove(project: str, id: str) -> dict:
+    """Remove a previously-added public calendar link — memaix-src card
+    324dd801."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_public_link_remove",
+        t_cal.calendar_public_link_remove,
+        _get_acl(), user, project, id,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,
