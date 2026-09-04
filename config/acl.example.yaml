@@ -2,7 +2,11 @@ users:
   alice:
     # admin: true ger implicit owner på alla projekt + tillgång till /app/admin
     admin: true
-    # OAuth subject från Hydra. Sätts till användarnamnet vi angav vid inloggning.
+    # OAuth subject från Hydra. login-app sätter alltid subject = användarnamnet
+    # som skrevs in på inloggningsformuläret (login-app/app.py:login_post) —
+    # det är inte ett separat genererat id. Så oauth_subjects-listan här är i
+    # praktiken bara "vilka inloggningsnamn får mappa till den här acl-användaren",
+    # och normalfallet är en post som är identisk med användarens eget id.
     oauth_subjects:
       - alice
     # Per-user lösenord för login-appen. Generera med: python3 -c "

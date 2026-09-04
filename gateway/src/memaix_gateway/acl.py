@@ -35,7 +35,14 @@ class Acl:
         return cls(users=cfg.get("users", {}), projects=cfg.get("projects", {}))
 
     def user_by_subject(self, oauth_sub: str) -> str | None:
-        """Map an authenticated OAuth subject to an internal user id."""
+        """Map an authenticated OAuth subject to an internal user id.
+
+        login-app mints the Hydra subject as the plain username (see
+        login-app/app.py:login_post, `"subject": username`) — it is not a
+        separate opaque id. That convention is why `oauth_sub` and
+        `oauth_subjects` entries in acl.yaml are almost always just the
+        user's own id again. Keep this in sync if login-app's subject
+        minting ever changes (memaix-src 4c8f32fe)."""
         for uid, u in self.users.items():
             if u.get("oauth_sub") == oauth_sub:
                 return uid

@@ -22,6 +22,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+import approved_clients
 import auth
 
 sys.path.insert(0, "/app/i18n_pkg")
@@ -115,8 +116,13 @@ async def login_get(request: Request, login_challenge: str = ""):
     except Exception as exc:
         return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
 
-    # Om Hydra redan minns sessionen — godkänn automatiskt.
-    if info.get("skip"):
+    # Hydra's "skip" is scoped to the BROWSER, not to (identity, client) — a
+    # second client logging in as someone else in the same browser would
+    # otherwise silently inherit whichever identity Hydra remembers. Only
+    # honour skip when this exact client has previously completed the
+    # password form for this exact subject (memaix-src 4c8f32fe).
+    client_id = (info.get("client") or {}).get("client_id", "")
+    if info.get("skip") and approved_clients.is_approved(info["subject"], client_id):
         redirect = _hydra_accept(
             "/admin/oauth2/auth/requests/login/accept",
             "login_challenge", login_challenge,
@@ -147,24 +153,24 @@ async def login_post(
         )
 
     try:
+        info = _hydra_get("/admin/oauth2/auth/requests/login", "login_challenge", login_challenge)
+        client_id = (info.get("client") or {}).get("client_id", "")
+        approved_clients.approve(username, client_id)
         redirect = _hydra_accept(
             "/admin/oauth2/auth/requests/login/accept",
             "login_challenge", login_challenge,
             {
                 "subject": username,
-                # 60s, inte 86400*30: en lång browser-scoped remember-me
-                # lät en ny klient (t.ex. mistral-test) ärva en annan
-                # klients (jimmy) redan inloggade session i samma
-                # webbläsare — identitetslackage, se memaix-src 4c8f32fe.
-                # remember=False/remember_for=0 provades som stopgap men
-                # Hydra kraschar då (DeleteLoginSession "Unable to locate
-                # the resource") eftersom ingen sessionsrad någonsin
-                # skapas för den att städa upp — bröt alla nya OAuth-
-                # kopplingar. 60s ger Hydra en riktig sessionsrad att
-                # hantera under själva handskakningen, men för kort för
-                # att överleva till nästa klients separata inloggning.
+                # Real remember-me again (30 days), safe now that skip is
+                # gated on approved_clients (identity + client_id), not just
+                # Hydra's browser-scoped session — see login_get above and
+                # memaix-src 4c8f32fe. A prior stopgap set remember_for=0 to
+                # kill the browser-scoped leak, but that meant Hydra never
+                # created a session row, so its own cleanup call
+                # (DeleteLoginSession) 404'd on every fresh login. remember=
+                # True + a real remember_for avoids that crash entirely.
                 "remember": True,
-                "remember_for": 60,
+                "remember_for": 86400 * 30,
             },
         )
     except Exception as exc:
@@ -214,7 +220,7 @@ async def consent_get(consent_challenge: str = ""):
             "grant_scope": requested_scope,
             "grant_access_token_audience": audience,
             "remember": True,
-            "remember_for": 60,  # see login_post above for why 60s, not 30 days or 0
+            "remember_for": 86400 * 30,
             "session": {
                 "id_token": {
                     "email": f"{info.get('subject', 'alice')}@personal.example.com",
