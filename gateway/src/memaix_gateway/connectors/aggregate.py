@@ -26,6 +26,28 @@ class BusyInterval:
     source: str = ""
 
 
+@dataclass(frozen=True)
+class CalendarEvent:
+    """One source event, identity preserved — memaix-src backlog card
+    c7698ff3. Unlike BusyInterval (post-merge, identity-less), this is what
+    lets a per-event override be resolved: uid/series_id are provider-native
+    ids, scoped to *source* (two different sources can reuse the same id)."""
+
+    uid: str
+    start: datetime
+    end: datetime
+    source: str = ""
+    title: str = ""
+    series_id: str | None = None
+    is_exception: bool = False
+    source_busy: bool = True
+    # False when uid is a synthesized per-sync fallback (the adapter gave no
+    # real id) — an override set against it could silently drift onto a
+    # different event on the next sync if the source reorders its results.
+    # calendar_events_list surfaces this as overridable=False.
+    stable_id: bool = True
+
+
 class CalendarSourceError(Exception):
     """One calendar source failed to answer. Carries the source label so
     the sync layer can record which source failed without losing the
@@ -65,6 +87,42 @@ def busy_from_backend(backend, label: str, start: datetime, end: datetime) -> li
     for ev in events:
         try:
             out.append(BusyInterval(to_utc(ev["start"]), to_utc(ev["end"]), label))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return out
+
+
+def events_from_backend(backend, label: str, start: datetime, end: datetime) -> list[CalendarEvent]:
+    """Like busy_from_backend, but preserves per-event identity instead of
+    collapsing straight to a BusyInterval. Adapters emit the new
+    series_id/is_exception/source_busy/title/id keys additively. An event
+    missing a real id still counts as busy (same as busy_from_backend always
+    did) — it gets a synthetic per-sync uid, just not one a click-to-override
+    UI can target reliably across syncs. A malformed event (missing/
+    unparseable start or end) is skipped, same as busy_from_backend."""
+    try:
+        events = backend.list_events(start, end)
+    except Exception as exc:  # noqa: BLE001 - deliberately broad, see busy_from_backend
+        raise CalendarSourceError(label, exc) from exc
+
+    out: list[CalendarEvent] = []
+    for i, ev in enumerate(events):
+        try:
+            real_id = ev.get("id")
+            uid = real_id or f"{label}-{i}"
+            out.append(
+                CalendarEvent(
+                    uid=str(uid),
+                    start=to_utc(ev["start"]),
+                    end=to_utc(ev["end"]),
+                    source=label,
+                    title=ev.get("title", ""),
+                    series_id=ev.get("series_id"),
+                    is_exception=bool(ev.get("is_exception", False)),
+                    source_busy=bool(ev.get("source_busy", True)),
+                    stable_id=bool(real_id),
+                )
+            )
         except (KeyError, ValueError, TypeError):
             continue
     return out

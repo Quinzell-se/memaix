@@ -2059,6 +2059,59 @@ def calendar_public_link_remove(project: str, id: str) -> dict:
 
 
 @mcp.tool()
+def calendar_events_list(project: str, start: str, end: str) -> dict:
+    """Every cached source event in [start, end] with its resolved
+    busy/free override state — memaix-src card c7698ff3. Returns {events:
+    [{uid, source, title, start, end, source_busy, override, effective_busy,
+    series_id, is_exception, in_series, overridable}], synced_at, stale}.
+    A client renders these clickable and, when in_series is true, asks
+    "just this instance, or the whole series?" before calling
+    calendar_event_override_set."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_events_list",
+        t_cal.calendar_events_list,
+        _get_acl(), user, project, start, end,
+    )
+
+
+@mcp.tool()
+def calendar_event_override_set(
+    project: str, source: str, state: str, scope: str = "instance",
+    uid: str | None = None, series_id: str | None = None, note: str = "",
+) -> dict:
+    """Force one event (scope="instance", needs uid) or a whole recurring
+    series (scope="series", needs series_id) to busy/free regardless of
+    what the source calendar said — memaix-src card c7698ff3. An exception
+    instance never inherits a series override; set it individually via
+    scope="instance"."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_event_override_set",
+        t_cal.calendar_event_override_set,
+        _get_acl(), user, project, source, state, scope, uid, series_id, note,
+    )
+
+
+@mcp.tool()
+def calendar_event_override_clear(
+    project: str, source: str, scope: str = "instance",
+    uid: str | None = None, series_id: str | None = None,
+) -> dict:
+    """Remove a previously-set event/series override — memaix-src card
+    c7698ff3."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_event_override_clear",
+        t_cal.calendar_event_override_clear,
+        _get_acl(), user, project, source, scope, uid, series_id,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,

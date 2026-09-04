@@ -107,6 +107,17 @@
   "cap.calendar.connect.examples": [
     "Connect my Google calendar"
   ],
+  "cap.calendar.events_view.title": "See individual events and their status",
+  "cap.calendar.events_view.summary": "List source events in a period, showing what the source calendar said and what actually counts after any manual override.",
+  "cap.calendar.events_view.examples": [
+    "Show my meetings next week and their status"
+  ],
+  "cap.calendar.events_override.title": "Manually adjust an event's status",
+  "cap.calendar.events_override.summary": "Mark a single event (or a whole recurring series) as Busy or Free regardless of what the source calendar says.",
+  "cap.calendar.events_override.examples": [
+    "Mark the conference as Free even though it's showing as all-day",
+    "Block out this whole meeting series"
+  ],
   "cap.files.manage.title": "Work with project files",
   "cap.files.manage.summary": "List, read, search and write files in the project vault.",
   "cap.files.manage.examples": [

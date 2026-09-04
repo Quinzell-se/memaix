@@ -70,6 +70,42 @@ def test_calendar_free_busy_stale_when_cache_older_than_an_hour(acl):
     assert result["stale"] is True
 
 
+def test_calendar_free_busy_uses_events_when_present_and_honors_source_busy(acl):
+    """memaix-src card c7698ff3 — a cache with "events" resolves per-event
+    (honoring source_busy, e.g. Google transparency:transparent) instead of
+    the pre-merged "busy" list."""
+    cache = {
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "events": [
+            {"uid": "e1", "start": _dt(9).isoformat(), "end": _dt(10).isoformat(), "source": "caldav:proj", "source_busy": True},
+            {"uid": "e2", "start": _dt(11).isoformat(), "end": _dt(12).isoformat(), "source": "caldav:proj", "source_busy": False},
+        ],
+        "busy": [{"start": _dt(9).isoformat(), "end": _dt(10).isoformat(), "source": "caldav:proj"},
+                 {"start": _dt(11).isoformat(), "end": _dt(12).isoformat(), "source": "caldav:proj"}],
+        "source_count": 1,
+        "errors": [],
+    }
+    result = calendar_free_busy(acl, "alice", "proj", _dt(0).isoformat(), _dt(23).isoformat(), _cache=cache)
+    assert result["busy"] == [{"start": _dt(9).isoformat(), "end": _dt(10).isoformat(), "source": "caldav:proj"}]
+
+
+def test_calendar_free_busy_honors_event_override(acl):
+    from memaix_gateway.connectors.calendar_event_overrides import EventOverrideStore
+
+    EventOverrideStore(acl, "proj", "alice").set_instance("caldav:proj", "e2", "busy")
+    cache = {
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "events": [
+            {"uid": "e2", "start": _dt(11).isoformat(), "end": _dt(12).isoformat(), "source": "caldav:proj", "source_busy": False},
+        ],
+        "busy": [],
+        "source_count": 1,
+        "errors": [],
+    }
+    result = calendar_free_busy(acl, "alice", "proj", _dt(0).isoformat(), _dt(23).isoformat(), _cache=cache)
+    assert result["busy"] == [{"start": _dt(11).isoformat(), "end": _dt(12).isoformat(), "source": "caldav:proj"}]
+
+
 def test_calendar_free_busy_surfaces_source_errors(acl):
     cache = {
         "synced_at": datetime.now(timezone.utc).isoformat(),

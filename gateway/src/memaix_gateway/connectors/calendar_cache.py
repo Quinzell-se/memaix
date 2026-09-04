@@ -23,7 +23,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .aggregate import BusyInterval, CalendarSourceError, busy_from_backend, merge_busy
+from .aggregate import BusyInterval, CalendarEvent, CalendarSourceError, events_from_backend, merge_busy
 from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
@@ -83,19 +83,37 @@ def sync_user_calendar(
     start, end = now, now + window
 
     sources = resolve_effective_sources(acl, token_store, project, user, registry=registry)
-    busy: list[BusyInterval] = []
+    events: list[CalendarEvent] = []
     errors: list[dict] = []
     for label, backend in sources:
         try:
-            busy.extend(busy_from_backend(backend, label, start, end))
+            events.extend(events_from_backend(backend, label, start, end))
         except CalendarSourceError as exc:
             errors.append({"source": label, "error": str(exc.cause)})
 
-    merged = merge_busy(busy)
+    # "busy" keeps its pre-c7698ff3 meaning: every fetched event counts,
+    # regardless of source_busy — the per-event override resolution (incl.
+    # honoring source_busy) happens at calendar_free_busy read time, against
+    # "events" below, not here.
+    merged = merge_busy([BusyInterval(e.start, e.end, e.source) for e in events])
     data = {
         "synced_at": now.isoformat(),
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
+        "events": [
+            {
+                "uid": e.uid,
+                "start": e.start.isoformat(),
+                "end": e.end.isoformat(),
+                "source": e.source,
+                "title": e.title,
+                "series_id": e.series_id,
+                "is_exception": e.is_exception,
+                "source_busy": e.source_busy,
+                "stable_id": e.stable_id,
+            }
+            for e in events
+        ],
         "busy": [
             {"start": b.start.isoformat(), "end": b.end.isoformat(), "source": b.source} for b in merged
         ],
