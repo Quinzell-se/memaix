@@ -19,6 +19,7 @@ shape blocks a later `rule`/recurrence field being added.
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
 
@@ -68,7 +69,7 @@ class OverrideStore:
             return True
         return False
 
-    def apply(self, busy: list[BusyInterval]) -> list[BusyInterval]:
+    def apply(self, busy: builtins.list[BusyInterval]) -> builtins.list[BusyInterval]:
         """Union the stored busy overrides in (merged like any other
         source), then subtract the stored free overrides — subtraction can
         split one busy block into two."""
