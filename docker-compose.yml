@@ -14,6 +14,7 @@ services:
       # model-block (AI-valet) atomiskt med backup-rotation; :ro bröt de flödena.
       - ./config:/app/config               # brand.yaml, memaix.yaml, acl.yaml
       - ./vaults:/srv/vaults               # git-versionerade minnesvaults
+      - ./data:/data                       # sqlite-state: notify/rules/tokens/audit/outbox m.fl. (durability)
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
