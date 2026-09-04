@@ -29,6 +29,10 @@ services:
     env_file: .env
     volumes:
       - ./config/acl.yaml:/app/config/acl.yaml:ro
+      # rw: approved_clients.db (memaix-src 4c8f32fe) — (subject, client_id)
+      # approvals for the login skip check. Not the gateway's ./data (that's
+      # its own service's sqlite state); a separate subdir keeps ownership clear.
+      - ./data/login-app:/data
     profiles: ["hydra"]
 
   caddy:
