@@ -22,6 +22,8 @@ gateway cross-origin.
 
 from __future__ import annotations
 
+import threading
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -40,6 +42,18 @@ _MIN_DURATION_MIN = 15
 _MAX_DURATION_MIN = 240
 _MAX_WINDOW_DAYS = 30
 _MAX_PURPOSE_LEN = 500
+
+# Omsluter TOCTOU-omkollen + calendar_create per värd-användare. I dagens
+# drift (uvicorn utan workers=, se server.py) gör detta inget praktiskt
+# jobb — booking_create är async utan await i den kritiska sektionen, så
+# händelseloopen kör redan omkoll->skapa till slut innan den växlar till
+# nästa request; det är olikt _USER_LOCKS i llm/agent.py, vars kritiska
+# sektion INNEHÅLLER await och där låset alltså gör verkligt arbete.
+# Poängen med den här är försäkring mot dagen gatewayen körs multi-worker
+# (gunicorn -w N, flera containrar) — då är denna defaultdict processlokal
+# och skyddar ingenting, medan CalDAV/Google fortfarande saknar
+# compare-and-swap på event-skapande. Känd begränsning, se card d99e2840.
+_BOOKING_LOCKS: "defaultdict[tuple[str, str], threading.Lock]" = defaultdict(threading.Lock)
 
 
 def _get_acl():
@@ -202,35 +216,35 @@ async def booking_create(request: Request) -> JSONResponse:
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
-    # First-line TOCTOU defense only, not a lock — a second visitor racing
-    # for the same slot between this check and calendar_create below can
-    # still win. Real fix (locking/optimistic-conflict handling) is
-    # memaix-src card d99e2840, deliberately out of scope here.
-    # calendar_find_free only returns a slot whose window is strictly
-    # longer than the requested duration (see its "we > cursor + duration"
-    # check) — pad the query window by a minute so an exact-fit free block
-    # still shows up here.
-    still_free = t_cal.calendar_find_free(
-        acl, host_user, project, int(duration.total_seconds() // 60),
-        start.isoformat(), (end + timedelta(minutes=1)).isoformat(), _dav=dav,
-    )
-    def _covers(s: dict) -> bool:
-        s_start, s_end = _parse_dt(s.get("start", "")), _parse_dt(s.get("end", ""))
-        # Unparseable start/end -> not a usable free slot. Never crash the
-        # public handler on a malformed calendar row; treat it as no cover.
-        if s_start is None or s_end is None:
-            return False
-        return s_start <= start and s_end >= end
+    with _BOOKING_LOCKS[(project, host_user)]:
+        # TOCTOU re-check, wrapped with calendar_create in the per-host-user
+        # lock above (see the lock's own docstring for what that lock does
+        # and doesn't guarantee today). calendar_find_free only returns a
+        # slot whose window is strictly longer than the
+        # requested duration (see its "we > cursor + duration" check) — pad
+        # the query window by a minute so an exact-fit free block still shows
+        # up here.
+        still_free = t_cal.calendar_find_free(
+            acl, host_user, project, int(duration.total_seconds() // 60),
+            start.isoformat(), (end + timedelta(minutes=1)).isoformat(), _dav=dav,
+        )
+        def _covers(s: dict) -> bool:
+            s_start, s_end = _parse_dt(s.get("start", "")), _parse_dt(s.get("end", ""))
+            # Unparseable start/end -> not a usable free slot. Never crash the
+            # public handler on a malformed calendar row; treat it as no cover.
+            if s_start is None or s_end is None:
+                return False
+            return s_start <= start and s_end >= end
 
-    if not any(_covers(s) for s in still_free):
-        return _json(request, {"error": "slot_unavailable"}, status_code=409)
+        if not any(_covers(s) for s in still_free):
+            return _json(request, {"error": "slot_unavailable"}, status_code=409)
 
-    title = link.get("title_template", "Möte").format(name=name) if "{name}" in link.get("title_template", "") else link.get("title_template", "Möte")
-    event = t_cal.calendar_create(
-        acl, host_user, project, title,
-        start.isoformat(), end.isoformat(),
-        attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
-    )
+        title = link.get("title_template", "Möte").format(name=name) if "{name}" in link.get("title_template", "") else link.get("title_template", "Möte")
+        event = t_cal.calendar_create(
+            acl, host_user, project, title,
+            start.isoformat(), end.isoformat(),
+            attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
+        )
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
 

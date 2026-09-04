@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import pytest
@@ -188,6 +189,38 @@ def test_create_booking_rejects_when_slot_no_longer_free(rig):
         },
     )
     assert resp.status_code == 409
+
+
+def test_concurrent_bookings_for_same_slot_only_one_wins(rig):
+    # Card d99e2840: pins the required outcome — of two visitors racing for
+    # the identical slot, exactly one gets 200 and the other gets 409
+    # slot_unavailable, never two overlapping events. This is a result
+    # assertion, not proof the _BOOKING_LOCKS lock itself is exercised: with
+    # TestClient, booking_create's async handler already serializes on the
+    # event loop (no await inside the critical section), so this passes
+    # regardless of the lock. What it does guard is the TOCTOU re-check
+    # logic never regressing to let both requests through.
+    client, dav = rig
+    # The module-level rate limiter's window is shared across every test in
+    # this file (same client_ip) — clear it so the two concurrent requests
+    # below are judged only against this test's own traffic, not the POSTs
+    # already made by earlier tests in the module.
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._windows.pop("booking:testclient", None)
+
+    payload = {
+        "start": _dt(16).isoformat(), "end": _dt(16, 30).isoformat(),
+        "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(client.post, "/book/alice-30", json=payload) for _ in range(2)]
+        responses = [f.result() for f in futures]
+
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses == [200, 409]
+    matching = [e for e in dav._events if e["start"] == _dt(16).isoformat()]
+    assert len(matching) == 1
 
 
 def test_create_booking_fails_closed_without_turnstile_configured(rig, monkeypatch):
