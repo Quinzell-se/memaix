@@ -152,8 +152,19 @@ async def login_post(
             "login_challenge", login_challenge,
             {
                 "subject": username,
+                # 60s, inte 86400*30: en lång browser-scoped remember-me
+                # lät en ny klient (t.ex. mistral-test) ärva en annan
+                # klients (jimmy) redan inloggade session i samma
+                # webbläsare — identitetslackage, se memaix-src 4c8f32fe.
+                # remember=False/remember_for=0 provades som stopgap men
+                # Hydra kraschar då (DeleteLoginSession "Unable to locate
+                # the resource") eftersom ingen sessionsrad någonsin
+                # skapas för den att städa upp — bröt alla nya OAuth-
+                # kopplingar. 60s ger Hydra en riktig sessionsrad att
+                # hantera under själva handskakningen, men för kort för
+                # att överleva till nästa klients separata inloggning.
                 "remember": True,
-                "remember_for": 86400 * 30,  # 30 dagar
+                "remember_for": 60,
             },
         )
     except Exception as exc:
@@ -203,7 +214,7 @@ async def consent_get(consent_challenge: str = ""):
             "grant_scope": requested_scope,
             "grant_access_token_audience": audience,
             "remember": True,
-            "remember_for": 86400 * 30,
+            "remember_for": 60,  # see login_post above for why 60s, not 30 days or 0
             "session": {
                 "id_token": {
                     "email": f"{info.get('subject', 'alice')}@personal.example.com",
