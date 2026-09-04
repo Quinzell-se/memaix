@@ -2740,6 +2740,7 @@ def build_http_app():
     mcp.settings.streamable_http_path = "/"
 
     from .board.routes import board_routes
+    from .booking.routes import booking_routes
     from .web.routes import web_routes
 
     custom_routes = [
@@ -2751,6 +2752,7 @@ def build_http_app():
         Route("/hooks/{token}", rule_webhook, methods=["POST"]),
         *board_routes,
         *web_routes,
+        *booking_routes,
     ]
 
     mcp._custom_starlette_routes = custom_routes
@@ -2829,13 +2831,34 @@ def build_http_app():
     starlette_app = BrowserRootRedirect(starlette_app)
 
     # Wrap with CORS so claude.ai browser requests aren't blocked.
-    app = CORSMiddleware(
+    _cors_wrapped = CORSMiddleware(
         app=starlette_app,
         allow_origins=["https://claude.ai", "https://api.claude.ai"],
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "mcp-session-id"],
         expose_headers=["mcp-session-id"],
     )
+
+    # /book/* handles CORS itself, scoped to jimlov.se (booking/routes.py
+    # _cors_headers), including its own OPTIONS preflight responses. The
+    # app-wide CORSMiddleware above only knows claude.ai — left in place it
+    # would intercept the booking preflight and 400 it before ever reaching
+    # booking/routes.py, since Starlette's CORSMiddleware answers every
+    # Access-Control-Request-Method OPTIONS itself instead of delegating.
+    # Route /book/* around it entirely rather than widening the claude.ai
+    # allowlist, which would apply CORS to every other route too.
+    class _BookingCorsBypass:
+        def __init__(self, plain_app, cors_app):
+            self._plain_app = plain_app
+            self._cors_app = cors_app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http" and scope["path"].startswith("/book/"):
+                await self._plain_app(scope, receive, send)
+            else:
+                await self._cors_app(scope, receive, send)
+
+    app = _BookingCorsBypass(starlette_app, _cors_wrapped)
 
     return app
 
