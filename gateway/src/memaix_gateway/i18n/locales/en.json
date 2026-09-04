@@ -130,6 +130,13 @@
     "Turn on my meeting booker",
     "Turn off booking, I'm not taking meetings this week"
   ],
+  "cap.calendar.meeting_types.title": "Manage meeting-type presets",
+  "cap.calendar.meeting_types.summary": "Define named meeting types with a fixed duration and interval, e.g. a 30-minute quick sync or a 90-minute deep dive.",
+  "cap.calendar.meeting_types.examples": [
+    "Add a 30 minute quick sync meeting type",
+    "List my meeting types",
+    "Delete the 'deep-dive' meeting type"
+  ],
   "cap.files.manage.title": "Work with project files",
   "cap.files.manage.summary": "List, read, search and write files in the project vault.",
   "cap.files.manage.examples": [

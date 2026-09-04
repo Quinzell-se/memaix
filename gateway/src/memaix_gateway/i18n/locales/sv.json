@@ -130,6 +130,13 @@
     "Slå på min mötesbokare",
     "Stäng av bokning, jag tar inga möten den här veckan"
   ],
+  "cap.calendar.meeting_types.title": "Hantera mötestyper",
+  "cap.calendar.meeting_types.summary": "Definiera namngivna mötestyper med fast längd och intervall, t.ex. en 30-minuters avstämning eller en 90-minuters djupdykning.",
+  "cap.calendar.meeting_types.examples": [
+    "Lägg till en mötestyp på 30 minuter för snabba avstämningar",
+    "Lista mina mötestyper",
+    "Ta bort mötestypen 'djupdykning'"
+  ],
   "cap.files.manage.title": "Jobba med projektfiler",
   "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
   "cap.files.manage.examples": [

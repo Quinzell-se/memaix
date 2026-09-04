@@ -2166,6 +2166,45 @@ def calendar_booking_enabled_set(project: str, enabled: bool) -> dict:
 
 
 @mcp.tool()
+def calendar_meeting_type_list(project: str) -> list[dict]:
+    """The user's named meeting-type presets — memaix-src card d0a1f633.
+    [] if never configured. Advisory only, doesn't affect calendar_find_free."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_type_list",
+        t_cal.calendar_meeting_type_list,
+        _get_acl(), user, project,
+    )
+
+
+@mcp.tool()
+def calendar_meeting_type_set(project: str, types: list[dict]) -> dict:
+    """Replace the full list of meeting-type presets — memaix-src card
+    d0a1f633. Each needs slug, name, duration_min (1..43200 min);
+    interval_min defaults to duration_min. At most one default."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_type_set",
+        t_cal.calendar_meeting_type_set,
+        _get_acl(), user, project, types,
+    )
+
+
+@mcp.tool()
+def calendar_meeting_type_delete(project: str, slug: str) -> dict:
+    """Remove one meeting-type preset by slug — memaix-src card d0a1f633."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_type_delete",
+        t_cal.calendar_meeting_type_delete,
+        _get_acl(), user, project, slug,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,
