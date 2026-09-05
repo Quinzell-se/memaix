@@ -77,7 +77,10 @@ def get_item(vault: Path, item_id: str) -> dict | None:
         return None
     try:
         meta, body = _split_fm(path.read_text(encoding="utf-8"))
-        result = dict(meta)
+        result = {
+            k: v.isoformat() if isinstance(v, datetime) else v
+            for k, v in meta.items()
+        }
         result["body"] = body
         return result
     except Exception:
