@@ -137,6 +137,13 @@
     "Lista mina mötestyper",
     "Ta bort mötestypen 'djupdykning'"
   ],
+  "cap.calendar.meeting_forms.title": "Hantera mötesformer (video/telefon)",
+  "cap.calendar.meeting_forms.summary": "Välj vilka video- eller telefonalternativ bokaren kan välja mellan — Google Meet, Zoom eller ett telefonnummer.",
+  "cap.calendar.meeting_forms.examples": [
+    "Erbjud Google Meet och telefon som mötesformer",
+    "Lista mina mötesformer",
+    "Ta bort Zoom-mötesformen"
+  ],
   "cap.files.manage.title": "Jobba med projektfiler",
   "cap.files.manage.summary": "Lista, läs, sök och skriv filer i projektvaulten.",
   "cap.files.manage.examples": [

@@ -137,6 +137,13 @@
     "List my meeting types",
     "Delete the 'deep-dive' meeting type"
   ],
+  "cap.calendar.meeting_forms.title": "Manage meeting forms (video/phone)",
+  "cap.calendar.meeting_forms.summary": "Choose which video or phone options visitors can pick when booking with you — Google Meet, Zoom, or a phone number.",
+  "cap.calendar.meeting_forms.examples": [
+    "Offer Google Meet and phone as meeting options",
+    "List my meeting forms",
+    "Delete the Zoom meeting form"
+  ],
   "cap.files.manage.title": "Work with project files",
   "cap.files.manage.summary": "List, read, search and write files in the project vault.",
   "cap.files.manage.examples": [
