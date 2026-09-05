@@ -1,20 +1,20 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later
-   Memaix web-UI — dark theme design tokens + base components
-   (FEATURE-WEB-UI-FOUNDATION.md §4.1). Tokens match the login app. */
+   Memaix web-UI — design tokens + base components */
 
 :root {
-  --bg:           #0f1117;
-  --surface:      #1a1d27;
-  --surface-2:    #222637;   /* hover states */
-  --border:       #2d3044;
-  --text:         #e2e8f0;
-  --muted:        #94a3b8;
-  --primary:      #6366f1;
-  --primary-light: rgba(99,102,241,.15);
-  --danger:       #ef4444;
-  --success:      #38a169;
-  --warning:      #f59e0b;
-  --card-shadow:  0 1px 3px rgba(0,0,0,.5);
+  /* Light theme (default) */
+  --bg:           #fffdf7;
+  --surface:      #ffffff;
+  --surface-2:    #f3f1ea;
+  --border:       #e0ddd6;
+  --text:         #111111;
+  --muted:        #6b6560;
+  --primary:      #3D7A8F;
+  --primary-light: rgba(61,122,143,.12);
+  --danger:       #c0392b;
+  --success:      #166534;
+  --warning:      #d97706;
+  --card-shadow:  0 1px 3px rgba(0,0,0,.08);
 
   /* Layout */
   --sidebar-w:    220px;
@@ -23,12 +23,26 @@
   --tab-h:        56px;
 
   /* Type */
-  --font:         system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font:         'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
   --mono:         'JetBrains Mono', 'Fira Mono', ui-monospace, monospace;
   --text-sm:      0.875rem;
   --text-xs:      0.75rem;
 }
 
+[data-theme="dark"] {
+  --bg:           #1c1917;
+  --surface:      #252220;
+  --surface-2:    #2f2c2a;
+  --border:       #3a3532;
+  --text:         #fffdf7;
+  --muted:        #a09890;
+  --primary:      #4a9ab0;
+  --primary-light: rgba(74,154,176,.15);
+  --danger:       #e05c4b;
+  --success:      #4ade80;
+  --warning:      #f59e0b;
+  --card-shadow:  0 1px 3px rgba(0,0,0,.5);
+}
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 /* The hidden attribute must always win: class rules that set display
@@ -220,7 +234,16 @@ body[data-collapsed="true"] .sidebar-foot { display: none; }
     font-size: var(--text-xs);
   }
   .tab-bar .tab.active { color: var(--primary); }
-  .board-frame { height: calc(100vh - var(--topbar-h) - var(--tab-h) - 2rem); }
+
+  /* The board is a horizontally-scrolling row that needs every pixel, so it
+     runs edge-to-edge on phones instead of sitting inside .content's padding.
+     Negative margins cancel the padding the page-level rule above applies. */
+  .board-frame {
+    height: calc(100vh - var(--topbar-h) - var(--tab-h) - .9rem);
+    border-radius: 0;
+    width: calc(100% + 1.8rem);
+    margin: -.9rem -.9rem 0;
+  }
 }
 
 /* --- Memory explorer (Fas B) ------------------------------------------- */

@@ -3,6 +3,39 @@
 // outbox badge (FEATURE-WEB-UI-FOUNDATION.md §4.4). Loaded last on every page.
 
 (() => {
+  // --- Theme (init early, persisted) -------------------------------------
+  // The board lives in a same-origin <iframe> with its own document, so the
+  // attribute has to be set on both roots \u2014 setting it only here leaves the
+  // board stuck on whatever theme it booted with.
+  const _applyTheme = (dark) => {
+    const value = dark ? 'dark' : 'light';
+    const glyph = dark ? '\u263D' : '\u263C';
+    document.documentElement.setAttribute('data-theme', value);
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = glyph;
+    const frame = document.querySelector('iframe.board-frame');
+    try {
+      frame?.contentDocument?.documentElement.setAttribute('data-theme', value);
+      const fbtn = frame?.contentDocument?.getElementById('theme-btn');
+      if (fbtn) fbtn.textContent = glyph;
+    } catch { /* iframe not ready yet \u2014 its own init reads localStorage */ }
+  };
+  // The iframe may not have parsed when the toggle fires, and it re-parses on
+  // every board navigation, so re-apply on load rather than only on click.
+  document.querySelector('iframe.board-frame')?.addEventListener('load', () => {
+    _applyTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+  });
+  (() => {
+    const saved = localStorage.getItem('mb_theme');
+    const prefersDark = saved === 'dark';  // default is light
+    _applyTheme(prefersDark);
+  })();
+  document.getElementById('theme-btn')?.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    _applyTheme(!isDark);
+    localStorage.setItem('mb_theme', isDark ? 'light' : 'dark');
+  });
+
   // --- Sidebar collapse (persisted) -----------------------------------
   if (localStorage.getItem('memaix_sidebar_collapsed') === 'true') {
     document.body.dataset.collapsed = 'true';
