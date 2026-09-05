@@ -2205,6 +2205,47 @@ def calendar_meeting_type_delete(project: str, slug: str) -> dict:
 
 
 @mcp.tool()
+def calendar_meeting_form_list(project: str) -> list[dict]:
+    """The host's enabled meeting forms (video/phone options offered at
+    booking time) — memaix-src card 85854d2c. [] if never configured,
+    which the public booking page treats as "feature off"."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_form_list",
+        t_cal.calendar_meeting_form_list,
+        _get_acl(), user, project,
+    )
+
+
+@mcp.tool()
+def calendar_meeting_form_set(project: str, forms: list[dict]) -> dict:
+    """Replace the full list of enabled meeting forms — memaix-src card
+    85854d2c. Each needs slug, provider (google_meet/zoom/phone) and
+    label; a phone form also needs config.phone_number. At most one
+    default; the first is auto-promoted if none is marked."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_form_set",
+        t_cal.calendar_meeting_form_set,
+        _get_acl(), user, project, forms,
+    )
+
+
+@mcp.tool()
+def calendar_meeting_form_delete(project: str, slug: str) -> dict:
+    """Remove one meeting form by slug — memaix-src card 85854d2c."""
+    user = _user()
+    _rl(user, project)
+    return _audited(
+        user, project, "calendar_meeting_form_delete",
+        t_cal.calendar_meeting_form_delete,
+        _get_acl(), user, project, slug,
+    )
+
+
+@mcp.tool()
 def calendar_create(
     project: str,
     title: str,

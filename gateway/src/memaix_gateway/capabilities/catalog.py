@@ -185,6 +185,19 @@ def register_defaults() -> None:
             tags=("kalender", "mötestyp", "längd", "calendar", "meeting type", "duration"),
         ),
         Capability(
+            key="calendar.meeting_forms", area="calendar",
+            title_key="cap.calendar.meeting_forms.title",
+            summary_key="cap.calendar.meeting_forms.summary",
+            tools=(
+                "calendar_meeting_form_list",
+                "calendar_meeting_form_set",
+                "calendar_meeting_form_delete",
+            ),
+            example_prompts_key="cap.calendar.meeting_forms.examples",
+            needs_role="collaborator", needs_resource="calendar",
+            tags=("kalender", "mötesform", "video", "zoom", "meet", "telefon", "calendar", "meeting form", "video"),
+        ),
+        Capability(
             key="calendar.connect", area="calendar",
             title_key="cap.calendar.connect.title",
             summary_key="cap.calendar.connect.summary",
