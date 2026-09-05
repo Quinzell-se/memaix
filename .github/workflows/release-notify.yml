@@ -1,0 +1,16 @@
+name: Notify jimlov.se on release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    uses: Quinzell-se/jimlov-crew/.github/workflows/release-publish.yml@master
+    with:
+      project_slug: memaix
+      display_name: Memaix
+      tag: ${{ github.event.release.tag_name }}
+      release_body: ${{ github.event.release.body }}
+      release_url: ${{ github.event.release.html_url }}
+    secrets: inherit
