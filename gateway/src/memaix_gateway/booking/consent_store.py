@@ -76,6 +76,18 @@ class ConsentStore:
                 # restarts or overlapping ticks.
                 "ALTER TABLE booking_consent ADD COLUMN meeting_start INTEGER",
                 "ALTER TABLE booking_consent ADD COLUMN reminders_sent TEXT NOT NULL DEFAULT ''",
+                # Additive migration for card 85854d2c (meeting forms). All
+                # three nullable: rows written before this migration have
+                # none, and every consumer (reminders, confirmation/.ics)
+                # treats NULL as "no video/phone info to render" — same
+                # pattern as meeting_start above. meeting_form_detail is the
+                # value *resolved at booking time* (a Meet/Zoom URL or a
+                # phone number), never re-resolved later — if a host swaps
+                # Zoom accounts, past bookings still show what the visitor
+                # actually received.
+                "ALTER TABLE booking_consent ADD COLUMN meeting_form_slug TEXT",
+                "ALTER TABLE booking_consent ADD COLUMN meeting_form_provider TEXT",
+                "ALTER TABLE booking_consent ADD COLUMN meeting_form_detail TEXT",
             ):
                 try:
                     conn.execute(ddl)
@@ -110,6 +122,9 @@ class ConsentStore:
         meeting_end: int,
         slug: str | None = None,
         meeting_start: int | None = None,
+        meeting_form_slug: str | None = None,
+        meeting_form_provider: str | None = None,
+        meeting_form_detail: str | None = None,
     ) -> tuple[str, str]:
         """Returns (row_id, manage_token). manage_token is the capability a
         booker or host later presents to /booking/{token}/... to reschedule
@@ -120,10 +135,12 @@ class ConsentStore:
             conn.execute(
                 "INSERT INTO booking_consent "
                 "(id, project, host_user, event_id, visitor_email, consent_text, "
-                " consent_at, meeting_end, purged_at, slug, manage_token, status, meeting_start) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 'confirmed', ?)",
+                " consent_at, meeting_end, purged_at, slug, manage_token, status, meeting_start, "
+                " meeting_form_slug, meeting_form_provider, meeting_form_detail) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 'confirmed', ?, ?, ?, ?)",
                 (row_id, project, host_user, event_id, visitor_email, consent_text,
-                 consent_at, meeting_end, slug, manage_token, meeting_start),
+                 consent_at, meeting_end, slug, manage_token, meeting_start,
+                 meeting_form_slug, meeting_form_provider, meeting_form_detail),
             )
             conn.commit()
         return row_id, manage_token
@@ -132,7 +149,8 @@ class ConsentStore:
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 "SELECT id, project, host_user, event_id, visitor_email, slug, status, "
-                "meeting_start, meeting_end FROM booking_consent WHERE manage_token = ?",
+                "meeting_start, meeting_end, meeting_form_slug, meeting_form_provider, "
+                "meeting_form_detail FROM booking_consent WHERE manage_token = ?",
                 (manage_token,),
             ).fetchone()
         return dict(row) if row else None
@@ -172,7 +190,8 @@ class ConsentStore:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 "SELECT id, project, host_user, event_id, visitor_email, slug, "
-                "manage_token, meeting_start, meeting_end, reminders_sent FROM booking_consent "
+                "manage_token, meeting_start, meeting_end, reminders_sent, "
+                "meeting_form_provider, meeting_form_detail FROM booking_consent "
                 "WHERE meeting_start IS NOT NULL AND meeting_start > ? "
                 "AND purged_at IS NULL AND status != 'cancelled'",
                 (floor,),

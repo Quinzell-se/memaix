@@ -87,7 +87,7 @@ def send_due_reminders(store, acl_fn, link_fn, now: datetime) -> int:
     """Send every due reminder across every pending booking. Returns the
     number of emails dispatched this tick. A single row's failure never
     blocks the rest — same isolation as purge_due()."""
-    from .routes import _send_reminder_email
+    from .routes import _format_meeting_detail_line, _send_reminder_email
 
     now_epoch = int(now.timestamp())
     sent_count = 0
@@ -107,9 +107,13 @@ def send_due_reminders(store, acl_fn, link_fn, now: datetime) -> int:
                 title = link.get("title_template", "Möte")
                 start_dt = datetime.fromtimestamp(meeting_start, tz=timezone.utc)
                 end_dt = datetime.fromtimestamp(row.get("meeting_end") or meeting_start, tz=timezone.utc)
+                meeting_detail_line = _format_meeting_detail_line(
+                    row.get("meeting_form_provider"), row.get("meeting_form_detail"),
+                )
                 _send_reminder_email(
                     acl_fn(), row["project"], link, title, row["event_id"],
                     row["visitor_email"], start_dt, end_dt, offset, row.get("manage_token", ""),
+                    meeting_detail_line,
                 )
                 # Claim only after a successful send — claiming first would
                 # permanently lose the reminder if the send then failed
