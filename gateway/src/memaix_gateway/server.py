@@ -2849,6 +2849,30 @@ def build_http_app():
 
         starlette_app.router.lifespan_context = _lifespan_with_consent_purge
 
+    # Start the meeting-reminders loop (memaix-src card ecffcb5b). Same
+    # lifespan-wrapping pattern as the three loops above — a fourth,
+    # independent background task.
+    if cfg.get("memaix", {}).get("booking", {}).get("reminders_enabled", True):
+        import contextlib
+
+        _prior_reminder_lifespan = starlette_app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def _lifespan_with_reminders(app):
+            import asyncio
+
+            from .booking.links import get_link
+            from .booking.reminders import reminder_loop
+
+            task = asyncio.create_task(reminder_loop(_get_acl, get_link))
+            try:
+                async with _prior_reminder_lifespan(app) as state:
+                    yield state
+            finally:
+                task.cancel()
+
+        starlette_app.router.lifespan_context = _lifespan_with_reminders
+
     # Browsers hitting the bare domain get the web UI, not the MCP 401 JSON.
     from .web.routes import BrowserRootRedirect
 

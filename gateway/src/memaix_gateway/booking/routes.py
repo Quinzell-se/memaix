@@ -47,6 +47,14 @@ channel exists to observe that).
 CORS is scoped to these routes only (not the whole app), since jimlov.se
 is a static export with no server runtime and must call this gateway
 cross-origin.
+
+Reminders (card ecffcb5b): reminders.py's background loop sends a 24h and
+1h-before reminder for every pending booking, using the manage_token and
+_reminder_body/_send_reminder_email helpers below (same best-effort,
+never-fail-the-caller contract as the other _send_*_emails helpers here).
+meeting_start is threaded through booking_create/reschedule/cancel into
+consent_store.py so reminders.py's reminders_due() can find bookings by
+start time without a second lookup against the calendar.
 """
 
 from __future__ import annotations
@@ -298,7 +306,7 @@ async def booking_create(request: Request) -> JSONResponse:
         project=project, host_user=host_user, event_id=event.get("id"),
         visitor_email=email, consent_text=consent_text,
         consent_at=int(time.time()), meeting_end=int(end.timestamp()),
-        slug=request.path_params["slug"],
+        slug=request.path_params["slug"], meeting_start=int(start.timestamp()),
     )
     # Lock released above — the booking is already committed to the
     # calendar, so email delivery is not part of the race-critical section
@@ -466,6 +474,55 @@ def _send_cancellation_emails(acl, project: str, link: dict, title: str, visitor
         logger.exception("booking cancellation email failed for project=%s slug-host=%s", project, link.get("user"))
 
 
+def _reminder_body(title: str, when: str, offset_min: int, manage_url: str) -> str:
+    lead = "imorgon" if offset_min >= 1440 else "om en timme"
+    lines = [
+        f"Påminnelse: {title} börjar {lead}.",
+        f"Tid: {when}",
+        "En kalenderfil (.ics) är bifogad.",
+        f"Behöver du boka om eller avboka? {manage_url}",
+    ]
+    return "\n".join(lines)
+
+
+def _send_reminder_email(
+    acl, project: str, link: dict, title: str, event_id: str | None,
+    visitor_email: str, meeting_start: datetime, meeting_end: datetime,
+    offset_min: int, manage_token: str,
+) -> None:
+    """Best-effort, same contract as _send_confirmation_emails. Called from
+    reminders.py's send_due_reminders() — see that module for the
+    claim-after-send ordering this depends on to avoid losing a reminder to
+    a transient failure in here."""
+    try:
+        host_user = link["user"]
+        if not acl.resource(project, "allow_send"):
+            return
+        uid = event_id or _uuid.uuid4().hex
+        ics_bytes = _build_ics(uid, title, meeting_start, meeting_end, None, [visitor_email])
+        manage_url = _manage_url(manage_token)
+        when = _format_dt(meeting_start, None)
+
+        t_email.email_send(
+            acl, host_user, project, visitor_email,
+            f"Påminnelse: {title}",
+            _reminder_body(title, when, offset_min, manage_url),
+            attachment_filename="moete.ics", attachment_content=ics_bytes,
+            _confirmed=True,
+        )
+        host_email = link.get("host_email")
+        if host_email:
+            t_email.email_send(
+                acl, host_user, project, host_email,
+                f"Påminnelse: {title}",
+                _reminder_body(title, _format_dt(meeting_start, link.get("host_timezone")), offset_min, manage_url),
+                attachment_filename="moete.ics", attachment_content=ics_bytes,
+                _confirmed=True,
+            )
+    except Exception:
+        logger.exception("booking reminder email failed for project=%s slug-host=%s", project, link.get("user"))
+
+
 async def booking_manage_get(request: Request) -> JSONResponse:
     """GET /booking/{token} — {status, meeting_end} for the booking the
     token manages, or 404 if the token is unknown. Powers a "manage your
@@ -544,7 +601,8 @@ async def booking_reschedule(request: Request) -> JSONResponse:
         )
 
     get_consent_store().update_booking(
-        row["id"], event_id=event_id, meeting_end=int(end.timestamp()), status="rescheduled",
+        row["id"], event_id=event_id, meeting_start=int(start.timestamp()),
+        meeting_end=int(end.timestamp()), status="rescheduled",
     )
     title = event.get("title") or link.get("title_template", "Möte")
     _send_reschedule_emails(acl, project, link, title, event, row["visitor_email"], start, end, request.path_params["token"])
@@ -581,7 +639,10 @@ async def booking_cancel(request: Request) -> JSONResponse:
             # that adapter, still cancel the booking record below.
             pass
 
-    get_consent_store().update_booking(row["id"], event_id=event_id, meeting_end=row["meeting_end"], status="cancelled")
+    get_consent_store().update_booking(
+        row["id"], event_id=event_id, meeting_start=row["meeting_start"],
+        meeting_end=row["meeting_end"], status="cancelled",
+    )
 
     if link is not None:
         title = link.get("title_template", "Möte")
