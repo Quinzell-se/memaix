@@ -486,6 +486,7 @@ def calendar_find_free(
     within_end: str,
     *,
     _dav=None,
+    _exclude_event_id: str | None = None,
 ) -> list[dict]:
     """Find free slots of *duration_min* minutes within [within_start, within_end].
 
@@ -493,6 +494,11 @@ def calendar_find_free(
     outside the user's configured working hours (card e21fde31) are
     excluded — a schedule only ever narrows this result, it can never
     surface a busy block as free.
+
+    _exclude_event_id (card 8056150d): when re-checking availability for a
+    reschedule, the event being moved is itself still on the calendar and
+    would otherwise count as busy against its own new window. Pass its id
+    to leave it out of the busy set.
 
     Known limitation (memaix-src d0a1f633): once a user has configured
     working hours, this can never return a slot longer than one day,
@@ -508,6 +514,8 @@ def calendar_find_free(
     dav = _get_dav(acl, project, _dav)
 
     busy = sorted(dav.find_events(ws, we), key=lambda e: e["start"])
+    if _exclude_event_id is not None:
+        busy = [e for e in busy if e.get("id") != _exclude_event_id]
 
     # Build free slots
     free: list[dict] = []

@@ -26,7 +26,10 @@ class _MockDav:
         self._events = list(events or [])
 
     def list_events(self, start, end):
-        return [e for e in self._events if _parse(e["start"]) >= start and _parse(e["end"]) <= end]
+        # Overlap, not containment — matches every real adapter (Google,
+        # iCal, CalDAV all return events that overlap the query window, not
+        # just ones fully inside it).
+        return [e for e in self._events if _parse(e["start"]) < end and _parse(e["end"]) > start]
 
     find_events = list_events
 
@@ -34,6 +37,24 @@ class _MockDav:
         ev = {"id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(), "description": description}
         self._events.append(ev)
         return ev
+
+    def update_event(self, id, **fields):
+        ev = next((e for e in self._events if e["id"] == id), None)
+        if ev is None:
+            raise FileNotFoundError(f"event not found: {id!r}")
+        if "start" in fields:
+            ev["start"] = fields["start"]
+        if "end" in fields:
+            ev["end"] = fields["end"]
+        if "title" in fields:
+            ev["title"] = fields["title"]
+        return ev
+
+    def delete_event(self, id):
+        ev = next((e for e in self._events if e["id"] == id), None)
+        if ev is None:
+            raise FileNotFoundError(f"event not found: {id!r}")
+        self._events.remove(ev)
 
 
 def _parse(s):
@@ -425,3 +446,198 @@ def test_turnstile_fails_closed_without_secret_ref(monkeypatch):
     from memaix_gateway.booking.routes import _verify_turnstile
     monkeypatch.setattr(config, "load", lambda: {"memaix": {}})
     assert asyncio.run(_verify_turnstile("some-token", "1.2.3.4")) is False
+
+
+# --- Reschedule / cancel — memaix-src card 8056150d -------------------------
+
+
+def _manage_token_for(store, project: str, host_user: str) -> str:
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT manage_token FROM booking_consent WHERE project = ? AND host_user = ? "
+            "ORDER BY rowid DESC LIMIT 1",
+            (project, host_user),
+        ).fetchone()
+    return row["manage_token"]
+
+
+@pytest.fixture()
+def rig_with_store(rig, monkeypatch, tmp_path):
+    from memaix_gateway.booking.consent_store import ConsentStore
+    import memaix_gateway.booking.routes as booking_routes_mod
+
+    store = ConsentStore(tmp_path / "consent.db")
+    monkeypatch.setattr(booking_routes_mod, "get_consent_store", lambda: store)
+    client, dav = rig
+
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._windows.pop("booking:testclient", None)
+    rate_limiter._windows.pop("booking-manage:testclient", None)
+
+    return client, dav, store
+
+
+def _book(client, start_h, start_m=0, end_h=None, end_m=30):
+    end_h = end_h if end_h is not None else start_h
+    return client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(start_h, start_m).isoformat(), "end": _dt(end_h, end_m).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker.",
+        },
+    )
+
+
+def test_reschedule_moves_the_calendar_event(rig_with_store):
+    client, dav, store = rig_with_store
+    resp = _book(client, 9)
+    assert resp.status_code == 200
+    token = _manage_token_for(store, "proj", "alice")
+
+    resp = client.post(f"/booking/{token}/reschedule", json={
+        "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+    })
+    assert resp.status_code == 200
+    assert not any(e["start"] == _dt(9).isoformat() for e in dav._events)
+    assert any(e["start"] == _dt(11).isoformat() for e in dav._events)
+
+    row = store.get_by_manage_token(token)
+    assert row["status"] == "rescheduled"
+    assert row["meeting_end"] == int(_dt(11, 30).timestamp())
+
+
+def test_reschedule_sends_email_with_new_ics(rig_with_store):
+    client, dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+    client.smtp.sent.clear()
+
+    resp = client.post(f"/booking/{token}/reschedule", json={
+        "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+    })
+    assert resp.status_code == 200
+    assert len(client.smtp.sent) == 2
+    recipients = {msg["To"] for msg in client.smtp.sent}
+    assert recipients == {"bob@example.com", "alice@example.com"}
+
+
+def test_reschedule_to_an_overlapping_window_excludes_own_event(rig_with_store):
+    # The booking's own event still overlaps its new window until
+    # calendar_update actually moves it — the free/busy re-check must not
+    # mistake it for a conflicting event (memaix-src card 8056150d).
+    client, dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+
+    resp = client.post(f"/booking/{token}/reschedule", json={
+        "start": _dt(9, 15).isoformat(), "end": _dt(9, 45).isoformat(),
+    })
+    assert resp.status_code == 200
+    assert any(e["start"] == _dt(9, 15).isoformat() for e in dav._events)
+
+
+def test_reschedule_rejects_when_new_slot_taken(rig_with_store):
+    client, dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+    dav._events.append({"id": "ev-taken", "title": "Taken", "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat()})
+
+    resp = client.post(f"/booking/{token}/reschedule", json={
+        "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+    })
+    assert resp.status_code == 409
+    row = store.get_by_manage_token(token)
+    assert row["status"] == "confirmed"  # untouched
+
+
+def test_reschedule_unknown_token_is_404(rig_with_store):
+    client, _dav, _store = rig_with_store
+    resp = client.post("/booking/no-such-token/reschedule", json={
+        "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+    })
+    assert resp.status_code == 404
+
+
+def test_reschedule_a_cancelled_booking_is_rejected(rig_with_store):
+    client, _dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+    assert client.post(f"/booking/{token}/cancel", json={}).status_code == 200
+
+    resp = client.post(f"/booking/{token}/reschedule", json={
+        "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+    })
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "already_cancelled"
+
+
+def test_cancel_deletes_the_calendar_event(rig_with_store):
+    client, dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+
+    resp = client.post(f"/booking/{token}/cancel", json={})
+    assert resp.status_code == 200
+    assert not any(e["start"] == _dt(9).isoformat() for e in dav._events)
+    row = store.get_by_manage_token(token)
+    assert row["status"] == "cancelled"
+
+
+def test_cancel_sends_cancellation_emails(rig_with_store):
+    client, dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+    client.smtp.sent.clear()
+
+    resp = client.post(f"/booking/{token}/cancel", json={})
+    assert resp.status_code == 200
+    assert len(client.smtp.sent) == 2
+    for msg in client.smtp.sent:
+        assert "Avbokat" in msg["Subject"]
+
+
+def test_cancel_twice_is_rejected(rig_with_store):
+    client, _dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+    assert client.post(f"/booking/{token}/cancel", json={}).status_code == 200
+
+    resp = client.post(f"/booking/{token}/cancel", json={})
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "already_cancelled"
+
+
+def test_cancel_unknown_token_is_404(rig_with_store):
+    client, _dav, _store = rig_with_store
+    resp = client.post("/booking/no-such-token/cancel", json={})
+    assert resp.status_code == 404
+
+
+def test_manage_get_returns_status_and_meeting_end(rig_with_store):
+    client, _dav, store = rig_with_store
+    _book(client, 9)
+    token = _manage_token_for(store, "proj", "alice")
+
+    resp = client.get(f"/booking/{token}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "confirmed"
+    assert body["meeting_end"] == int(_dt(9, 30).timestamp())
+
+
+def test_manage_get_unknown_token_is_404(rig_with_store):
+    client, _dav, _store = rig_with_store
+    resp = client.get("/booking/no-such-token")
+    assert resp.status_code == 404
+
+
+def test_confirmation_email_includes_manage_link(rig_with_store):
+    client, dav, store = rig_with_store
+    client.smtp.sent.clear()
+    resp = _book(client, 9)
+    assert resp.status_code == 200
+    token = _manage_token_for(store, "proj", "alice")
+    for msg in client.smtp.sent:
+        body = msg.get_body(preferencelist=("plain",)).get_content()
+        assert token in body

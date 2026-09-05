@@ -20,6 +20,7 @@ process/restart-durable local state in this gateway.
 from __future__ import annotations
 
 import os
+import secrets
 import sqlite3
 import threading
 import uuid
@@ -58,6 +59,22 @@ class ConsentStore:
                 "CREATE INDEX IF NOT EXISTS idx_consent_due "
                 "ON booking_consent(meeting_end) WHERE purged_at IS NULL"
             )
+            # Additive migration for card 8056150d (reschedule/cancel).
+            # SQLite has no "ADD COLUMN IF NOT EXISTS" — probe and ignore
+            # the OperationalError on a database that already has them.
+            for ddl in (
+                "ALTER TABLE booking_consent ADD COLUMN slug TEXT",
+                "ALTER TABLE booking_consent ADD COLUMN manage_token TEXT",
+                "ALTER TABLE booking_consent ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_consent_manage_token "
+                "ON booking_consent(manage_token) WHERE manage_token IS NOT NULL"
+            )
             conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
@@ -76,19 +93,45 @@ class ConsentStore:
         consent_text: str,
         consent_at: int,
         meeting_end: int,
-    ) -> str:
+        slug: str | None = None,
+    ) -> tuple[str, str]:
+        """Returns (row_id, manage_token). manage_token is the capability a
+        booker or host later presents to /booking/{token}/... to reschedule
+        or cancel this booking — see card 8056150d."""
         row_id = uuid.uuid4().hex
+        manage_token = secrets.token_urlsafe(32)
         with self._lock, self._connect() as conn:
             conn.execute(
                 "INSERT INTO booking_consent "
                 "(id, project, host_user, event_id, visitor_email, consent_text, "
-                " consent_at, meeting_end, purged_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+                " consent_at, meeting_end, purged_at, slug, manage_token, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 'confirmed')",
                 (row_id, project, host_user, event_id, visitor_email, consent_text,
-                 consent_at, meeting_end),
+                 consent_at, meeting_end, slug, manage_token),
             )
             conn.commit()
-        return row_id
+        return row_id, manage_token
+
+    def get_by_manage_token(self, manage_token: str) -> dict | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, project, host_user, event_id, visitor_email, slug, status, meeting_end "
+                "FROM booking_consent WHERE manage_token = ?",
+                (manage_token,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_booking(self, row_id: str, *, event_id: str | None, meeting_end: int, status: str) -> None:
+        """Reschedule moves meeting_end (purge.py's due() keys off it) and
+        may keep the same event_id (an in-place calendar_update) or a new
+        one; cancel just flips status so a cancelled booking can't be
+        rescheduled later."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE booking_consent SET event_id = ?, meeting_end = ?, status = ? WHERE id = ?",
+                (event_id, meeting_end, status, row_id),
+            )
+            conn.commit()
 
     def due(self, now_epoch: int, retention_days: int = RETENTION_DAYS) -> list[dict]:
         """Rows whose meeting ended more than *retention_days* ago and

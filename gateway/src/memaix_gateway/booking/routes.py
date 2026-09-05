@@ -32,9 +32,21 @@ bypass in tools/calendar.py and this route does not attempt to add one.
 Privacy: only ever returns {start, end} slots (memaix-src card de858332) —
 never calendar_free_busy's richer, source-tagged view.
 
-CORS is scoped to these four routes only (not the whole app), since
-jimlov.se is a static export with no server runtime and must call this
-gateway cross-origin.
+Reschedule/cancel (card 8056150d): booking_create mints an opaque
+manage_token (consent_store.py) and includes a manage link in both
+confirmation emails — the token IS the capability, same convention as the
+slug, so either the visitor or the host can act on it via
+/booking/{token}/reschedule or /booking/{token}/cancel, no login for
+either party. Reschedule re-runs the exact TOCTOU check and lock
+booking_create uses, since it's racing other bookers for a new window the
+same way a fresh booking would. Detecting a conflict introduced later by
+the host editing their own calendar directly is explicitly out of scope
+for this card — see the card's design notes for why (no inbound calendar
+channel exists to observe that).
+
+CORS is scoped to these routes only (not the whole app), since jimlov.se
+is a static export with no server runtime and must call this gateway
+cross-origin.
 """
 
 from __future__ import annotations
@@ -282,15 +294,16 @@ async def booking_create(request: Request) -> JSONResponse:
             start.isoformat(), end.isoformat(),
             attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
         )
-    get_consent_store().record(
+    _row_id, manage_token = get_consent_store().record(
         project=project, host_user=host_user, event_id=event.get("id"),
         visitor_email=email, consent_text=consent_text,
         consent_at=int(time.time()), meeting_end=int(end.timestamp()),
+        slug=request.path_params["slug"],
     )
     # Lock released above — the booking is already committed to the
     # calendar, so email delivery is not part of the race-critical section
     # and its latency must never hold up the next booker for this host.
-    _send_confirmation_emails(acl, project, link, title, event, name, email, purpose, start, end, visitor_tz)
+    _send_confirmation_emails(acl, project, link, title, event, name, email, purpose, start, end, visitor_tz, manage_token)
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
 
@@ -329,35 +342,62 @@ def _build_ics(uid: str, title: str, start: datetime, end: datetime, description
     return cal.serialize().encode("utf-8")
 
 
-def _confirmation_body(title: str, name: str, visitor_email: str, when: str, purpose: str) -> str:
+def _confirmation_body(title: str, name: str, visitor_email: str, when: str, purpose: str, manage_url: str) -> str:
     lines = [f"Mötet är bokat: {title}", f"Tid: {when}"]
     if purpose:
         lines.append(f"Syfte: {purpose}")
     lines.append(f"Bokat av: {name} <{visitor_email}>")
     lines.append("En kalenderfil (.ics) är bifogad.")
+    lines.append(f"Vill du boka om eller avboka? {manage_url}")
     return "\n".join(lines)
+
+
+def _reschedule_body(title: str, when: str, manage_url: str) -> str:
+    lines = [
+        f"Mötet är ombokat: {title}",
+        f"Ny tid: {when}",
+        "En uppdaterad kalenderfil (.ics) är bifogad.",
+        f"Vill du boka om igen eller avboka? {manage_url}",
+    ]
+    return "\n".join(lines)
+
+
+def _cancellation_body(title: str, when: str) -> str:
+    return f"Mötet är avbokat: {title}\nTid som avbokades: {when}"
+
+
+def _manage_url(manage_token: str) -> str:
+    cfg = config.load()
+    public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "http://localhost:8080")
+    return f"{public_url.rstrip('/')}/booking/{manage_token}"
 
 
 def _send_confirmation_emails(
     acl, project: str, link: dict, title: str, event: dict,
     name: str, visitor_email: str, purpose: str,
     start: datetime, end: datetime, visitor_tz: str | None,
+    manage_token: str,
 ) -> None:
     """Best-effort only. The booking already succeeded by the time this
     runs — a project with no mailbox/allow_send configured yet, or a
     transient SMTP error, must never turn into a booking failure for the
-    visitor. See the module docstring for why."""
+    visitor. See the module docstring for why.
+
+    Both copies get the manage link (card 8056150d) — the manage_token IS
+    the capability to reschedule/cancel, so either the visitor or the host
+    can act on it, whichever notices a change is needed first."""
     try:
         host_user = link["user"]
         if not acl.resource(project, "allow_send"):
             return
         uid = event.get("id") or _uuid.uuid4().hex
         ics_bytes = _build_ics(uid, title, start, end, purpose or None, [visitor_email])
+        manage_url = _manage_url(manage_token)
 
         t_email.email_send(
             acl, host_user, project, visitor_email,
             f"Bekräftelse: {title}",
-            _confirmation_body(title, name, visitor_email, _format_dt(start, visitor_tz), purpose),
+            _confirmation_body(title, name, visitor_email, _format_dt(start, visitor_tz), purpose, manage_url),
             attachment_filename="moete.ics", attachment_content=ics_bytes,
             _confirmed=True,
         )
@@ -367,12 +407,187 @@ def _send_confirmation_emails(
             t_email.email_send(
                 acl, host_user, project, host_email,
                 f"Ny bokning: {title}",
-                _confirmation_body(title, name, visitor_email, _format_dt(start, link.get("host_timezone")), purpose),
+                _confirmation_body(title, name, visitor_email, _format_dt(start, link.get("host_timezone")), purpose, manage_url),
                 attachment_filename="moete.ics", attachment_content=ics_bytes,
                 _confirmed=True,
             )
     except Exception:
         logger.exception("booking confirmation email failed for project=%s slug-host=%s", project, link.get("user"))
+
+
+def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: dict,
+                             visitor_email: str, start: datetime, end: datetime, manage_token: str) -> None:
+    """Best-effort, same contract as _send_confirmation_emails."""
+    try:
+        host_user = link["user"]
+        if not acl.resource(project, "allow_send"):
+            return
+        uid = event.get("id") or _uuid.uuid4().hex
+        ics_bytes = _build_ics(uid, title, start, end, None, [visitor_email])
+        manage_url = _manage_url(manage_token)
+
+        t_email.email_send(
+            acl, host_user, project, visitor_email,
+            f"Ombokat: {title}",
+            _reschedule_body(title, _format_dt(start, None), manage_url),
+            attachment_filename="moete.ics", attachment_content=ics_bytes,
+            _confirmed=True,
+        )
+        host_email = link.get("host_email")
+        if host_email:
+            t_email.email_send(
+                acl, host_user, project, host_email,
+                f"Ombokat: {title}",
+                _reschedule_body(title, _format_dt(start, link.get("host_timezone")), manage_url),
+                attachment_filename="moete.ics", attachment_content=ics_bytes,
+                _confirmed=True,
+            )
+    except Exception:
+        logger.exception("booking reschedule email failed for project=%s slug-host=%s", project, link.get("user"))
+
+
+def _send_cancellation_emails(acl, project: str, link: dict, title: str, visitor_email: str, when: str) -> None:
+    """Best-effort, same contract as _send_confirmation_emails."""
+    try:
+        host_user = link["user"]
+        if not acl.resource(project, "allow_send"):
+            return
+        t_email.email_send(
+            acl, host_user, project, visitor_email,
+            f"Avbokat: {title}", _cancellation_body(title, when), _confirmed=True,
+        )
+        host_email = link.get("host_email")
+        if host_email:
+            t_email.email_send(
+                acl, host_user, project, host_email,
+                f"Avbokat: {title}", _cancellation_body(title, when), _confirmed=True,
+            )
+    except Exception:
+        logger.exception("booking cancellation email failed for project=%s slug-host=%s", project, link.get("user"))
+
+
+async def booking_manage_get(request: Request) -> JSONResponse:
+    """GET /booking/{token} — {status, meeting_end} for the booking the
+    token manages, or 404 if the token is unknown. Powers a "manage your
+    booking" page on jimlov.se; never exposes anything not already visible
+    to whoever holds the token. Deliberately doesn't re-fetch the calendar
+    event's own start/end — consent_store's meeting_end is already the
+    source of truth this route needs, and calendar_find_free/calendar_list
+    aren't shaped for "look up one specific event by id"."""
+    row = get_consent_store().get_by_manage_token(request.path_params["token"])
+    if row is None:
+        return _json(request, {"error": "not_found"}, status_code=404)
+    return _json(request, {"status": row["status"], "meeting_end": row["meeting_end"]})
+
+
+async def booking_reschedule(request: Request) -> JSONResponse:
+    """POST /booking/{token}/reschedule — {start, end}. The token is the
+    capability (card 8056150d) — no turnstile, but still IP rate-limited."""
+    client_ip = _client_ip(request)
+    if not _rate_limiter().check(f"booking-manage:{client_ip}", limit=10, window_s=60):
+        return _json(request, {"error": "rate_limited"}, status_code=429)
+
+    row = get_consent_store().get_by_manage_token(request.path_params["token"])
+    if row is None:
+        return _json(request, {"error": "not_found"}, status_code=404)
+    if row["status"] == "cancelled":
+        return _json(request, {"error": "already_cancelled"}, status_code=409)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return _json(request, {"error": "invalid_body"}, status_code=400)
+
+    start = _parse_dt(str(body.get("start") or ""))
+    end = _parse_dt(str(body.get("end") or ""))
+    if start is None or end is None or end <= start:
+        return _json(request, {"error": "invalid_body"}, status_code=400)
+    duration = end - start
+    if not (timedelta(minutes=_MIN_DURATION_MIN) <= duration <= timedelta(minutes=_MAX_DURATION_MIN)):
+        return _json(request, {"error": "invalid_duration"}, status_code=400)
+
+    link = get_link(row["slug"]) if row["slug"] else None
+    if link is None:
+        return _json(request, {"error": "not_found"}, status_code=404)
+
+    acl = _get_acl()
+    project, host_user, event_id = row["project"], row["host_user"], row["event_id"]
+    try:
+        dav = _resolve_dav(project, host_user)
+    except CalendarAuthRequired:
+        return _json(request, {"error": "not_found"}, status_code=404)
+
+    with _BOOKING_LOCKS[(project, host_user)]:
+        # Same TOCTOU re-check booking_create does — a reschedule races
+        # other bookers for the new window exactly like a fresh booking.
+        still_free = t_cal.calendar_find_free(
+            acl, host_user, project, int(duration.total_seconds() // 60),
+            start.isoformat(), (end + timedelta(minutes=1)).isoformat(), _dav=dav,
+            _exclude_event_id=event_id,
+        )
+
+        def _covers(s: dict) -> bool:
+            s_start, s_end = _parse_dt(s.get("start", "")), _parse_dt(s.get("end", ""))
+            if s_start is None or s_end is None:
+                return False
+            return s_start <= start and s_end >= end
+
+        if not any(_covers(s) for s in still_free):
+            return _json(request, {"error": "slot_unavailable"}, status_code=409)
+
+        event = t_cal.calendar_update(
+            acl, host_user, project, event_id,
+            start=start.isoformat(), end=end.isoformat(),
+            _dav=dav, _confirmed=True,
+        )
+
+    get_consent_store().update_booking(
+        row["id"], event_id=event_id, meeting_end=int(end.timestamp()), status="rescheduled",
+    )
+    title = event.get("title") or link.get("title_template", "Möte")
+    _send_reschedule_emails(acl, project, link, title, event, row["visitor_email"], start, end, request.path_params["token"])
+    return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
+
+
+async def booking_cancel(request: Request) -> JSONResponse:
+    """POST /booking/{token}/cancel — the token is the capability."""
+    client_ip = _client_ip(request)
+    if not _rate_limiter().check(f"booking-manage:{client_ip}", limit=10, window_s=60):
+        return _json(request, {"error": "rate_limited"}, status_code=429)
+
+    row = get_consent_store().get_by_manage_token(request.path_params["token"])
+    if row is None:
+        return _json(request, {"error": "not_found"}, status_code=404)
+    if row["status"] == "cancelled":
+        return _json(request, {"error": "already_cancelled"}, status_code=409)
+
+    link = get_link(row["slug"]) if row["slug"] else None
+    project, host_user, event_id = row["project"], row["host_user"], row["event_id"]
+    acl = _get_acl()
+
+    if event_id:
+        try:
+            dav = _resolve_dav(project, host_user)
+            try:
+                t_cal.calendar_delete(acl, host_user, project, event_id, _dav=dav)
+            except FileNotFoundError:
+                # Already gone (host deleted it manually) — nothing left to
+                # delete, same reasoning as purge.py.
+                pass
+        except CalendarAuthRequired:
+            # Host revoked calendar access — nothing left to delete via
+            # that adapter, still cancel the booking record below.
+            pass
+
+    get_consent_store().update_booking(row["id"], event_id=event_id, meeting_end=row["meeting_end"], status="cancelled")
+
+    if link is not None:
+        title = link.get("title_template", "Möte")
+        when = _format_dt(datetime.fromtimestamp(row["meeting_end"], tz=timezone.utc), link.get("host_timezone"))
+        _send_cancellation_emails(acl, project, link, title, row["visitor_email"], when)
+    return _json(request, {"ok": True})
 
 
 async def booking_options(request: Request) -> Response:
@@ -390,4 +605,10 @@ booking_routes = [
     Route("/book/{slug}/slots", booking_options, methods=["OPTIONS"]),
     Route("/book/{slug}", booking_create, methods=["POST"]),
     Route("/book/{slug}", booking_options, methods=["OPTIONS"]),
+    Route("/booking/{token}", booking_manage_get, methods=["GET"]),
+    Route("/booking/{token}", booking_options, methods=["OPTIONS"]),
+    Route("/booking/{token}/reschedule", booking_reschedule, methods=["POST"]),
+    Route("/booking/{token}/reschedule", booking_options, methods=["OPTIONS"]),
+    Route("/booking/{token}/cancel", booking_cancel, methods=["POST"]),
+    Route("/booking/{token}/cancel", booking_options, methods=["OPTIONS"]),
 ]

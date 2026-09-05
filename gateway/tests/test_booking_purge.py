@@ -31,7 +31,7 @@ def test_due_excludes_recent_meetings(store):
 
 
 def test_due_includes_meetings_past_one_year(store):
-    row_id = store.record(
+    row_id, _ = store.record(
         project="proj", host_user="alice", event_id="ev1", visitor_email="bob@example.com",
         consent_text="ok", consent_at=_epoch(2025, 1, 1), meeting_end=_epoch(2025, 1, 1),
     )
@@ -41,7 +41,7 @@ def test_due_includes_meetings_past_one_year(store):
 
 
 def test_mark_purged_scrubs_email_but_keeps_row(store):
-    row_id = store.record(
+    row_id, _ = store.record(
         project="proj", host_user="alice", event_id="ev1", visitor_email="bob@example.com",
         consent_text="Jag samtycker.", consent_at=_epoch(2025, 1, 1), meeting_end=_epoch(2025, 1, 1),
     )
