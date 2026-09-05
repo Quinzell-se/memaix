@@ -88,14 +88,24 @@ def test_login_page_next_param_open_redirect_guard(page):
     assert "evil.example.com" not in page.url
 
 
-def test_shell_renders_dark_with_sidebar(alice_page):
+def test_shell_renders_light_with_sidebar(alice_page):
     page = alice_page
     page.goto("/app")
     expect(page.locator(".sidebar")).to_be_visible()
     expect(page.locator("#user-badge")).to_contain_text("alice")
-    # Dark theme actually applied (design token on <body>).
+    # Light is the default — deliberately not the OS prefers-color-scheme,
+    # which used to hand a night-time visitor a dark shell after a light login.
     bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
-    assert bg == "rgb(15, 17, 23)"  # --bg: #0f1117
+    assert bg == "rgb(255, 253, 247)"  # --bg: #fffdf7
+
+
+def test_theme_toggle_switches_to_dark(alice_page):
+    page = alice_page
+    page.goto("/app")
+    page.click("#theme-btn")
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    assert bg == "rgb(28, 25, 23)"  # --bg: #1c1917
 
 
 def test_sidebar_collapse_persists_via_localstorage(alice_page):
