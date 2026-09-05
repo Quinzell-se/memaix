@@ -66,6 +66,16 @@ class ConsentStore:
                 "ALTER TABLE booking_consent ADD COLUMN slug TEXT",
                 "ALTER TABLE booking_consent ADD COLUMN manage_token TEXT",
                 "ALTER TABLE booking_consent ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'",
+                # Additive migration for card ecffcb5b (reminders). meeting_start
+                # is nullable: rows written before this migration have none, and
+                # reminders.py treats a NULL start as "can't schedule, skip" —
+                # those bookings simply predate the feature. reminders_sent is a
+                # comma-joined set of offsets (minutes) already dispatched, e.g.
+                # "1440,60" — the durable idempotency ledger reminders.py claims
+                # against before sending, so a reminder never double-fires across
+                # restarts or overlapping ticks.
+                "ALTER TABLE booking_consent ADD COLUMN meeting_start INTEGER",
+                "ALTER TABLE booking_consent ADD COLUMN reminders_sent TEXT NOT NULL DEFAULT ''",
             ):
                 try:
                     conn.execute(ddl)
@@ -74,6 +84,11 @@ class ConsentStore:
             conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_consent_manage_token "
                 "ON booking_consent(manage_token) WHERE manage_token IS NOT NULL"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reminder_due "
+                "ON booking_consent(meeting_start) "
+                "WHERE purged_at IS NULL AND status != 'cancelled'"
             )
             conn.commit()
 
@@ -94,6 +109,7 @@ class ConsentStore:
         consent_at: int,
         meeting_end: int,
         slug: str | None = None,
+        meeting_start: int | None = None,
     ) -> tuple[str, str]:
         """Returns (row_id, manage_token). manage_token is the capability a
         booker or host later presents to /booking/{token}/... to reschedule
@@ -104,10 +120,10 @@ class ConsentStore:
             conn.execute(
                 "INSERT INTO booking_consent "
                 "(id, project, host_user, event_id, visitor_email, consent_text, "
-                " consent_at, meeting_end, purged_at, slug, manage_token, status) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 'confirmed')",
+                " consent_at, meeting_end, purged_at, slug, manage_token, status, meeting_start) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 'confirmed', ?)",
                 (row_id, project, host_user, event_id, visitor_email, consent_text,
-                 consent_at, meeting_end, slug, manage_token),
+                 consent_at, meeting_end, slug, manage_token, meeting_start),
             )
             conn.commit()
         return row_id, manage_token
@@ -115,23 +131,76 @@ class ConsentStore:
     def get_by_manage_token(self, manage_token: str) -> dict | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
-                "SELECT id, project, host_user, event_id, visitor_email, slug, status, meeting_end "
-                "FROM booking_consent WHERE manage_token = ?",
+                "SELECT id, project, host_user, event_id, visitor_email, slug, status, "
+                "meeting_start, meeting_end FROM booking_consent WHERE manage_token = ?",
                 (manage_token,),
             ).fetchone()
         return dict(row) if row else None
 
-    def update_booking(self, row_id: str, *, event_id: str | None, meeting_end: int, status: str) -> None:
-        """Reschedule moves meeting_end (purge.py's due() keys off it) and
-        may keep the same event_id (an in-place calendar_update) or a new
-        one; cancel just flips status so a cancelled booking can't be
-        rescheduled later."""
+    def update_booking(
+        self, row_id: str, *, event_id: str | None, meeting_start: int | None, meeting_end: int, status: str,
+    ) -> None:
+        """Reschedule moves meeting_start/meeting_end (purge.py's due() and
+        reminders.py's reminders_due() key off meeting_end/meeting_start
+        respectively) and may keep the same event_id (an in-place
+        calendar_update) or a new one; cancel just flips status so a
+        cancelled booking can't be rescheduled later.
+
+        reminders_sent is reset to '' on every call: a reschedule invalidates
+        any reminder already fired for the old time (the new time needs its
+        own fresh 24h/60min reminders), and a cancel takes the row out of
+        reminders_due() entirely via its 'status != cancelled' predicate, so
+        the reset there is inert but harmless."""
         with self._lock, self._connect() as conn:
             conn.execute(
-                "UPDATE booking_consent SET event_id = ?, meeting_end = ?, status = ? WHERE id = ?",
-                (event_id, meeting_end, status, row_id),
+                "UPDATE booking_consent SET event_id = ?, meeting_start = ?, meeting_end = ?, "
+                "status = ?, reminders_sent = '' WHERE id = ?",
+                (event_id, meeting_start, meeting_end, status, row_id),
             )
             conn.commit()
+
+    def reminders_due(self, now_epoch: int, offsets_min: tuple[int, ...]) -> list[dict]:
+        """Rows with a future-or-recent meeting_start that haven't been
+        purged or cancelled. Coarse SQL filter only — reminders.due_offsets()
+        does the per-offset "is this one due and unsent" decision in Python,
+        same split as purge_due()/store.due()."""
+        max_offset = max(offsets_min) if offsets_min else 0
+        # Rows whose meeting started more than max_offset+1 day ago can never
+        # have a still-due reminder — narrows the scan without affecting
+        # correctness (due_offsets() re-checks precisely against now_epoch).
+        floor = now_epoch - (max_offset + 1440) * 60
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, project, host_user, event_id, visitor_email, slug, "
+                "manage_token, meeting_start, meeting_end, reminders_sent FROM booking_consent "
+                "WHERE meeting_start IS NOT NULL AND meeting_start > ? "
+                "AND purged_at IS NULL AND status != 'cancelled'",
+                (floor,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_reminder_sent(self, row_id: str, offset_min: int) -> bool:
+        """Append offset_min to reminders_sent if not already present.
+        Returns True if this call added it (caller should send), False if
+        another tick/worker already claimed it (caller should skip). The
+        check-and-append happens under self._lock so it's a real claim, same
+        principle as notify/scheduler.py's claim()."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT reminders_sent FROM booking_consent WHERE id = ?", (row_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            sent = {s for s in row["reminders_sent"].split(",") if s}
+            if str(offset_min) in sent:
+                return False
+            sent.add(str(offset_min))
+            conn.execute(
+                "UPDATE booking_consent SET reminders_sent = ? WHERE id = ?",
+                (",".join(sorted(sent, key=int)), row_id),
+            )
+            conn.commit()
+            return True
 
     def due(self, now_epoch: int, retention_days: int = RETENTION_DAYS) -> list[dict]:
         """Rows whose meeting ended more than *retention_days* ago and
