@@ -34,7 +34,10 @@ class _MockDav:
     find_events = list_events
 
     def create_event(self, uid, title, start, end, attendees=None, location=None, description=None):
-        ev = {"id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(), "description": description}
+        ev = {
+            "id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(),
+            "description": description, "location": location,
+        }
         self._events.append(ev)
         return ev
 
@@ -641,3 +644,232 @@ def test_confirmation_email_includes_manage_link(rig_with_store):
     for msg in client.smtp.sent:
         body = msg.get_body(preferencelist=("plain",)).get_content()
         assert token in body
+
+
+# --- Meeting forms — memaix-src card 85854d2c -------------------------------
+
+
+class _MockDavWithMeet(_MockDav):
+    """Same as _MockDav but honours want_conference, mirroring the real
+    Google Calendar adapter's conferenceData handling (tools/calendar.py's
+    _to_dict) closely enough for booking_create's google_meet path."""
+
+    def create_event(self, uid, title, start, end, attendees=None, location=None, description=None, want_conference=False):
+        ev = {
+            "id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(),
+            "description": description, "location": location,
+        }
+        if want_conference:
+            ev["meet_url"] = f"https://meet.google.com/{uid}"
+        self._events.append(ev)
+        return ev
+
+
+def _set_forms(acl, project, user, forms):
+    from memaix_gateway.connectors.meeting_forms import MeetingFormsStore
+
+    return MeetingFormsStore(acl, project, user).set(forms)
+
+
+def test_create_booking_with_no_forms_configured_is_unchanged(rig):
+    # Pure backward-compat: a host who never touched meeting forms sees
+    # identical behaviour to before this card — no location set, no error.
+    client, dav = rig
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(21).isoformat(), "end": _dt(21, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(21).isoformat())
+    assert ev.get("location") is None
+
+
+def test_create_booking_auto_selects_default_phone_form(rig):
+    client, dav = rig
+    from memaix_gateway import server as server_mod
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "phone", "provider": "phone", "label": "Ring oss", "config": {"phone_number": "+46701234567"}},
+    ])
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(22).isoformat(), "end": _dt(22, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(22).isoformat())
+    assert ev["description"] is None  # sanity: purpose untouched by the form
+
+
+def test_create_booking_phone_form_ends_up_in_calendar_location_with_no_http_call(rig, monkeypatch):
+    client, dav = rig
+    from memaix_gateway import server as server_mod
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "phone", "provider": "phone", "label": "Ring oss", "config": {"phone_number": "+46701234567"}},
+    ])
+
+    def _boom(*a, **kw):
+        raise AssertionError("phone form must never make an HTTP call")
+
+    monkeypatch.setattr("requests.post", _boom)
+    monkeypatch.setattr("requests.patch", _boom)
+    monkeypatch.setattr("requests.delete", _boom)
+
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(23).isoformat(), "end": _dt(23, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "meeting_form_slug": "phone",
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(23).isoformat())
+    assert ev["location"] == "+46701234567"
+
+
+def test_create_booking_explicit_valid_slug_selects_that_form(rig):
+    client, dav = rig
+    from memaix_gateway import server as server_mod
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "phone", "provider": "phone", "label": "Ring oss", "config": {"phone_number": "+46701234567"}, "default": True},
+        {"slug": "phone2", "provider": "phone", "label": "Ring oss 2", "config": {"phone_number": "+46709999999"}},
+    ])
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(0).isoformat(), "end": _dt(0, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "meeting_form_slug": "phone2",
+        },
+    )
+    assert resp.status_code == 200
+
+
+def test_create_booking_invalid_meeting_form_slug_is_400(rig):
+    client, dav = rig
+    from memaix_gateway import server as server_mod
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "phone", "provider": "phone", "label": "Ring oss", "config": {"phone_number": "+46701234567"}},
+    ])
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(1).isoformat(), "end": _dt(1, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "meeting_form_slug": "does-not-exist",
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_meeting_form"
+
+
+def test_create_booking_provider_error_surfaces_as_502(rig, monkeypatch):
+    client, dav = rig
+    from memaix_gateway import server as server_mod
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "zoomform", "provider": "zoom", "label": "Zoom"},
+    ])
+
+    import memaix_gateway.booking.routes as booking_routes_mod
+    from memaix_gateway.booking.meeting_providers import MeetingProviderError
+
+    def _boom(*a, **kw):
+        raise MeetingProviderError("zoom not configured for this deployment")
+
+    monkeypatch.setattr(booking_routes_mod, "resolve_meeting_detail", _boom)
+
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(2).isoformat(), "end": _dt(2, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "meeting_form_slug": "zoomform",
+        },
+    )
+    assert resp.status_code == 502
+    assert resp.json()["error"] == "meeting_form_unavailable"
+    assert not any(e["start"] == _dt(2).isoformat() for e in dav._events)
+
+
+def test_create_booking_google_meet_form_resolves_after_calendar_create(rig, monkeypatch):
+    from memaix_gateway import server as server_mod
+
+    dav = _MockDavWithMeet()
+    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    client, _old_dav = rig
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "meet", "provider": "google_meet", "label": "Google Meet"},
+    ])
+
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(3).isoformat(), "end": _dt(3, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
+        },
+    )
+    assert resp.status_code == 200
+    ev = next(e for e in dav._events if e["start"] == _dt(3).isoformat())
+    assert ev.get("meet_url", "").startswith("https://meet.google.com/")
+
+
+def test_create_booking_google_meet_missing_meet_url_rolls_back_event(rig, monkeypatch):
+    # conferenceData provisioning can fail on Google's side even though
+    # calendar_create itself succeeds — the event comes back with no
+    # meet_url, MeetingProviderError fires, and the handler must not leave
+    # an orphaned event (visitor invited, no consent record) behind.
+    from memaix_gateway import server as server_mod
+
+    class _MockDavMeetProvisionFails(_MockDav):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.deleted_ids: list = []
+
+        def create_event(self, uid, title, start, end, attendees=None, location=None, description=None, want_conference=False):
+            ev = {
+                "id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(),
+                "description": description, "location": location,
+            }
+            # want_conference is honoured but no meet_url key is set — this
+            # mirrors Google returning an event with no conferenceData.
+            self._events.append(ev)
+            return ev
+
+        def delete_event(self, id):
+            self.deleted_ids.append(id)
+            super().delete_event(id)
+
+    dav = _MockDavMeetProvisionFails()
+    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    client, _old_dav = rig
+
+    _set_forms(server_mod._acl, "proj", "alice", [
+        {"slug": "meet", "provider": "google_meet", "label": "Google Meet"},
+    ])
+
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(4).isoformat(), "end": _dt(4, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True,
+        },
+    )
+    assert resp.status_code == 502
+    assert resp.json()["error"] == "meeting_form_unavailable"
+    assert not any(e["start"] == _dt(4).isoformat() for e in dav._events)
+    assert len(dav.deleted_ids) == 1

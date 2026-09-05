@@ -61,9 +61,9 @@ class _PerUserGoogleAdapter:
         r.raise_for_status()
         return r.json()
 
-    def _post(self, path: str, body: dict) -> dict:
+    def _post(self, path: str, body: dict, **params) -> dict:
         import requests
-        r = requests.post(f"{self._BASE}{path}", headers=self._headers(), json=body, timeout=10)
+        r = requests.post(f"{self._BASE}{path}", headers=self._headers(), json=body, params=params, timeout=10)
         r.raise_for_status()
         return r.json()
 
@@ -104,6 +104,14 @@ class _PerUserGoogleAdapter:
             "is_exception": is_exception,
             # Google: transparency:"transparent" == Free, default "opaque" == Busy.
             "source_busy": item.get("transparency", "opaque") != "transparent",
+            # memaix-src card 85854d2c — set only on a create_event(want_conference=True)
+            # response; entryPointType "video" is the Meet join link, Google also
+            # returns "more" entry points (phone dial-in, sip) we don't surface here.
+            "meet_url": next(
+                (ep.get("uri") for ep in item.get("conferenceData", {}).get("entryPoints", [])
+                 if ep.get("entryPointType") == "video"),
+                None,
+            ),
         }
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
@@ -127,6 +135,7 @@ class _PerUserGoogleAdapter:
         attendees: list[str] | None = None,
         location: str | None = None,
         description: str | None = None,
+        want_conference: bool = False,
     ) -> dict:
         body: dict = {
             "summary": title,
@@ -139,7 +148,18 @@ class _PerUserGoogleAdapter:
             body["description"] = description
         if attendees:
             body["attendees"] = [{"email": a} for a in attendees]
-        return self._to_dict(self._post("/calendars/primary/events", body))
+        params: dict = {}
+        if want_conference:
+            # requestId reuses the event uid we already generated —
+            # idempotent if this create is ever retried.
+            body["conferenceData"] = {
+                "createRequest": {
+                    "requestId": uid,
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                }
+            }
+            params["conferenceDataVersion"] = 1
+        return self._to_dict(self._post("/calendars/primary/events", body, **params))
 
     def update_event(self, id: str, **fields) -> dict:
         body: dict = {}
@@ -153,6 +173,11 @@ class _PerUserGoogleAdapter:
             body["start"] = {"dateTime": fields["start"], "timeZone": "UTC"}
         if "end" in fields:
             body["end"] = {"dateTime": fields["end"], "timeZone": "UTC"}
+        # want_conference is intentionally not handled here: Google keeps a
+        # PATCH's existing conferenceData untouched unless resent, so a
+        # reschedule of a google_meet booking retains its original Meet
+        # link without any extra work — verify this against Google's
+        # interactive API reference if a future report says otherwise.
         return self._to_dict(self._patch(f"/calendars/primary/events/{id}", body))
 
     def delete_event(self, id: str) -> None:
@@ -377,7 +402,11 @@ class _RealDavAdapter:
         attendees: list[str] | None = None,
         location: str | None = None,
         description: str | None = None,
+        want_conference: bool = False,
     ) -> dict:
+        # CalDAV has no conferenceData concept — accepted for duck-type
+        # compatibility with _PerUserGoogleAdapter and ignored.
+        del want_conference
         import vobject
         from vobject.icalendar import utc as vobject_utc
 
@@ -896,6 +925,41 @@ def calendar_meeting_type_delete(acl: Acl, user_id: str, project: str, slug: str
     return {"ok": True, "types": remaining}
 
 
+def calendar_meeting_form_list(acl: Acl, user_id: str, project: str) -> list[dict]:
+    """The host's enabled meeting forms (video/phone options offered at
+    booking time) — card 85854d2c. [] if never configured, which
+    booking_create treats as "feature off, old behaviour"."""
+    acl.enforce(user_id, project, "reader")
+    from ..connectors.meeting_forms import MeetingFormsStore
+
+    return MeetingFormsStore(acl, project, user_id).get()
+
+
+def calendar_meeting_form_set(acl: Acl, user_id: str, project: str, forms: list[dict]) -> dict:
+    """Replace the full list of enabled meeting forms — card 85854d2c.
+    Each form needs slug, provider (google_meet/zoom/phone) and label; a
+    phone form also needs config.phone_number. At most one form may be
+    marked default; if none is, the first is auto-promoted."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.meeting_forms import MeetingFormsStore
+
+    try:
+        normalized = MeetingFormsStore(acl, project, user_id).set(forms)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "forms": normalized}
+
+
+def calendar_meeting_form_delete(acl: Acl, user_id: str, project: str, slug: str) -> dict:
+    """Remove one meeting form by slug — card 85854d2c. A no-op if the
+    slug isn't present."""
+    acl.enforce(user_id, project, "collaborator")
+    from ..connectors.meeting_forms import MeetingFormsStore
+
+    remaining = MeetingFormsStore(acl, project, user_id).delete(slug)
+    return {"ok": True, "forms": remaining}
+
+
 def _maybe_queue(acl, user_id: str, project: str, tool: str, args: dict, *, _outbox, _cfg) -> dict | None:
     """Return a {"pending": ...} dict if this action should be queued, else None."""
     from ..outbox.policy import action_mode
@@ -921,12 +985,18 @@ def calendar_create(
     location: str | None = None,
     description: str | None = None,
     *,
+    want_conference: bool = False,
     _dav=None,
     _confirmed: bool = False,
     _outbox=None,
     _cfg: dict | None = None,
 ) -> dict:
     """Create an event.  Returns {id, title, start, end}.
+
+    want_conference=True (memaix-src card 85854d2c) asks the adapter to
+    auto-generate a video-conference link (Google Meet only today — other
+    adapters silently ignore it, no conferenceData concept exists for
+    CalDAV/iCal/FreeBusy). The returned dict then carries a "meet_url" key.
 
     Queued for approval instead of created when the outbox policy resolves
     to 'review' (see module docstring) — unless _confirmed=True.
@@ -947,7 +1017,11 @@ def calendar_create(
 
     uid = _uuid.uuid4().hex
     dav = _get_dav(acl, project, _dav)
-    return dav.create_event(uid, title, start_dt, end_dt, attendees, location, description)
+    # Only pass want_conference through when set — keeps every existing
+    # caller/test fake (whose create_event doesn't know this kwarg) working
+    # unchanged, since the default path never sends it at all.
+    extra = {"want_conference": True} if want_conference else {}
+    return dav.create_event(uid, title, start_dt, end_dt, attendees, location, description, **extra)
 
 
 def calendar_update(

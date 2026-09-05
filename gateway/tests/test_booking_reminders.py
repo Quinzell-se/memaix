@@ -80,6 +80,42 @@ def test_booking_made_inside_offset_window_skips_stale_offset_only():
     assert set(stale_offsets(meeting_start, set(), now)) == {1440, 60}
 
 
+# --- _format_meeting_detail_line (pure) ---------------------------------
+
+
+def test_format_meeting_detail_line_google_meet():
+    from memaix_gateway.booking.routes import _format_meeting_detail_line
+
+    line = _format_meeting_detail_line("google_meet", "https://meet.google.com/abc-defg-hij")
+    assert line == "Google Meet: https://meet.google.com/abc-defg-hij"
+
+
+def test_format_meeting_detail_line_zoom():
+    from memaix_gateway.booking.routes import _format_meeting_detail_line
+
+    line = _format_meeting_detail_line("zoom", "https://zoom.us/j/111")
+    assert line == "Zoom: https://zoom.us/j/111"
+
+
+def test_format_meeting_detail_line_phone():
+    from memaix_gateway.booking.routes import _format_meeting_detail_line
+
+    line = _format_meeting_detail_line("phone", "+46701234567")
+    assert line == "Ring: +46701234567"
+
+
+def test_format_meeting_detail_line_none_when_provider_missing():
+    from memaix_gateway.booking.routes import _format_meeting_detail_line
+
+    assert _format_meeting_detail_line(None, "https://meet.google.com/abc-defg-hij") is None
+
+
+def test_format_meeting_detail_line_none_when_detail_missing():
+    from memaix_gateway.booking.routes import _format_meeting_detail_line
+
+    assert _format_meeting_detail_line("google_meet", None) is None
+
+
 # --- ConsentStore reminder plumbing -------------------------------------
 
 
@@ -187,6 +223,52 @@ def test_send_due_reminders_skips_when_link_unknown(store, monkeypatch):
     # can still send it — this is what catches a claim-before-send ordering
     # regression, not just the count.
     assert store.mark_reminder_sent(row_id, 1440) is True
+
+
+def test_send_due_reminders_renders_meeting_detail_line_when_set(store, monkeypatch):
+    row_id, token = store.record(
+        project="proj", host_user="alice", event_id="ev1", visitor_email="bob@example.com",
+        consent_text="ok", consent_at=_epoch(2026, 1, 1), meeting_end=_epoch(2026, 1, 2, 9, 30),
+        meeting_start=_epoch(2026, 1, 2, 9, 0), slug="alice-30",
+        meeting_form_slug="video", meeting_form_provider="google_meet",
+        meeting_form_detail="https://meet.google.com/abc-defg-hij",
+    )
+
+    calls = []
+    import memaix_gateway.booking.routes as routes_mod
+    monkeypatch.setattr(routes_mod, "_send_reminder_email", lambda *a, **kw: calls.append(a))
+
+    link = {"project": "proj", "user": "alice", "title_template": "Möte"}
+    now = datetime.fromtimestamp(_epoch(2026, 1, 1, 9, 0), tz=timezone.utc)  # exactly 24h before
+
+    count = send_due_reminders(store, _acl, lambda slug: link, now)
+
+    assert count == 1
+    assert len(calls) == 1
+    meeting_detail_line = calls[0][-1]
+    assert meeting_detail_line == "Google Meet: https://meet.google.com/abc-defg-hij"
+
+
+def test_send_due_reminders_renders_no_line_when_meeting_form_unset(store, monkeypatch):
+    row_id, token = store.record(
+        project="proj", host_user="alice", event_id="ev1", visitor_email="bob@example.com",
+        consent_text="ok", consent_at=_epoch(2026, 1, 1), meeting_end=_epoch(2026, 1, 2, 9, 30),
+        meeting_start=_epoch(2026, 1, 2, 9, 0), slug="alice-30",
+    )
+
+    calls = []
+    import memaix_gateway.booking.routes as routes_mod
+    monkeypatch.setattr(routes_mod, "_send_reminder_email", lambda *a, **kw: calls.append(a))
+
+    link = {"project": "proj", "user": "alice", "title_template": "Möte"}
+    now = datetime.fromtimestamp(_epoch(2026, 1, 1, 9, 0), tz=timezone.utc)  # exactly 24h before
+
+    count = send_due_reminders(store, _acl, lambda slug: link, now)
+
+    assert count == 1
+    assert len(calls) == 1
+    meeting_detail_line = calls[0][-1]
+    assert meeting_detail_line is None
 
 
 def test_send_due_reminders_leaves_offset_unclaimed_when_send_raises(store, monkeypatch):

@@ -78,6 +78,7 @@ from ..tools import email as t_email
 from ..tools.calendar import CalendarAuthRequired
 from .consent_store import get_consent_store
 from .links import get_link
+from .meeting_providers import MeetingProviderError, resolve_meeting_detail
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,7 @@ async def booking_create(request: Request) -> JSONResponse:
     name = str(body.get("name") or "").strip()
     email = str(body.get("email") or "").strip()
     purpose = str(body.get("purpose") or "").strip()[:_MAX_PURPOSE_LEN]
+    meeting_form_slug = str(body.get("meeting_form_slug") or "").strip() or None
     # Display-only: which IANA zone to render times in inside the
     # confirmation email. Never used for scheduling — start/end below stay
     # the authoritative UTC instants. Missing/invalid -> emails show UTC.
@@ -267,6 +269,21 @@ async def booking_create(request: Request) -> JSONResponse:
     enabled = t_cal.calendar_booking_enabled_get(acl, host_user, project)
     if not enabled.get("enabled"):
         return _json(request, {"error": "not_found"}, status_code=404)
+
+    # Meeting forms (card 85854d2c): an empty list means the host never
+    # configured any, which is identical to the pre-feature behaviour —
+    # skip all of this and book with no video/phone form attached.
+    forms = t_cal.calendar_meeting_form_list(acl, host_user, project)
+    meeting_form = None
+    if forms:
+        if meeting_form_slug:
+            meeting_form = next((f for f in forms if f["slug"] == meeting_form_slug), None)
+            if meeting_form is None:
+                return _json(request, {"error": "invalid_meeting_form"}, status_code=400)
+        else:
+            meeting_form = next((f for f in forms if f.get("default")), None)
+            if meeting_form is None:
+                return _json(request, {"error": "invalid_meeting_form"}, status_code=400)
 
     try:
         dav = _resolve_dav(project, host_user)
@@ -297,21 +314,83 @@ async def booking_create(request: Request) -> JSONResponse:
             return _json(request, {"error": "slot_unavailable"}, status_code=409)
 
         title = link.get("title_template", "Möte").format(name=name) if "{name}" in link.get("title_template", "") else link.get("title_template", "Möte")
+
+        meeting_detail = None
+        if meeting_form is not None and meeting_form["provider"] != "google_meet":
+            # Zoom/phone must resolve before calendar_create — the detail
+            # gets embedded in the event's location, unlike Google Meet
+            # whose link is a side effect of calendar_create itself.
+            try:
+                meeting_detail = resolve_meeting_detail(
+                    meeting_form["provider"], meeting_form.get("config") or {},
+                    acl, project, host_user, start=start, end=end, title=title,
+                )
+            except MeetingProviderError:
+                logger.exception(
+                    "meeting form resolution failed for project=%s host=%s slug=%s",
+                    project, host_user, meeting_form["slug"],
+                )
+                return _json(request, {"error": "meeting_form_unavailable"}, status_code=502)
+
         event = t_cal.calendar_create(
             acl, host_user, project, title,
             start.isoformat(), end.isoformat(),
-            attendees=[email], description=purpose or None, _dav=dav, _confirmed=True,
+            attendees=[email],
+            location=meeting_detail["join_url"] or meeting_detail["phone_number"] if meeting_detail else None,
+            description=purpose or None,
+            want_conference=bool(meeting_form is not None and meeting_form["provider"] == "google_meet"),
+            _dav=dav, _confirmed=True,
         )
+
+        if meeting_form is not None and meeting_form["provider"] == "google_meet":
+            try:
+                meeting_detail = resolve_meeting_detail(
+                    "google_meet", {}, acl, project, host_user,
+                    start=start, end=end, title=title, calendar_event=event,
+                )
+            except MeetingProviderError:
+                logger.exception(
+                    "meeting form resolution failed for project=%s host=%s slug=%s",
+                    project, host_user, meeting_form["slug"],
+                )
+                # Unlike Zoom/phone (which resolve before the event exists),
+                # calendar_create has already committed a Google event with
+                # the visitor invited by this point — leaving it in place on
+                # a 502 would silently book a real meeting with no Meet
+                # link and no consent record. Undo it so the failure is
+                # actually clean, same fail-closed guarantee as the Zoom
+                # path gets for free.
+                try:
+                    t_cal.calendar_delete(acl, host_user, project, event["id"], _dav=dav)
+                except Exception:
+                    logger.exception(
+                        "failed to roll back orphaned google_meet event=%s project=%s host=%s",
+                        event.get("id"), project, host_user,
+                    )
+                return _json(request, {"error": "meeting_form_unavailable"}, status_code=502)
+
+    meeting_form_slug_final = meeting_form["slug"] if meeting_form is not None else None
+    meeting_form_provider = meeting_form["provider"] if meeting_form is not None else None
+    meeting_detail_line = meeting_detail["display_text"] if meeting_detail is not None else None
+    meeting_form_detail = (
+        (meeting_detail["join_url"] or meeting_detail["phone_number"]) if meeting_detail is not None else None
+    )
+
     _row_id, manage_token = get_consent_store().record(
         project=project, host_user=host_user, event_id=event.get("id"),
         visitor_email=email, consent_text=consent_text,
         consent_at=int(time.time()), meeting_end=int(end.timestamp()),
         slug=request.path_params["slug"], meeting_start=int(start.timestamp()),
+        meeting_form_slug=meeting_form_slug_final, meeting_form_provider=meeting_form_provider,
+        meeting_form_detail=meeting_form_detail,
     )
     # Lock released above — the booking is already committed to the
     # calendar, so email delivery is not part of the race-critical section
     # and its latency must never hold up the next booker for this host.
-    _send_confirmation_emails(acl, project, link, title, event, name, email, purpose, start, end, visitor_tz, manage_token)
+    _send_confirmation_emails(
+        acl, project, link, title, event, name, email, purpose, start, end, visitor_tz, manage_token,
+        meeting_detail_line,
+    )
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
 
@@ -350,8 +429,13 @@ def _build_ics(uid: str, title: str, start: datetime, end: datetime, description
     return cal.serialize().encode("utf-8")
 
 
-def _confirmation_body(title: str, name: str, visitor_email: str, when: str, purpose: str, manage_url: str) -> str:
+def _confirmation_body(
+    title: str, name: str, visitor_email: str, when: str, purpose: str, manage_url: str,
+    meeting_detail_line: str | None = None,
+) -> str:
     lines = [f"Mötet är bokat: {title}", f"Tid: {when}"]
+    if meeting_detail_line:
+        lines.append(meeting_detail_line)
     if purpose:
         lines.append(f"Syfte: {purpose}")
     lines.append(f"Bokat av: {name} <{visitor_email}>")
@@ -360,18 +444,31 @@ def _confirmation_body(title: str, name: str, visitor_email: str, when: str, pur
     return "\n".join(lines)
 
 
-def _reschedule_body(title: str, when: str, manage_url: str) -> str:
+def _reschedule_body(title: str, when: str, manage_url: str, meeting_detail_line: str | None = None) -> str:
     lines = [
         f"Mötet är ombokat: {title}",
         f"Ny tid: {when}",
-        "En uppdaterad kalenderfil (.ics) är bifogad.",
-        f"Vill du boka om igen eller avboka? {manage_url}",
     ]
+    if meeting_detail_line:
+        lines.append(meeting_detail_line)
+    lines.append("En uppdaterad kalenderfil (.ics) är bifogad.")
+    lines.append(f"Vill du boka om igen eller avboka? {manage_url}")
     return "\n".join(lines)
 
 
 def _cancellation_body(title: str, when: str) -> str:
     return f"Mötet är avbokat: {title}\nTid som avbokades: {when}"
+
+
+def _format_meeting_detail_line(provider: str | None, detail: str | None) -> str | None:
+    """Rebuilds the same display line meeting_providers.py's MeetingDetail
+    produced at booking time, from the two columns consent_store persisted
+    — used by reschedule/reminders, which never re-resolve a provider
+    (see consent_store.py's migration comment for why)."""
+    if not provider or not detail:
+        return None
+    label = {"google_meet": "Google Meet", "zoom": "Zoom", "phone": "Ring"}.get(provider)
+    return f"{label}: {detail}" if label else None
 
 
 def _manage_url(manage_token: str) -> str:
@@ -384,7 +481,7 @@ def _send_confirmation_emails(
     acl, project: str, link: dict, title: str, event: dict,
     name: str, visitor_email: str, purpose: str,
     start: datetime, end: datetime, visitor_tz: str | None,
-    manage_token: str,
+    manage_token: str, meeting_detail_line: str | None = None,
 ) -> None:
     """Best-effort only. The booking already succeeded by the time this
     runs — a project with no mailbox/allow_send configured yet, or a
@@ -405,7 +502,10 @@ def _send_confirmation_emails(
         t_email.email_send(
             acl, host_user, project, visitor_email,
             f"Bekräftelse: {title}",
-            _confirmation_body(title, name, visitor_email, _format_dt(start, visitor_tz), purpose, manage_url),
+            _confirmation_body(
+                title, name, visitor_email, _format_dt(start, visitor_tz), purpose, manage_url,
+                meeting_detail_line,
+            ),
             attachment_filename="moete.ics", attachment_content=ics_bytes,
             _confirmed=True,
         )
@@ -415,7 +515,10 @@ def _send_confirmation_emails(
             t_email.email_send(
                 acl, host_user, project, host_email,
                 f"Ny bokning: {title}",
-                _confirmation_body(title, name, visitor_email, _format_dt(start, link.get("host_timezone")), purpose, manage_url),
+                _confirmation_body(
+                    title, name, visitor_email, _format_dt(start, link.get("host_timezone")), purpose, manage_url,
+                    meeting_detail_line,
+                ),
                 attachment_filename="moete.ics", attachment_content=ics_bytes,
                 _confirmed=True,
             )
@@ -424,7 +527,8 @@ def _send_confirmation_emails(
 
 
 def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: dict,
-                             visitor_email: str, start: datetime, end: datetime, manage_token: str) -> None:
+                             visitor_email: str, start: datetime, end: datetime, manage_token: str,
+                             meeting_detail_line: str | None = None) -> None:
     """Best-effort, same contract as _send_confirmation_emails."""
     try:
         host_user = link["user"]
@@ -437,7 +541,7 @@ def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: di
         t_email.email_send(
             acl, host_user, project, visitor_email,
             f"Ombokat: {title}",
-            _reschedule_body(title, _format_dt(start, None), manage_url),
+            _reschedule_body(title, _format_dt(start, None), manage_url, meeting_detail_line),
             attachment_filename="moete.ics", attachment_content=ics_bytes,
             _confirmed=True,
         )
@@ -446,7 +550,7 @@ def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: di
             t_email.email_send(
                 acl, host_user, project, host_email,
                 f"Ombokat: {title}",
-                _reschedule_body(title, _format_dt(start, link.get("host_timezone")), manage_url),
+                _reschedule_body(title, _format_dt(start, link.get("host_timezone")), manage_url, meeting_detail_line),
                 attachment_filename="moete.ics", attachment_content=ics_bytes,
                 _confirmed=True,
             )
@@ -474,21 +578,25 @@ def _send_cancellation_emails(acl, project: str, link: dict, title: str, visitor
         logger.exception("booking cancellation email failed for project=%s slug-host=%s", project, link.get("user"))
 
 
-def _reminder_body(title: str, when: str, offset_min: int, manage_url: str) -> str:
+def _reminder_body(
+    title: str, when: str, offset_min: int, manage_url: str, meeting_detail_line: str | None = None,
+) -> str:
     lead = "imorgon" if offset_min >= 1440 else "om en timme"
     lines = [
         f"Påminnelse: {title} börjar {lead}.",
         f"Tid: {when}",
-        "En kalenderfil (.ics) är bifogad.",
-        f"Behöver du boka om eller avboka? {manage_url}",
     ]
+    if meeting_detail_line:
+        lines.append(meeting_detail_line)
+    lines.append("En kalenderfil (.ics) är bifogad.")
+    lines.append(f"Behöver du boka om eller avboka? {manage_url}")
     return "\n".join(lines)
 
 
 def _send_reminder_email(
     acl, project: str, link: dict, title: str, event_id: str | None,
     visitor_email: str, meeting_start: datetime, meeting_end: datetime,
-    offset_min: int, manage_token: str,
+    offset_min: int, manage_token: str, meeting_detail_line: str | None = None,
 ) -> None:
     """Best-effort, same contract as _send_confirmation_emails. Called from
     reminders.py's send_due_reminders() — see that module for the
@@ -506,7 +614,7 @@ def _send_reminder_email(
         t_email.email_send(
             acl, host_user, project, visitor_email,
             f"Påminnelse: {title}",
-            _reminder_body(title, when, offset_min, manage_url),
+            _reminder_body(title, when, offset_min, manage_url, meeting_detail_line),
             attachment_filename="moete.ics", attachment_content=ics_bytes,
             _confirmed=True,
         )
@@ -515,7 +623,10 @@ def _send_reminder_email(
             t_email.email_send(
                 acl, host_user, project, host_email,
                 f"Påminnelse: {title}",
-                _reminder_body(title, _format_dt(meeting_start, link.get("host_timezone")), offset_min, manage_url),
+                _reminder_body(
+                    title, _format_dt(meeting_start, link.get("host_timezone")), offset_min, manage_url,
+                    meeting_detail_line,
+                ),
                 attachment_filename="moete.ics", attachment_content=ics_bytes,
                 _confirmed=True,
             )
@@ -604,8 +715,18 @@ async def booking_reschedule(request: Request) -> JSONResponse:
         row["id"], event_id=event_id, meeting_start=int(start.timestamp()),
         meeting_end=int(end.timestamp()), status="rescheduled",
     )
+
+    # The Zoom meeting itself isn't moved (no zoom meeting id is stored,
+    # only the resolved join_url — card 85854d2c's follow-up if this turns
+    # out to matter). Google Meet needs nothing: Google preserves
+    # conferenceData on a PATCH that doesn't touch it. Phone needs nothing.
+    # The stored link/number is still shown to the visitor either way.
     title = event.get("title") or link.get("title_template", "Möte")
-    _send_reschedule_emails(acl, project, link, title, event, row["visitor_email"], start, end, request.path_params["token"])
+    meeting_detail_line = _format_meeting_detail_line(row.get("meeting_form_provider"), row.get("meeting_form_detail"))
+    _send_reschedule_emails(
+        acl, project, link, title, event, row["visitor_email"], start, end, request.path_params["token"],
+        meeting_detail_line,
+    )
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
 
