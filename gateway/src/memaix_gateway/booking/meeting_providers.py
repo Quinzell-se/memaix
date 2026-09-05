@@ -20,13 +20,20 @@ location/description.
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Protocol, TypedDict
 
 
 class MeetingProviderError(Exception):
     """Raised when a provider fails to produce a meeting detail. Callers
     (booking_create) should treat this as fail-closed — never silently
     create a booking with no working video/phone info."""
+
+
+class _Provider(Protocol):
+    def resolve(
+        self, acl, project, host_user, form_config,
+        *, start, end, title, calendar_event=None,
+    ) -> "MeetingDetail": ...
 
 
 class MeetingDetail(TypedDict):
@@ -71,6 +78,8 @@ class _ZoomProvider:
             raise MeetingProviderError("zoom not configured for this deployment")
         try:
             secret = config.secret(cfg.get("client_secret_ref"))
+            if secret is None:
+                raise MeetingProviderError("zoom client_secret_ref did not resolve to a value")
             token = get_access_token(cfg["account_id"], cfg["client_id"], secret)
             duration_min = max(1, int((end - start).total_seconds() // 60))
             meeting = create_zoom_meeting(
@@ -88,7 +97,7 @@ class _ZoomProvider:
         )
 
 
-_PROVIDERS: dict[str, object] = {
+_PROVIDERS: dict[str, _Provider] = {
     "phone": _PhoneProvider(),
     "google_meet": _GoogleMeetProvider(),
     "zoom": _ZoomProvider(),
