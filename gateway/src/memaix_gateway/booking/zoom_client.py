@@ -19,7 +19,7 @@ shapes the same way.
 
 from __future__ import annotations
 
-_TOKEN_URL = "https://zoom.us/oauth/token"
+_TOKEN_URL = "https://zoom.us/oauth/token"  # nosec B105 -- a URL, not a credential
 _API_BASE = "https://api.zoom.us/v2"
 
 
