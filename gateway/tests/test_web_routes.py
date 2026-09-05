@@ -65,7 +65,9 @@ def test_static_css_has_design_tokens(rig):
     resp = client.get("/app/static/app.css")
     assert resp.status_code == 200
     assert "text/css" in resp.headers["content-type"]
-    assert "--bg:           #0f1117;" in resp.text
+    # Light is the default theme; dark is an opt-in override on the root.
+    assert "--bg:           #fffdf7;" in resp.text
+    assert '[data-theme="dark"]' in resp.text
     assert "--sidebar-w:    220px;" in resp.text
 
 
