@@ -45,8 +45,9 @@ for this card — see the card's design notes for why (no inbound calendar
 channel exists to observe that).
 
 CORS is scoped to these routes only (not the whole app), since jimlov.se
-is a static export with no server runtime and must call this gateway
-cross-origin.
+and memaix.se are static exports with no server runtime and must call
+this gateway cross-origin. Both front the same booking link — see
+_ALLOWED_ORIGINS.
 
 Reminders (card ecffcb5b): reminders.py's background loop sends a 24h and
 1h-before reminder for every pending booking, using the manage_token and
@@ -82,7 +83,15 @@ from .meeting_providers import MeetingProviderError, resolve_meeting_detail
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_ORIGINS = {"https://jimlov.se", "https://www.jimlov.se"}
+_ALLOWED_ORIGINS = {
+    "https://jimlov.se",
+    "https://www.jimlov.se",
+    # memaix.se/boka reaches the same host, the same calendar and the
+    # same booking link — only the chrome differs. A separate booking
+    # type would just be two ways to double-book one person.
+    "https://memaix.se",
+    "https://www.memaix.se",
+}
 _TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 _MIN_DURATION_MIN = 15
 _MAX_DURATION_MIN = 240
