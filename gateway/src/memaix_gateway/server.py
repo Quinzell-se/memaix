@@ -397,7 +397,8 @@ def _brief_tools_for_user() -> dict:
         msgs = []
         for ref in resp.get("messages", []):
             msg = svc.users().messages().get(
-                userId="me", id=ref["id"], format="minimal",
+                userId="me", id=ref["id"], format="metadata",
+                metadataHeaders=["Subject", "From"],
             ).execute()
             headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
             msgs.append({
