@@ -397,20 +397,61 @@ def _brief_tools_for_user() -> dict:
         msgs = []
         for ref in resp.get("messages", []):
             msg = svc.users().messages().get(
-                userId="me", id=ref["id"], format="metadata",
-                metadataHeaders=["Subject", "From"]
+                userId="me", id=ref["id"], format="minimal",
             ).execute()
             headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
             msgs.append({
                 "subject": headers.get("Subject", "(inget ämne)"),
                 "from": headers.get("From", ""),
                 "seen": "UNREAD" not in msg.get("labelIds", []),
+                "snippet": msg.get("snippet", ""),
             })
         return msgs
+
+    def _mail_triage(mails: list[dict]) -> list[dict]:
+        if not mails:
+            return mails
+        try:
+            from .llm import LLMClient
+            client = LLMClient.from_config(config.load())
+            lines = []
+            for i, m in enumerate(mails, 1):
+                lines.append(
+                    f"{i}. Från: {m.get('from', '')}\n"
+                    f"   Ämne: {m.get('subject', '(inget ämne)')}\n"
+                    f"   Förhandsgranskning: {m.get('snippet', '')}"
+                )
+            mail_text = "\n".join(lines)
+            prompt = (
+                "Utvärdera dessa e-postmeddelanden och svara med en JSON-array.\n"
+                'För varje mail: {"priority": "Hög"|"Medel"|"Låg", "summary": "1-2 meningar på svenska"}\n'
+                "\n"
+                "Prioritet Hög: säkerhetslarm, kräver omedelbar åtgärd, ekonomiskt kritiskt\n"
+                "Prioritet Medel: kräver svar eller åtgärd men inte brådskande\n"
+                "Prioritet Låg: information, reklam, nyhetsbrev, automatiska bekräftelser\n"
+                "\n"
+                "Mail:\n"
+                f"{mail_text}\n"
+                "\n"
+                "Svara ENBART med JSON-array utan markdown-kodblock, inga andra ord."
+            )
+            reply = client.complete(
+                [{"role": "user", "content": prompt}], max_tokens=1500
+            )
+            import json as _json
+            verdicts = _json.loads((reply.get("content") or "").strip())
+            for m, v in zip(mails, verdicts):
+                if isinstance(v, dict):
+                    m["priority"] = v.get("priority", "")
+                    m["summary"] = v.get("summary", "")
+            return mails
+        except Exception:
+            return mails
 
     return {
         "calendar_events": calendar_events,
         "email_list": _gmail_or_imap_list,
+        "mail_triage": _mail_triage,
         "backlog_list": t_backlog.backlog_list,
         "pm_raid_list": t_pm.pm_raid_list,
     }
