@@ -95,7 +95,7 @@ _ALLOWED_ORIGINS = {
 _TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 _MIN_DURATION_MIN = 15
 _MAX_DURATION_MIN = 240
-_MAX_WINDOW_DAYS = 30
+_MAX_WINDOW_DAYS = 90
 _MAX_PURPOSE_LEN = 500
 
 # Omsluter TOCTOU-omkollen + calendar_create per värd-användare. I dagens
@@ -157,8 +157,15 @@ def _parse_dt(value: str) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _clamp_window(start: datetime, end: datetime) -> tuple[datetime, datetime]:
+def _clamp_window(
+    start: datetime, end: datetime, max_days_ahead: int | None = None
+) -> tuple[datetime, datetime]:
     cap = start + timedelta(days=_MAX_WINDOW_DAYS)
+    if max_days_ahead is not None:
+        start_of_today = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        cap = min(cap, start_of_today + timedelta(days=max_days_ahead))
     return start, min(end, cap)
 
 
@@ -213,7 +220,9 @@ async def booking_slots(request: Request) -> JSONResponse:
     within_end = _parse_dt(q.get("within_end", ""))
     if within_start is None or within_end is None or within_end <= within_start:
         return _json(request, {"error": "invalid_window"}, status_code=400)
-    within_start, within_end = _clamp_window(within_start, within_end)
+    within_start, within_end = _clamp_window(
+        within_start, within_end, link.get("max_days_ahead")
+    )
 
     try:
         dav = _resolve_dav(project, host_user)

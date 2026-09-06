@@ -537,12 +537,20 @@ def calendar_find_free(
     here — tracked as a separate risk, not this card's scope.
     """
     acl.enforce(user_id, project, "collaborator")
-    ws = _parse_dt(within_start)
-    we = _parse_dt(within_end)
+    # All datetimes are normalised to tz-aware UTC via to_utc before any
+    # comparison below. within_* strings may carry an offset (e.g. a "Z"
+    # suffix -> aware) while adapter event start/end may be naive; mixing
+    # the two raises "can't compare offset-naive and offset-aware
+    # datetimes". Mirrors calendar_free_busy, which already routes every
+    # datetime through to_utc.
+    from ..connectors.aggregate import to_utc
+
+    ws = to_utc(_parse_dt(within_start))
+    we = to_utc(_parse_dt(within_end))
     duration = timedelta(minutes=duration_min)
     dav = _get_dav(acl, project, _dav)
 
-    busy = sorted(dav.find_events(ws, we), key=lambda e: e["start"])
+    busy = sorted(dav.find_events(ws, we), key=lambda e: to_utc(e["start"]))
     if _exclude_event_id is not None:
         busy = [e for e in busy if e.get("id") != _exclude_event_id]
 
@@ -550,8 +558,8 @@ def calendar_find_free(
     free: list[dict] = []
     cursor = ws
     for ev in busy:
-        ev_start = _parse_dt(ev["start"]) if isinstance(ev["start"], str) else ev["start"]
-        ev_end = _parse_dt(ev["end"]) if isinstance(ev["end"], str) else ev["end"]
+        ev_start = to_utc(ev["start"])
+        ev_end = to_utc(ev["end"])
         if ev_start > cursor + duration:
             free.append({"start": cursor.isoformat(), "end": ev_start.isoformat()})
         if ev_end > cursor:
