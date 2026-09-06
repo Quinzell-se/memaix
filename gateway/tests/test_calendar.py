@@ -265,6 +265,31 @@ def test_calendar_find_free_returns_slots(acl, dav):
         assert "end" in s
 
 
+def test_calendar_find_free_mixed_naive_and_aware_datetimes(acl):
+    """Regression: within_* strings carrying an offset (aware) compared
+    against adapter events with no offset (naive) raised "can't compare
+    offset-naive and offset-aware datetimes" and crashed calendar_find_free
+    (and, via booking_slots, surfaced as a broken public /book/<slug>/slots).
+    All datetimes must be normalised to tz-aware UTC before comparison."""
+    dav_naive = _MockDav(
+        [
+            # No timezone offset -> datetime.fromisoformat() yields naive.
+            {"id": "ev-naive", "title": "x",
+             "start": "2024-06-03T09:00:00", "end": "2024-06-03T09:30:00"},
+        ]
+    )
+    # within_* carry a "Z"/offset -> aware. Mixing the two used to crash.
+    slots = calendar_find_free(
+        acl, "carol", "proj",
+        duration_min=30,
+        within_start="2024-06-03T08:00:00+00:00",
+        within_end="2024-06-03T18:00:00+00:00",
+        _dav=dav_naive,
+    )
+    assert isinstance(slots, list)
+    assert len(slots) >= 1
+
+
 def test_calendar_find_free_never_leaks_event_details(acl):
     # memaix-src card de858332 — the external booking view must only ever
     # see whether a slot is free, never what the busy event actually was
