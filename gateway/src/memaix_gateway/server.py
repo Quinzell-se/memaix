@@ -42,7 +42,14 @@ from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools import pm_engine as t_pm_engine
 from .tools import whoami as t_whoami
-from .tools.calendar import CalendarAuthRequired, _FreeBusyAdapter, _ICalAdapter, _PerUserGoogleAdapter
+from .tools.calendar import (
+    CalendarAuthRequired,
+    _FreeBusyAdapter,
+    _ICalAdapter,
+    _MultiCalendarAdapter,
+    _PerUserGoogleAdapter,
+    _ServiceAccountGoogleCalendarAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2400,6 +2407,45 @@ def _resolve_calendar_dav(project: str, user: str):
     public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "")
     all_accounts = store.list_accounts(user)
 
+    # 0. Service account (domain-wide delegation) — merged with the normal
+    # per-user adapter when both resolve, so the SA's org calendars appear
+    # alongside whatever the user has linked. Runs before OAuth on purpose.
+    sa_res = acl.resource(project, "calendar_sa")
+    if isinstance(sa_res, dict) and sa_res.get("auth") == "service_account":
+        import json
+        import os
+        ref = sa_res["service_account_ref"]
+        if ref.startswith("env:"):
+            env_var = ref[4:]
+            sa_json = os.environ.get(env_var, "")
+            if not sa_json:
+                raise ValueError(f"Env-var {env_var} saknas för SA-kalender")
+            sa_info = json.loads(sa_json)
+        elif ref.startswith("file:"):
+            with open(ref[5:]) as f:
+                sa_info = json.load(f)
+        else:
+            raise ValueError(f"Okänd service_account_ref: {ref}")
+        sa_adapter = _ServiceAccountGoogleCalendarAdapter(sa_info, sa_res["impersonate"])
+        normal_adapter = None
+        try:
+            normal_adapter = _resolve_normal_calendar_dav(
+                acl, cfg, store, project, user, all_accounts, require_per_user, public_url
+            )
+        except CalendarAuthRequired:
+            normal_adapter = None
+        if normal_adapter is not None:
+            return _MultiCalendarAdapter([sa_adapter, normal_adapter])
+        return sa_adapter
+
+    return _resolve_normal_calendar_dav(
+        acl, cfg, store, project, user, all_accounts, require_per_user, public_url
+    )
+
+
+def _resolve_normal_calendar_dav(
+    acl, cfg, store, project, user, all_accounts, require_per_user, public_url
+):
     # 1. OAuth (Google)
     google_accounts = [a for a in all_accounts if a["provider"] == "google"]
     if google_accounts:

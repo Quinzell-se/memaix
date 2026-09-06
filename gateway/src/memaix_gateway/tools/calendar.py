@@ -338,6 +338,115 @@ class _FreeBusyAdapter:
 
 
 # ------------------------------------------------------------------
+# Google service account adapter (domain-wide delegation, read-only)
+# ------------------------------------------------------------------
+
+
+class _ServiceAccountGoogleCalendarAdapter:
+    """Google Calendar via service account med domain-wide delegation."""
+
+    def __init__(self, sa_info: dict, impersonate_email: str):
+        import importlib.util
+
+        if importlib.util.find_spec("googleapiclient") is None:
+            raise RuntimeError(
+                "google-auth och google-api-python-client måste installeras"
+            )
+        try:
+            from google.oauth2 import service_account
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-auth och google-api-python-client måste installeras"
+            ) from exc
+
+        scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
+        self._creds = (
+            service_account.Credentials.from_service_account_info(
+                sa_info, scopes=scopes
+            ).with_subject(impersonate_email)
+        )
+        self._email = impersonate_email
+
+    def _build(self):
+        import googleapiclient.discovery
+        return googleapiclient.discovery.build(
+            "calendar", "v3", credentials=self._creds, cache_discovery=False
+        )
+
+    @staticmethod
+    def _to_dict(item: dict) -> dict:
+        start = item.get("start") or {}
+        end = item.get("end") or {}
+        return {
+            "id": item.get("id", ""),
+            "title": item.get("summary", ""),
+            "start": start.get("dateTime") or start.get("date", ""),
+            "end": end.get("dateTime") or end.get("date", ""),
+            "location": item.get("location", ""),
+            "description": item.get("description", ""),
+        }
+
+    def list_events(self, start: datetime, end: datetime) -> list[dict]:
+        time_min = start.isoformat() if start.tzinfo else start.isoformat() + "Z"
+        time_max = end.isoformat() if end.tzinfo else end.isoformat() + "Z"
+        svc = self._build()
+        calendars_resp = svc.calendarList().list().execute()
+        calendars = calendars_resp.get("items", [])
+        events: list[dict] = []
+        for cal in calendars:
+            cal_id = cal["id"]
+            try:
+                resp = (
+                    svc.events()
+                    .list(
+                        calendarId=cal_id,
+                        timeMin=time_min,
+                        timeMax=time_max,
+                        singleEvents=True,
+                        orderBy="startTime",
+                        maxResults=250,
+                    )
+                    .execute()
+                )
+                events.extend(self._to_dict(ev) for ev in resp.get("items", []))
+            except Exception:
+                pass
+        return events
+
+    find_events = list_events
+
+
+# ------------------------------------------------------------------
+# Multi-calendar merge adapter
+# ------------------------------------------------------------------
+
+
+class _MultiCalendarAdapter:
+    """Slår ihop resultat från flera kalenderadapters."""
+
+    def __init__(self, adapters: list):
+        self._adapters = adapters
+
+    def list_events(self, start: datetime, end: datetime) -> list[dict]:
+        seen: set[tuple] = set()
+        merged: list[dict] = []
+        for adapter in self._adapters:
+            try:
+                events = adapter.list_events(start, end)
+            except Exception:
+                events = []
+            for ev in events:
+                key = (ev.get("title", ""), ev.get("start", ""))
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(ev)
+        merged.sort(key=lambda e: e.get("start", ""))
+        return merged
+
+    find_events = list_events
+
+
+# ------------------------------------------------------------------
 # Real CalDAV adapter (wraps caldav library)
 # ------------------------------------------------------------------
 
