@@ -412,6 +412,20 @@ def test_cors_headers_present_for_allowed_origin(rig):
     assert resp.headers["access-control-allow-origin"] == "https://jimlov.se"
 
 
+@pytest.mark.parametrize("origin", ["https://memaix.se", "https://www.memaix.se"])
+def test_cors_headers_present_for_memaix_origin(rig, origin):
+    # memaix.se/boka fronts the same booking link as jimlov.se/boka, so the
+    # gateway has to answer it too — otherwise the slot fetch dies in the
+    # browser before the visitor ever sees a calendar.
+    client, _dav = rig
+    resp = client.get(
+        "/book/alice-30/slots",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()},
+        headers={"Origin": origin},
+    )
+    assert resp.headers["access-control-allow-origin"] == origin
+
+
 def test_cors_headers_absent_for_disallowed_origin(rig):
     client, _dav = rig
     resp = client.get(
