@@ -47,6 +47,7 @@ def build(
 
     brief_cfg = ((cfg or {}).get("memaix", {}) or {}).get("brief", {})
     max_mail = brief_cfg.get("max_mail", 5)
+    mail_days = brief_cfg.get("mail_days", 3)
     send_when_empty = brief_cfg.get("send_when_empty", True)
 
     calendar_events_fn = tools.get("calendar_events")
@@ -67,10 +68,10 @@ def build(
             except Exception:
                 pass
 
-        if email_list_fn and acl.resource(project, "mailbox"):
+        if email_list_fn and (acl.resource(project, "mailbox") or acl.resource(project, "email")):
             try:
-                msgs = email_list_fn(acl, user, project, "INBOX", max_mail) or []
-                for m in [m for m in msgs if not m.get("seen", True)][:max_mail]:
+                msgs = email_list_fn(acl, user, project, "INBOX", max_mail, days=mail_days) or []
+                for m in msgs[:max_mail]:
                     mail_lines.append(f"- [{project}] {m.get('subject', '(inget ämne)')} — {m.get('from', '')}")
             except Exception:
                 pass
