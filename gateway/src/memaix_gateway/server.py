@@ -370,9 +370,47 @@ def _brief_tools_for_user() -> dict:
             acl, u, project, day_start.isoformat(), day_end.isoformat(), _dav=dav
         )
 
+    def _gmail_or_imap_list(acl, u, project, folder, limit, *, days=3):
+        email_res = acl.resource(project, "email")
+        if not (isinstance(email_res, dict) and email_res.get("type") == "google"):
+            return t_email.email_list(acl, u, project, folder, limit)
+        store = _get_token_store()
+        accounts = [a for a in store.list_accounts(u) if a["provider"] == "google"]
+        if not accounts:
+            return []
+        token_data = store.load_one(u, "google", accounts[0]["account"])
+        if not token_data:
+            return []
+        from google.oauth2.credentials import Credentials
+        import googleapiclient.discovery
+        provider_cfg = config.load().get("memaix", {}).get("oauth_providers", {}).get("google", {})
+        creds = Credentials(
+            token=token_data.get("access_token"),
+            refresh_token=token_data.get("refresh_token"),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=provider_cfg.get("client_id", ""),
+            client_secret=config.secret(provider_cfg.get("client_secret_ref", "")) or "",
+        )
+        svc = googleapiclient.discovery.build("gmail", "v1", credentials=creds, cache_discovery=False)
+        q = f"newer_than:{days}d in:inbox"
+        resp = svc.users().messages().list(userId="me", q=q, maxResults=limit).execute()
+        msgs = []
+        for ref in resp.get("messages", []):
+            msg = svc.users().messages().get(
+                userId="me", id=ref["id"], format="metadata",
+                metadataHeaders=["Subject", "From"]
+            ).execute()
+            headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+            msgs.append({
+                "subject": headers.get("Subject", "(inget ämne)"),
+                "from": headers.get("From", ""),
+                "seen": "UNREAD" not in msg.get("labelIds", []),
+            })
+        return msgs
+
     return {
         "calendar_events": calendar_events,
-        "email_list": t_email.email_list,
+        "email_list": _gmail_or_imap_list,
         "backlog_list": t_backlog.backlog_list,
         "pm_raid_list": t_pm.pm_raid_list,
     }
