@@ -392,20 +392,34 @@ def _brief_tools_for_user() -> dict:
             client_secret=config.secret(provider_cfg.get("client_secret_ref", "")) or "",
         )
         svc = googleapiclient.discovery.build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+        def _extract_body(payload: dict, max_chars: int = 800) -> str:
+            import base64
+            parts = payload.get("parts") or [payload]
+            for part in parts:
+                if part.get("mimeType") == "text/plain":
+                    data = part.get("body", {}).get("data", "")
+                    if data:
+                        text = base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="replace")
+                        return text[:max_chars]
+                sub = _extract_body(part, max_chars) if part.get("parts") else ""
+                if sub:
+                    return sub
+            return ""
+
         q = f"newer_than:{days}d in:inbox"
         resp = svc.users().messages().list(userId="me", q=q, maxResults=limit).execute()
         msgs = []
         for ref in resp.get("messages", []):
-            msg = svc.users().messages().get(
-                userId="me", id=ref["id"], format="metadata",
-                metadataHeaders=["Subject", "From"],
-            ).execute()
-            headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+            msg = svc.users().messages().get(userId="me", id=ref["id"], format="full").execute()
+            payload = msg.get("payload", {})
+            headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+            body = _extract_body(payload) or msg.get("snippet", "")
             msgs.append({
                 "subject": headers.get("Subject", "(inget ämne)"),
                 "from": headers.get("From", ""),
                 "seen": "UNREAD" not in msg.get("labelIds", []),
-                "snippet": msg.get("snippet", ""),
+                "snippet": body,
             })
         return msgs
 
