@@ -54,6 +54,7 @@ def build(
     email_list_fn = tools.get("email_list")
     backlog_list_fn = tools.get("backlog_list")
     pm_raid_list_fn = tools.get("pm_raid_list")
+    mail_triage_fn = tools.get("mail_triage")
 
     calendar_lines: list[str] = []
     mail_lines: list[str] = []
@@ -71,8 +72,18 @@ def build(
         if email_list_fn and (acl.resource(project, "mailbox") or acl.resource(project, "email")):
             try:
                 msgs = email_list_fn(acl, user, project, "INBOX", max_mail, days=mail_days) or []
+                if mail_triage_fn and msgs:
+                    msgs = mail_triage_fn(msgs) or msgs
+                priority_icons = {"Hög": "🔴", "Medel": "🟡", "Låg": "⚪"}
                 for m in msgs[:max_mail]:
-                    mail_lines.append(f"- [{project}] {m.get('subject', '(inget ämne)')} — {m.get('from', '')}")
+                    icon = priority_icons.get(m.get("priority", ""), "•")
+                    subject = m.get("subject", "(inget ämne)")
+                    sender = m.get("from", "")
+                    summary = m.get("summary", "")
+                    line = f"- [{project}] {icon} {subject} — {sender}"
+                    if summary:
+                        line += f"\n  {summary}"
+                    mail_lines.append(line)
             except Exception:
                 pass
 
