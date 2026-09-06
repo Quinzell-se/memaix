@@ -387,7 +387,7 @@ def _brief_tools_for_user() -> dict:
         creds = Credentials(
             token=token_data.get("access_token"),
             refresh_token=token_data.get("refresh_token"),
-            token_uri="https://oauth2.googleapis.com/token",
+            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
             client_id=provider_cfg.get("client_id", ""),
             client_secret=config.secret(provider_cfg.get("client_secret_ref", "")) or "",
         )
