@@ -9,6 +9,7 @@ role-dependent UI, the full MFA enrollment flow, and mobile layout.
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 
@@ -336,7 +337,11 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     from memaix_gateway.web import totp as totp_mod
 
     login_as(context, "alice")
-    page.goto("/app/admin")
+    # wait_until="commit" avoids "interrupted by navigation" if the JS auth
+    # redirect fires before the load event (intermittent race with cookie flush).
+    # The subsequent .click() and expect() calls provide the real stability gate.
+    page.goto("/app/admin", wait_until="commit")
+    expect(page).to_have_url(re.compile(r"/app/admin"))
 
     # 1) Enroll: open the setup modal, read the secret, answer with a real code.
     page.locator("button", has_text="Set up MFA").click()
@@ -359,7 +364,8 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
 
     # Secure cookie won't survive plain http — inject the equivalent session.
     _inject_mfa_cookie(context, "alice")
-    page.goto("/app/admin")
+    page.goto("/app/admin", wait_until="commit")
+    expect(page).to_have_url(re.compile(r"/app/admin"))
     assert page.request.get("/app/api/admin/mfa").json()["verified"] is True
 
     # 3) Kill-switch: disable bob from the UI…
@@ -378,7 +384,8 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     context.clear_cookies()
     login_as(context, "alice")
     _inject_mfa_cookie(context, "alice")
-    page.goto("/app/admin")
+    page.goto("/app/admin", wait_until="commit")
+    expect(page).to_have_url(re.compile(r"/app/admin"))
     with page.expect_navigation():
         page.locator("button", has_text="Enable: bob").click()
     users = page.request.get("/app/api/admin/users").json()
