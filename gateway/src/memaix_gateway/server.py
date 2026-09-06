@@ -1072,6 +1072,117 @@ def brief_send_now() -> dict:
     return result
 
 
+
+@mcp.tool()
+def brief_data(project: str | None = None, days_back: int = 1) -> dict:
+    """Return the brief's underlying data as structured JSON (calendar, mail,
+    backlog changes, open RAID count) so an AI client can render its own brief.
+    project: limit to one project, or all visible projects if None.
+    days_back: how far back to look for mail and backlog changes (default 1)."""
+    user = _user()
+    acl = _get_acl()
+    store = _get_notify()
+    prefs = store.get_prefs(user) or {}
+
+    from datetime import datetime, timedelta
+    from datetime import timezone as _tz
+
+    now = datetime.now(_tz.utc)
+    tz_name = prefs.get("timezone", "UTC")
+    brief_cfg = config.load().get("memaix", {}).get("brief", {})
+    max_mail = brief_cfg.get("max_mail", 5)
+    mail_days = max(days_back, brief_cfg.get("mail_days", 3))
+
+    from .notify.brief import _tz_or_utc
+    tzinfo = _tz_or_utc(tz_name)
+    local_now = now.astimezone(tzinfo)
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    last_run_iso = (now - timedelta(days=days_back)).isoformat()
+
+    if project is not None:
+        projects = [project] if project in acl.visible_projects(user) else []
+    else:
+        projects = prefs.get("projects") or acl.visible_projects(user)
+
+    t = _brief_tools_for_user()
+    calendar_events_fn = t.get("calendar_events")
+    email_list_fn = t.get("email_list")
+    mail_triage_fn = t.get("mail_triage")
+    backlog_list_fn = t.get("backlog_list")
+    pm_raid_list_fn = t.get("pm_raid_list")
+
+    calendar: list[dict] = []
+    mail: list[dict] = []
+    backlog_changes: list[dict] = []
+    raid_open = 0
+
+    for proj in projects:
+        if calendar_events_fn and acl.resource(proj, "calendar"):
+            try:
+                for ev in (calendar_events_fn(acl, user, proj, day_start, day_end) or []):
+                    calendar.append({
+                        "title": ev.get("title", ""),
+                        "start": ev.get("start", ""),
+                        "end": ev.get("end", ""),
+                        "project": proj,
+                    })
+            except Exception:
+                pass
+
+        if email_list_fn and (acl.resource(proj, "mailbox") or acl.resource(proj, "email")):
+            try:
+                msgs = email_list_fn(acl, user, proj, "INBOX", max_mail, days=mail_days) or []
+                if mail_triage_fn and msgs:
+                    msgs = mail_triage_fn(msgs) or msgs
+                for m in msgs[:max_mail]:
+                    entry = {
+                        "subject": m.get("subject", "(inget ämne)"),
+                        "from": m.get("from", ""),
+                        "seen": m.get("seen", False),
+                        "project": proj,
+                    }
+                    if m.get("priority"):
+                        entry["priority"] = m["priority"]
+                    if m.get("summary"):
+                        entry["summary"] = m["summary"]
+                    mail.append(entry)
+            except Exception:
+                pass
+
+        if backlog_list_fn and acl.resource(proj, "vault"):
+            try:
+                items = backlog_list_fn(acl, user, proj) or []
+                changed = [i for i in items if str(i.get("updated_at", "")) > last_run_iso]
+                for i in changed[:10]:
+                    backlog_changes.append({
+                        "id": i.get("id", "?"),
+                        "title": i.get("title", ""),
+                        "status": i.get("status", ""),
+                        "updated_at": i.get("updated_at", ""),
+                        "project": proj,
+                    })
+            except Exception:
+                pass
+
+        if pm_raid_list_fn and acl.resource(proj, "vault"):
+            try:
+                raid = pm_raid_list_fn(acl, user, proj)
+                entries = raid.get("entries", []) if isinstance(raid, dict) else []
+                raid_open += sum(1 for e in entries if e.get("status") == "open")
+            except Exception:
+                pass
+
+    return {
+        "date": local_now.strftime("%Y-%m-%d"),
+        "generated_at": now.isoformat(),
+        "projects": projects,
+        "calendar": calendar,
+        "mail": mail,
+        "backlog_changes": backlog_changes,
+        "raid_open": raid_open,
+    }
+
 @mcp.prompt()
 def daily_brief() -> str:
     """Deliver today's brief for the calling user (fetch-on-open path)."""
