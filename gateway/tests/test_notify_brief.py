@@ -92,4 +92,4 @@ def test_build_max_mail_from_config():
     tools = {"email_list": lambda acl, u, p, f, lim, **kw: msgs[:lim]}
     cfg = {"memaix": {"brief": {"max_mail": 2}}}
     result = build(_acl(), "alice", cfg, _prefs(), now=NOW, tools=tools)
-    assert result["markdown"].count("- [proj] m") == 2
+    assert result["markdown"].count("- [proj] ") == 2
