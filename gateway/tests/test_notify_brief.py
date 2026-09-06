@@ -32,14 +32,14 @@ def test_build_includes_calendar_event():
     assert not result["empty"]
 
 
-def test_build_includes_unread_mail_only():
-    tools = {"email_list": lambda acl, u, p, f, lim: [
+def test_build_includes_recent_mail():
+    tools = {"email_list": lambda acl, u, p, f, lim, **kw: [
         {"subject": "Seen one", "from": "a@b.com", "seen": True},
         {"subject": "New invoice", "from": "c@d.com", "seen": False},
     ]}
     result = build(_acl(), "alice", None, _prefs(), now=NOW, tools=tools)
     assert "New invoice" in result["markdown"]
-    assert "Seen one" not in result["markdown"]
+    assert "Seen one" in result["markdown"]
 
 
 def test_build_includes_backlog_changes_since_last_run():
@@ -89,7 +89,7 @@ def test_build_tool_exception_does_not_break_brief():
 
 def test_build_max_mail_from_config():
     msgs = [{"subject": f"m{i}", "from": "x", "seen": False} for i in range(10)]
-    tools = {"email_list": lambda acl, u, p, f, lim: msgs[:lim]}
+    tools = {"email_list": lambda acl, u, p, f, lim, **kw: msgs[:lim]}
     cfg = {"memaix": {"brief": {"max_mail": 2}}}
     result = build(_acl(), "alice", cfg, _prefs(), now=NOW, tools=tools)
     assert result["markdown"].count("- [proj] m") == 2
