@@ -381,8 +381,8 @@ def _brief_tools_for_user() -> dict:
         token_data = store.load_one(u, "google", accounts[0]["account"])
         if not token_data:
             return []
-        from google.oauth2.credentials import Credentials
         import googleapiclient.discovery
+        from google.oauth2.credentials import Credentials
         provider_cfg = config.load().get("memaix", {}).get("oauth_providers", {}).get("google", {})
         creds = Credentials(
             token=token_data.get("access_token"),
