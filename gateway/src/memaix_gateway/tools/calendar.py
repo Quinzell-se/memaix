@@ -287,9 +287,14 @@ class _ServiceAccountGoogleCalendarAdapter:
     """Google Calendar via service account med domain-wide delegation."""
 
     def __init__(self, sa_info: dict, impersonate_email: str):
+        import importlib.util
+
+        if importlib.util.find_spec("googleapiclient") is None:
+            raise RuntimeError(
+                "google-auth och google-api-python-client måste installeras"
+            )
         try:
             from google.oauth2 import service_account
-            import googleapiclient.discovery
         except ImportError as exc:
             raise RuntimeError(
                 "google-auth och google-api-python-client måste installeras"

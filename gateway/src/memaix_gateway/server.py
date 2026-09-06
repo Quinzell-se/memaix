@@ -42,7 +42,14 @@ from .tools import onboarding as t_onboarding
 from .tools import pm as t_pm
 from .tools import pm_engine as t_pm_engine
 from .tools import whoami as t_whoami
-from .tools.calendar import CalendarAuthRequired, _FreeBusyAdapter, _ICalAdapter, _MultiCalendarAdapter, _PerUserGoogleAdapter, _ServiceAccountGoogleCalendarAdapter
+from .tools.calendar import (
+    CalendarAuthRequired,
+    _FreeBusyAdapter,
+    _ICalAdapter,
+    _MultiCalendarAdapter,
+    _PerUserGoogleAdapter,
+    _ServiceAccountGoogleCalendarAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
