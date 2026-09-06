@@ -333,7 +333,7 @@ class _ServiceAccountGoogleCalendarAdapter:
         svc = self._build()
         calendars_resp = svc.calendarList().list().execute()
         calendars = calendars_resp.get("items", [])
-        events = []
+        events: list[dict] = []
         for cal in calendars:
             cal_id = cal["id"]
             try:
