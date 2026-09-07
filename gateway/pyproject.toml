@@ -68,6 +68,11 @@ where = ["src"]
     "web/static/*.css",
     "web/static/*.js",
     "board/*.html",
+    # The embeddable booking widget. It lives with the booking module rather
+    # than in web/static/ because it is the booking feature's public face, not
+    # part of the logged-in app shell — and because a missing entry here is
+    # invisible until /embed/booking.js 500s in production.
+    "booking/static/*.js",
     "i18n/locales/*.json",
 ]
 

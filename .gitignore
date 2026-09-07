@@ -16,6 +16,7 @@ vaults/
 __pycache__/
 *.pyc
 .venv/
+.venv-test/
 *.egg-info/
 dist/
 build/

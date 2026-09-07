@@ -40,6 +40,17 @@ def get_link(slug: str) -> dict | None:
       "granularity_min": spacing of the start times /book/{slug}/times
         offers, e.g. 15 to offer quarter past and quarter to. Omitted -> 30.
         A query parameter of the same name overrides it per request.
+      "origins": extra origins the embedded widget may call this link from,
+        e.g. ["https://example.com"]. Added to the two hardcoded ones in
+        routes.py rather than replacing them, so a typo here can't take
+        booking off the air on jimlov.se or memaix.se.
+      "turnstile_site_key": the Cloudflare Turnstile *site* key the widget
+        renders its captcha with (public — it appears in every page that
+        shows one; the secret lives in config under turnstile_secret_ref).
+        Omitted -> the gateway-wide memaix.booking.turnstile_site_key.
+      "consent_text": the exact wording the visitor agrees to, recorded
+        verbatim with the booking. Omitted -> the widget uses its own
+        built-in text for the page's language.
     """
     if not slug or "/" in slug or ".." in slug:
         return None

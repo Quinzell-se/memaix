@@ -74,6 +74,7 @@ Läs i den ordning som passar din roll.
 10. [SYSTEM-MAIL.md](SYSTEM-MAIL.md) — systemmejl: config, avsändardomän/DKIM, mallar.
 11. [BACKUP.md](BACKUP.md) — backup & återställning (vaults, config, hemligheter, Nextcloud).
 12. [UPDATE.md](UPDATE.md) — uppdatering: versionsmigrering, rollback, nedtid.
+13. [FEATURE-BOOKING-EMBED.md](FEATURE-BOOKING-EMBED.md) — bokningswidgeten: bädda in mötesbokning på en extern sida med en div och en script-tagg.
 
 ## 💼 Ska du sälja installation/hosting?
 1. [BUSINESS-CASE.md](BUSINESS-CASE.md) — kostnad, pris, kritisk bedömning (publik-OSS-verklighet).

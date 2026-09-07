@@ -66,11 +66,12 @@ import time
 import uuid as _uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
 
 from .. import config
@@ -84,6 +85,10 @@ from .slotting import DEFAULT_GRANULARITY_MIN, subdivide
 
 logger = logging.getLogger(__name__)
 
+# The two sites that predate per-link origins. Kept hardcoded so a config
+# mistake can't take booking off the air on either of them; every other site
+# embedding the widget adds itself via the link's "origins" list instead of
+# by editing this file and redeploying.
 _ALLOWED_ORIGINS = {
     "https://jimlov.se",
     "https://www.jimlov.se",
@@ -133,9 +138,31 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _link_origins(request: Request) -> set[str]:
+    """Extra origins the widget for *this* booking link may be embedded on.
+
+    Read back off the link rather than threaded in as an argument, because
+    _json() is called from a dozen places — including error paths that never
+    resolved a link at all — and the one that forgot to pass it would
+    silently lose its CORS headers. That failure only ever shows up in
+    somebody else's browser console, on a site we don't own.
+    """
+    slug = request.path_params.get("slug")
+    if not slug:
+        return set()
+    link = get_link(slug)
+    origins = (link or {}).get("origins")
+    return {str(o) for o in origins} if isinstance(origins, list) else set()
+
+
 def _cors_headers(request: Request) -> dict:
     origin = request.headers.get("origin", "")
-    if origin not in _ALLOWED_ORIGINS:
+    # No Origin header means no browser asked, and CORS headers mean nothing to
+    # curl or the tunnel's health check. Leaving early keeps _link_origins from
+    # reading the link file a second time on every non-browser request.
+    if not origin:
+        return {}
+    if origin not in _ALLOWED_ORIGINS and origin not in _link_origins(request):
         return {}
     return {
         "Access-Control-Allow-Origin": origin,
@@ -344,6 +371,66 @@ async def booking_times(request: Request) -> JSONResponse:
         request,
         {"times": times, "duration_min": duration_min, "granularity_min": granularity_min},
     )
+
+
+def _refuse_unless_bookable(request: Request) -> dict:
+    """Rate limit, resolve the link, check booking is on. Returns the link.
+
+    The half of _find_free that doesn't touch the calendar. /config needs
+    exactly this and nothing more: asking a CalDAV server for free windows to
+    answer "what is your Turnstile key" would put a network round trip in
+    front of the widget's very first paint.
+    """
+    if not _rate_limiter().check(f"booking:read:{_client_ip(request)}", limit=60, window_s=60):
+        raise _Refused(_json(request, {"error": "rate_limited"}, status_code=429))
+
+    link = get_link(request.path_params["slug"])
+    if link is None:
+        raise _Refused(_json(request, {"error": "not_found"}, status_code=404))
+
+    enabled = t_cal.calendar_booking_enabled_get(_get_acl(), link["user"], link["project"])
+    if not enabled.get("enabled"):
+        raise _Refused(_json(request, {"error": "not_found"}, status_code=404))
+    return link
+
+
+async def booking_config(request: Request) -> JSONResponse:
+    """GET /book/{slug}/config — everything the embedded widget needs to draw
+    itself before it knows a single free time.
+
+    The widget is served from this gateway to any origin, so it can't carry
+    per-host settings in its own source. It asks here instead. Nothing
+    returned is a secret: the Turnstile *site* key is printed into every page
+    that renders a captcha, and the meeting forms are the choices the visitor
+    is about to be offered anyway.
+
+    What is deliberately withheld is each form's `config` — that's where a
+    phone form keeps the host's number, and a booking page has no business
+    publishing it to anyone who curls the endpoint.
+    """
+    try:
+        link = _refuse_unless_bookable(request)
+    except _Refused as refusal:
+        return refusal.response
+
+    cfg = config.load().get("memaix", {}).get("booking", {})
+    forms = t_cal.calendar_meeting_form_list(_get_acl(), link["user"], link["project"])
+    return _json(request, {
+        "duration_min": _clamp_duration(int(link.get("duration_min", 30))),
+        "granularity_min": _clamp_granularity(link.get("granularity_min")),
+        "timezone": _host_timezone(link),
+        "max_days_ahead": link.get("max_days_ahead"),
+        "turnstile_site_key": link.get("turnstile_site_key") or cfg.get("turnstile_site_key") or "",
+        # None, not a default string: the widget carries its own wording per
+        # language, and inventing one here would mean recording a consent the
+        # visitor never read.
+        "consent_text": link.get("consent_text") or None,
+        "meeting_forms": [
+            {"slug": f["slug"], "label": f.get("label") or f["slug"],
+             "provider": f["provider"], "default": bool(f.get("default"))}
+            for f in forms
+        ],
+    })
 
 
 async def booking_create(request: Request) -> JSONResponse:
@@ -904,6 +991,43 @@ async def booking_options(request: Request) -> Response:
     return Response(status_code=204, headers=_cors_headers(request))
 
 
+_WIDGET_JS = Path(__file__).parent / "static" / "booking.js"
+
+
+async def booking_widget(request: Request) -> Response:
+    """GET /embed/booking.js — the booking UI, as one file anybody can
+    <script src> from their own page.
+
+    The grid, the form and the Turnstile dance used to be copied by hand into
+    every site that wanted booking, which is how two sites shipped the same
+    broken slot grid on the same day. Serving it from here makes the embedder's
+    job a div and a script tag, and makes a fix reach every site on deploy.
+
+    Cache-Control is `no-cache`, not a long max-age: embedders write a bare
+    script tag they will never think about again, so the URL has to stay the
+    same forever and the freshness has to come from revalidation. A caller
+    that does version it (?v=…) opts into the immutable answer instead. The
+    wildcard CORS header is redundant for a plain script tag but makes the
+    file usable as a module import too, and it protects nothing — this is a
+    public asset by definition.
+    """
+    if not _WIDGET_JS.is_file():
+        # Packaging decides whether this file ships, and package-data is a
+        # whitelist — miss the entry and the file is simply absent from the
+        # installed wheel. FileResponse raises RuntimeError on a missing path,
+        # which Starlette turns into a 500 with no body worth reading; a 404
+        # at least tells the embedder their gateway has no widget rather than
+        # that it fell over.
+        return Response("booking widget not installed", status_code=404, media_type="text/plain")
+
+    cache = "public, max-age=31536000, immutable" if request.query_params.get("v") else "no-cache"
+    return FileResponse(
+        _WIDGET_JS,
+        media_type="text/javascript; charset=utf-8",
+        headers={"Cache-Control": cache, "Access-Control-Allow-Origin": "*"},
+    )
+
+
 def _rate_limiter():
     from ..safety.rate_limit import rate_limiter
 
@@ -911,6 +1035,9 @@ def _rate_limiter():
 
 
 booking_routes = [
+    Route("/embed/booking.js", booking_widget, methods=["GET"]),
+    Route("/book/{slug}/config", booking_config, methods=["GET"]),
+    Route("/book/{slug}/config", booking_options, methods=["OPTIONS"]),
     Route("/book/{slug}/slots", booking_slots, methods=["GET"]),
     Route("/book/{slug}/slots", booking_options, methods=["OPTIONS"]),
     Route("/book/{slug}/times", booking_times, methods=["GET"]),
