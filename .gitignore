@@ -1,16 +1,34 @@
 # Internal-only docs — not for public repo
 docs/BUSINESS-CASE.md
 
-# Secrets & local config — never commit
-.env
-config/*.yaml
+# Secrets & local config — never commit.
+#
+# Skrivet som "ignorera allt, återinkludera exemplen" i stället för att räkna
+# upp de hemligheter vi råkar känna till. Den gamla varianten namngav `.env` och
+# `config/*.yaml` och missade därmed allt annat som faktiskt låg i deployen:
+# `config/memaix-calendar-sa.json` (Google-kalenderns service account),
+# `config/booking_links/` och fyra `.env.bak-*` från Shepherds rotationer. Ett
+# enda `git add -A` i /srv/memaix hade stagat en privat nyckel.
+#
+# `config/*` snarare än `config/`: git kan inte återinkludera en fil ur en
+# katalog som själv är exkluderad, så negationen nedan hade blivit verkningslös.
+.env*
+!.env.example
+config/*
 !config/*.example.yaml
-config/secrets/
 cloudflared/*
 !cloudflared/config.example.yml
 
-# Runtime data
+# Runtime data — skapas av containrarna, ägs av deployen, hör aldrig i repot.
 vaults/
+data/
+ntfy/
+
+# Backupfiler. Uppstår vid varje handpåläggning på servern och är per definition
+# kopior av det som redan är känsligt: elva låg i /srv/memaix, två av dem `.env`.
+*.bak
+*.bak-*
+*.bak.*
 
 # Python
 __pycache__/
