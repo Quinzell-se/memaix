@@ -15,10 +15,14 @@ services:
     # kärnlöfte, och det hade aldrig levererat en enda dag.
     #
     # Variabel snarare än hårdkodad 1000, för att "en instans per kund" ska
-    # vara sant även när kundens uid inte är 1000. Kontrollera med
-    # `stat -c '%u %g' vaults config data` innan första start: alla tre
-    # monteras skrivbart, så fel uid byter ett trasigt git mot en trasig
-    # databas.
+    # vara sant även när kundens uid inte är 1000.
+    #
+    # Kontrollera ägarskapet REKURSIVT innan första start, inte på toppnivån:
+    #   find vaults config data ! -uid "$MEMAIX_UID" -printf '%u %p\n'
+    # Vid deployen 2026-09-07 ägdes alla tre katalogerna av 1000 medan tio
+    # SQLite-databaser inuti data/ — inklusive audit-loggen — ägdes av root.
+    # Ett `stat` på toppnivån hade sagt att allt var i sin ordning och vi hade
+    # bytt ett trasigt git mot en revisionslogg som inte gick att skriva till.
     user: "${MEMAIX_UID:-1000}:${MEMAIX_GID:-1000}"
     env_file: .env
     environment:
