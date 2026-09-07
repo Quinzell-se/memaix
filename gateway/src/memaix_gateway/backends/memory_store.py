@@ -103,12 +103,7 @@ class MemoryStore:
                 gitvault.run(self.vault, ["rev-parse", "--git-dir"])
             gitvault.init(self.vault)
 
-        gi = self.vault / ".gitignore"
-        if not gi.exists():
-            gi.write_text(".memaix.db\n")
-        elif ".memaix.db" not in gi.read_text():
-            with gi.open("a") as fh:
-                fh.write("\n.memaix.db\n")
+        self._ensure_gitignore()
 
         # Keyed on "has no commits" rather than "was just created", because
         # the six vaults this fix is aimed at are already initialised and
@@ -116,6 +111,32 @@ class MemoryStore:
         # a branch that only new vaults can reach.
         if not gitvault.has_commits(self.vault):
             gitvault.commit(self.vault, [".gitignore"], "chore: init memaix vault")
+
+    # `PRAGMA journal_mode=WAL` in _open_db means the store is three files,
+    # not one. The sidecars change on reads as well as writes, so a vault
+    # that tracks them records a diff every time anyone looks at it -- and
+    # committing a WAL alongside its database is worse than useless: the
+    # pair is only consistent at the instant of the snapshot, so restoring
+    # them from different commits yields a corrupt database rather than an
+    # old one. Only `.memaix.db` was ever listed here, which nobody noticed
+    # because no vault in production ever reached the point of committing.
+    _IGNORED = (".memaix.db", ".memaix.db-wal", ".memaix.db-shm")
+
+    def _ensure_gitignore(self) -> None:
+        """Make sure the vault ignores its own database, all three files of it.
+
+        Appends what is missing rather than rewriting the file: a vault's
+        .gitignore belongs to whoever owns the vault, and may hold entries
+        we know nothing about.
+        """
+        gi = self.vault / ".gitignore"
+        present = gi.read_text().splitlines() if gi.exists() else []
+        missing = [pattern for pattern in self._IGNORED if pattern not in present]
+        if not missing:
+            return
+        lead = "" if not present or present[-1] == "" else "\n"
+        with gi.open("a") as fh:
+            fh.write(lead + "\n".join(missing) + "\n")
 
     def _current_hash(self) -> str:
         return gitvault.head(self.vault)

@@ -179,6 +179,43 @@ def test_an_initialised_but_commitless_vault_gets_its_first_commit(vault):
     assert gitvault.has_commits(vault)
 
 
+def test_the_vault_ignores_all_three_files_of_its_database(vault):
+    """SQLite in WAL mode is `.memaix.db` plus a -wal and a -shm sidecar.
+
+    Only the first was ever ignored. It never showed, because no production
+    vault got as far as committing anything -- and it would have surfaced
+    the moment one did, as binary churn on every read.
+    """
+    MemoryStore.for_vault(vault)
+    ignored = (vault / ".gitignore").read_text().splitlines()
+    assert ".memaix.db" in ignored
+    assert ".memaix.db-wal" in ignored
+    assert ".memaix.db-shm" in ignored
+
+
+def test_an_existing_gitignore_keeps_its_own_entries(vault):
+    (vault / ".gitignore").write_text("scratch/\n.memaix.db\n")
+    MemoryStore.for_vault(vault)
+
+    ignored = (vault / ".gitignore").read_text().splitlines()
+    assert "scratch/" in ignored, "the vault owner's own entry was dropped"
+    assert ignored.count(".memaix.db") == 1, "existing entry was duplicated"
+    assert ".memaix.db-wal" in ignored
+
+
+def test_the_database_never_reaches_a_commit(vault):
+    """The end the .gitignore exists for, asserted rather than assumed."""
+    store = MemoryStore.for_vault(vault)
+    store.write("note.md", "hello", "jimmy")
+
+    tracked = subprocess.run(
+        ["git", "-C", str(vault), "ls-files"],
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert not [f for f in tracked if f.startswith(".memaix.db")], tracked
+
+
 def test_commits_carry_an_identity_without_a_global_gitconfig(vault):
     """A container has no ~/.gitconfig, so `git commit` dies on "Author
     identity unknown". memory_store passed identity through the environment;
