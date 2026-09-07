@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import frontmatter as fm
+from .. import gitvault
 from ..acl import Acl
 from ..paths import validate_id
 from . import backlog as t_backlog
@@ -56,20 +56,22 @@ def _today() -> str:
 
 
 def _git_commit(vault: Path, rel_paths: list[str], message: str) -> bool:
-    if not (vault / ".git").is_dir():
+    """Commit *rel_paths*. False only when the vault keeps no history at all.
+
+    The previous version wrapped both git calls in a bare `except Exception`
+    and returned the commit's returncode as a bool nobody inspected. That
+    swallowed `FileNotFoundError` when git is absent, `PermissionError` on
+    the vault, and -- in production -- exit 128 on every single call, and
+    reported all of it as an unremarkable `committed: false`.
+
+    It also ran git without a committer identity, so even once the ownership
+    is fixed these commits would have died on "Author identity unknown".
+    gitvault supplies both the identity and the returncode check.
+    """
+    if not gitvault.is_repo(vault):
         return False
-    try:
-        subprocess.run(
-            ["git", "-C", str(vault), "add", *rel_paths],
-            check=False, capture_output=True,
-        )
-        result = subprocess.run(
-            ["git", "-C", str(vault), "commit", "-m", message],
-            check=False, capture_output=True,
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+    gitvault.commit(vault, rel_paths, message)
+    return True
 
 
 # ------------------------------------------------------------------
