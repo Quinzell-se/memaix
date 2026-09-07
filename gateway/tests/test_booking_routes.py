@@ -76,6 +76,11 @@ class _MockSmtp:
 def rig(tmp_path, monkeypatch):
     from memaix_gateway import server as server_mod
 
+    # The limiter is a process-wide singleton; without this, the number of
+    # requests one test makes silently becomes the next test's budget.
+    from memaix_gateway.safety.rate_limit import rate_limiter
+    rate_limiter._reset()
+
     vault = tmp_path / "vault"
     smtp = _MockSmtp()
     acl = Acl(
@@ -166,6 +171,152 @@ def test_slots_404_when_booking_disabled(rig, monkeypatch):
         params={"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()},
     )
     assert resp.status_code == 404
+
+
+def _local_hhmm(times):
+    return [t["start"][11:16] for t in times]
+
+
+def test_times_are_offered_on_the_hosts_clock(rig):
+    """The bug /times exists to fix: a meeting overrunning to 10:15 local
+    must not turn the rest of the day into 10:15/10:45/11:15 offers."""
+    client, dav = rig
+    dav.create_event("ev1", "Överdraget", _dt(8), _dt(9, 15))  # 09:00-10:15 lokal tid
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(12).isoformat()},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["duration_min"] == 30
+    assert body["granularity_min"] == 30
+    assert _local_hhmm(body["times"])[:3] == ["10:30", "11:00", "11:30"]
+
+
+def test_times_are_expressed_in_the_hosts_timezone(rig):
+    """A visitor's browser can render whatever it likes, but the offer the
+    server makes is the host's local time — the link says Europe/Stockholm."""
+    client, _dav = rig
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(10).isoformat()},
+    )
+    assert all(t["start"].endswith("+01:00") for t in resp.json()["times"])
+
+
+def test_times_never_offer_a_busy_moment(rig):
+    client, dav = rig
+    dav.create_event("ev1", "Upptagen", _dt(9), _dt(10))  # 10:00-11:00 lokal tid
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(12).isoformat()},
+    )
+    offered = _local_hhmm(resp.json()["times"])
+    assert "10:00" not in offered and "10:30" not in offered
+    assert "09:00" in offered and "11:00" in offered
+
+
+def test_times_returns_only_start_end(rig):
+    """Same disclosure rule as /slots (card de858332) — no titles, no
+    attendees, no hint of which calendar the gap came from."""
+    client, dav = rig
+    dav.create_event("ev1", "Secret", _dt(9), _dt(9, 30))
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()},
+    )
+    assert resp.json()["times"]
+    for t in resp.json()["times"]:
+        assert set(t.keys()) == {"start", "end"}
+
+
+def test_times_honours_a_finer_grid(rig):
+    client, _dav = rig
+    resp = client.get(
+        "/book/alice-30/times",
+        params={
+            "within_start": _dt(8).isoformat(), "within_end": _dt(10).isoformat(),
+            "granularity_min": "15",
+        },
+    )
+    body = resp.json()
+    assert body["granularity_min"] == 15
+    assert _local_hhmm(body["times"])[:3] == ["09:00", "09:15", "09:30"]
+
+
+def test_times_ignores_a_nonsense_grid_rather_than_refusing(rig):
+    client, _dav = rig
+    resp = client.get(
+        "/book/alice-30/times",
+        params={
+            "within_start": _dt(8).isoformat(), "within_end": _dt(10).isoformat(),
+            "granularity_min": "abc",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["granularity_min"] == 30
+
+
+def test_times_404_when_booking_disabled(rig):
+    client, _dav = rig
+    from memaix_gateway import server as server_mod
+    BookingSettingsStore(server_mod._acl, "proj", "alice").set(False)
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()},
+    )
+    assert resp.status_code == 404
+
+
+def test_times_404_for_unknown_slug(rig):
+    client, _dav = rig
+    resp = client.get(
+        "/book/no-such-slug/times",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()},
+    )
+    assert resp.status_code == 404
+
+
+def test_times_rejects_a_backwards_window(rig):
+    client, _dav = rig
+    resp = client.get(
+        "/book/alice-30/times",
+        params={"within_start": _dt(18).isoformat(), "within_end": _dt(8).isoformat()},
+    )
+    assert resp.status_code == 400
+
+
+def test_slots_still_returns_raw_windows(rig):
+    """Both live sites still divide the windows themselves. /times must be
+    an addition, not a redefinition — the day /slots starts returning
+    half-hour pieces is the day both sites show a grid of duplicates."""
+    client, dav = rig
+    dav.create_event("ev1", "Upptagen", _dt(9), _dt(10))
+    windows = client.get(
+        "/book/alice-30/slots",
+        params={"within_start": _dt(8).isoformat(), "within_end": _dt(12).isoformat()},
+    ).json()["slots"]
+    assert len(windows) == 2
+    assert windows[0]["end"] == _dt(9).isoformat()
+
+
+def test_browsing_the_calendar_does_not_spend_the_budget_for_booking(rig):
+    """Reading and writing get separate counters. They used to share one, so
+    a visitor who clicked through a dozen weeks looking for a time was then
+    refused when they finally picked one."""
+    client, _dav = rig
+    params = {"within_start": _dt(8).isoformat(), "within_end": _dt(18).isoformat()}
+    for _ in range(15):
+        assert client.get("/book/alice-30/times", params=params).status_code == 200
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(10).isoformat(), "end": _dt(10, 30).isoformat(),
+            "name": "Bob", "email": "bob@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker till lagring i 1 år.",
+        },
+    )
+    assert resp.status_code == 200
 
 
 def test_create_booking_succeeds_and_stores_event(rig):

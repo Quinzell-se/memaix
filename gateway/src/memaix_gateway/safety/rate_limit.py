@@ -74,6 +74,17 @@ class RateLimiter:
         with self._lock:
             return list(self._windows.get(key, []))
 
+    def _reset(self) -> None:
+        """For testing: forget every window.
+
+        The module-level `rate_limiter` is a singleton, so without this one
+        test's requests count against the next one's budget — a test that
+        adds a few HTTP calls then fails an unrelated test further down the
+        file with a 429, which reads as a real regression and isn't one.
+        """
+        with self._lock:
+            self._windows.clear()
+
 
 class SQLiteRateLimiter:
     """Sliding-window limiter backed by a shared SQLite table.

@@ -80,6 +80,7 @@ from ..tools.calendar import CalendarAuthRequired
 from .consent_store import get_consent_store
 from .links import get_link
 from .meeting_providers import MeetingProviderError, resolve_meeting_detail
+from .slotting import DEFAULT_GRANULARITY_MIN, subdivide
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,9 @@ _ALLOWED_ORIGINS = {
 _TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 _MIN_DURATION_MIN = 15
 _MAX_DURATION_MIN = 240
+# Five minutes is already finer than anyone books on; below it the grid stops
+# being a grid and starts being every instant of the day.
+_MIN_GRANULARITY_MIN = 5
 _MAX_WINDOW_DAYS = 90
 _MAX_PURPOSE_LEN = 500
 
@@ -149,6 +153,22 @@ def _clamp_duration(duration_min: int) -> int:
     return max(_MIN_DURATION_MIN, min(_MAX_DURATION_MIN, duration_min))
 
 
+def _clamp_granularity(value: object) -> int:
+    """The spacing of the offered start times, from an untrusted query param.
+
+    Unparseable falls back to the default rather than 400ing: the grid is a
+    presentation choice, and refusing to show a calendar because someone
+    typed `granularity_min=abc` would be a tantrum, not validation. The
+    ceiling is the same as duration's — a grid coarser than the longest
+    bookable meeting can't offer anything the meeting doesn't already fill.
+    """
+    try:
+        n = int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return DEFAULT_GRANULARITY_MIN
+    return max(_MIN_GRANULARITY_MIN, min(_MAX_DURATION_MIN, n))
+
+
 def _parse_dt(value: str) -> datetime | None:
     try:
         dt = datetime.fromisoformat(value)
@@ -196,50 +216,140 @@ async def _verify_turnstile(token: str, remote_ip: str) -> bool:
         return False
 
 
-async def booking_slots(request: Request) -> JSONResponse:
-    """GET /book/{slug}/slots?within_start=&within_end=&duration_min= —
-    free {start, end} windows only, never event details or which calendar
-    source they came from (card de858332)."""
+class _Refused(Exception):
+    """A lookup that ended in a response instead of a result."""
+
+    def __init__(self, response: JSONResponse) -> None:
+        self.response = response
+
+
+def _find_free(request: Request) -> tuple[dict, list, int]:
+    """The lookup both /slots and /times need: rate limit, resolve the link,
+    check booking is on, parse the window, ask the calendar.
+
+    Returns (link, windows, duration_min), or raises _Refused carrying the
+    response to send. Shared rather than copied because the two endpoints
+    must agree on what counts as free — /times is only /slots with the
+    subdivision done here instead of in the browser, and a rate limit or a
+    404 rule that applied to one but not the other would be a hole, not a
+    feature.
+    """
     client_ip = _client_ip(request)
-    if not _rate_limiter().check(f"booking:{client_ip}", limit=30, window_s=60):
-        return _json(request, {"error": "rate_limited"}, status_code=429)
+    # Separate bucket from booking_create's. They used to share `booking:{ip}`
+    # while checking it against different limits, which meant looking at the
+    # calendar spent the budget for booking in it: eleven clicks through the
+    # weeks and the visitor got a 429 on submit, having done nothing wrong.
+    # Reading and writing are different privileges and get different counters.
+    if not _rate_limiter().check(f"booking:read:{client_ip}", limit=60, window_s=60):
+        raise _Refused(_json(request, {"error": "rate_limited"}, status_code=429))
 
     link = get_link(request.path_params["slug"])
     if link is None:
-        return _json(request, {"error": "not_found"}, status_code=404)
+        raise _Refused(_json(request, {"error": "not_found"}, status_code=404))
 
     acl = _get_acl()
     project, host_user = link["project"], link["user"]
     enabled = t_cal.calendar_booking_enabled_get(acl, host_user, project)
     if not enabled.get("enabled"):
-        return _json(request, {"error": "not_found"}, status_code=404)
+        raise _Refused(_json(request, {"error": "not_found"}, status_code=404))
 
     q = request.query_params
     duration_min = _clamp_duration(int(q.get("duration_min") or link.get("duration_min", 30)))
     within_start = _parse_dt(q.get("within_start", ""))
     within_end = _parse_dt(q.get("within_end", ""))
     if within_start is None or within_end is None or within_end <= within_start:
-        return _json(request, {"error": "invalid_window"}, status_code=400)
+        raise _Refused(_json(request, {"error": "invalid_window"}, status_code=400))
     within_start, within_end = _clamp_window(
         within_start, within_end, link.get("max_days_ahead")
     )
 
     try:
         dav = _resolve_dav(project, host_user)
-        slots = t_cal.calendar_find_free(
+        windows = t_cal.calendar_find_free(
             acl, host_user, project, duration_min,
             within_start.isoformat(), within_end.isoformat(), _dav=dav,
         )
     except CalendarAuthRequired:
-        return _json(request, {"error": "not_found"}, status_code=404)
+        raise _Refused(_json(request, {"error": "not_found"}, status_code=404))
 
-    return _json(request, {"slots": slots, "duration_min": duration_min})
+    return link, windows, duration_min
+
+
+def _host_timezone(link: dict) -> str:
+    """The zone the host's day is lived in, for aligning slots to their clock.
+
+    Working hours win because that's the frame the weekly schedule is already
+    expressed in (calendar_working_hours_set) — aligning to a different zone
+    than the one that decided "mon 16:00-18:00" would put slots on the half
+    hour of somebody else's afternoon. `host_timezone` on the link is the
+    fallback for hosts who never configured working hours, and UTC is the
+    last resort: wrong for most people, but never unresolvable.
+    """
+    try:
+        hours = t_cal.calendar_working_hours_get(_get_acl(), link["user"], link["project"])
+        tz = str(hours.get("tz") or "")
+    except Exception:
+        logger.warning("kunde inte läsa arbetstider för %s", link.get("user"), exc_info=True)
+        tz = ""
+    tz = tz or str(link.get("host_timezone") or "") or "UTC"
+    try:
+        ZoneInfo(tz)
+    except Exception:
+        # Loudly, because the visible symptom is a grid of times that are
+        # merely an hour or two wrong — which looks like a calendar bug, not
+        # a config typo, and gets debugged in the wrong place for a day.
+        logger.warning("okänd tidszon %r för bokningslänk, faller tillbaka på UTC", tz)
+        return "UTC"
+    return tz
+
+
+async def booking_slots(request: Request) -> JSONResponse:
+    """GET /book/{slug}/slots?within_start=&within_end=&duration_min= —
+    free {start, end} windows only, never event details or which calendar
+    source they came from (card de858332).
+
+    Superseded by /times, which returns bookable start times instead of raw
+    windows. Kept because both live sites still divide the windows
+    themselves; remove once neither does.
+    """
+    try:
+        _link, windows, duration_min = _find_free(request)
+    except _Refused as refusal:
+        return refusal.response
+    return _json(request, {"slots": windows, "duration_min": duration_min})
+
+
+async def booking_times(request: Request) -> JSONResponse:
+    """GET /book/{slug}/times?within_start=&within_end=&duration_min=&granularity_min= —
+    bookable start times, already cut from the free windows and aligned to
+    the host's clock.
+
+    /slots hands back windows and leaves the dividing to the caller, which
+    meant every embedding site reimplemented it and got it wrong the same
+    way: dividing "free 16:15-18:00" from its left edge offers 16:15, 16:45,
+    17:15 — the leftovers of whatever meeting overran. Doing it here means
+    one implementation, under test, and a browser that only has to render.
+    """
+    try:
+        link, windows, duration_min = _find_free(request)
+    except _Refused as refusal:
+        return refusal.response
+
+    q = request.query_params
+    granularity_min = _clamp_granularity(
+        q.get("granularity_min") or link.get("granularity_min")
+    )
+    times = subdivide(windows, duration_min, _host_timezone(link), granularity_min)
+    return _json(
+        request,
+        {"times": times, "duration_min": duration_min, "granularity_min": granularity_min},
+    )
 
 
 async def booking_create(request: Request) -> JSONResponse:
     """POST /book/{slug} — {start, end, name, email, turnstile_token, purpose?}."""
     client_ip = _client_ip(request)
-    if not _rate_limiter().check(f"booking:{client_ip}", limit=10, window_s=60):
+    if not _rate_limiter().check(f"booking:create:{client_ip}", limit=10, window_s=60):
         return _json(request, {"error": "rate_limited"}, status_code=429)
 
     link = get_link(request.path_params["slug"])
@@ -803,6 +913,8 @@ def _rate_limiter():
 booking_routes = [
     Route("/book/{slug}/slots", booking_slots, methods=["GET"]),
     Route("/book/{slug}/slots", booking_options, methods=["OPTIONS"]),
+    Route("/book/{slug}/times", booking_times, methods=["GET"]),
+    Route("/book/{slug}/times", booking_options, methods=["OPTIONS"]),
     Route("/book/{slug}", booking_create, methods=["POST"]),
     Route("/book/{slug}", booking_options, methods=["OPTIONS"]),
     Route("/booking/{token}", booking_manage_get, methods=["GET"]),
