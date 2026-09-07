@@ -34,8 +34,12 @@ def get_link(slug: str) -> dict | None:
         email at (card 14666e8a). Omitted -> the host simply isn't emailed;
         the visitor's own confirmation is unaffected.
       "host_timezone": IANA name (e.g. "Europe/Stockholm") used to format
-        the time shown in the host's copy of the confirmation email. Omitted
-        -> shown in UTC.
+        the time shown in the host's copy of the confirmation email, and —
+        when the host has no working hours configured — to align the start
+        times /book/{slug}/times offers. Omitted -> shown in UTC.
+      "granularity_min": spacing of the start times /book/{slug}/times
+        offers, e.g. 15 to offer quarter past and quarter to. Omitted -> 30.
+        A query parameter of the same name overrides it per request.
     """
     if not slug or "/" in slug or ".." in slug:
         return None
