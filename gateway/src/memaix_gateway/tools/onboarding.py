@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+
+from .. import gitvault
 
 DEFAULT_QUESTIONS = [
     "Vad heter du och vad är din roll?",
@@ -115,13 +116,17 @@ def check_onboarding(user_id: str, vault: Path, cfg: dict | None = None) -> dict
 
 
 def _git_commit(vault: Path, message: str) -> None:
-    if not (vault / ".git").exists():
+    """Commit the onboarding write. Returns nothing, but no longer hides
+    anything either -- the two unchecked subprocess calls this replaces
+    reported neither success nor failure to anyone.
+
+    `add -A` is preserved: onboarding writes a profile and a flag file in
+    different directories and has always swept the whole tree. Named
+    explicitly now so the sweep is visible at the call rather than implied.
+    """
+    if not gitvault.is_repo(vault):
         return
-    subprocess.run(["git", "-C", str(vault), "add", "-A"], capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(vault), "commit", "-m", message],
-        capture_output=True,
-    )
+    gitvault.commit(vault, [], message, all_tracked=True)
 
 
 _DEFAULT_TOUR_KEYS = ("memory.remember", "mail.triage", "backlog.capture", "brief.daily")

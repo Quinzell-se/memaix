@@ -12,13 +12,14 @@ TODO(perf): batch async git commits via a queue.Queue + background thread
 
 from __future__ import annotations
 
-import os
 import re
 import sqlite3
 import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+
+from .. import gitvault
 
 
 class MemoryStore:
@@ -82,45 +83,45 @@ class MemoryStore:
     # Git helpers
     # ------------------------------------------------------------------
 
-    def _git_env(self) -> dict:
-        env = os.environ.copy()
-        env["GIT_AUTHOR_NAME"] = "memaix"
-        env["GIT_AUTHOR_EMAIL"] = "memaix@localhost"
-        env["GIT_COMMITTER_NAME"] = "memaix"
-        env["GIT_COMMITTER_EMAIL"] = "memaix@localhost"
-        return env
-
-    def _run(self, cmd: list[str]) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            cmd,
-            cwd=str(self.vault),
-            env=self._git_env(),
-            capture_output=True,
-            text=True,
-        )
+    def _run(self, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
+        return gitvault.run(self.vault, args, check=check)
 
     def _ensure_git(self) -> None:
-        if (self.vault / ".git").exists():
-            return
-        self._run(["git", "init"])
+        """Guarantee a working repository, or refuse to serve this vault.
+
+        The old version returned early whenever `.git` existed, which is how
+        production stayed broken in silence: `git init` had created the
+        directory as root, every command afterwards died on ownership, and
+        the early return meant nobody ever asked again. The presence of a
+        directory is not the same thing as a repository that answers.
+        """
+        if not gitvault.is_repo(self.vault):
+            if (self.vault / ".git").exists():
+                # Present but unusable. Re-run the probe with check=True so
+                # the caller gets git's own diagnosis. Running `init` on top
+                # would succeed, change nothing, and restore the illusion.
+                gitvault.run(self.vault, ["rev-parse", "--git-dir"])
+            gitvault.init(self.vault)
+
         gi = self.vault / ".gitignore"
         if not gi.exists():
             gi.write_text(".memaix.db\n")
         elif ".memaix.db" not in gi.read_text():
             with gi.open("a") as fh:
                 fh.write("\n.memaix.db\n")
-        self._run(["git", "add", ".gitignore"])
-        self._run(["git", "commit", "-m", "chore: init memaix vault"])
+
+        # Keyed on "has no commits" rather than "was just created", because
+        # the six vaults this fix is aimed at are already initialised and
+        # still empty. They need their first commit on the next startup, not
+        # a branch that only new vaults can reach.
+        if not gitvault.has_commits(self.vault):
+            gitvault.commit(self.vault, [".gitignore"], "chore: init memaix vault")
 
     def _current_hash(self) -> str:
-        r = self._run(["git", "log", "-1", "--format=%H"])
-        return r.stdout.strip()
+        return gitvault.head(self.vault)
 
     def _git_commit(self, paths: list[str], message: str) -> str:
-        for p in paths:
-            self._run(["git", "add", "--", p])
-        self._run(["git", "commit", "-m", message])
-        return self._current_hash()
+        return gitvault.commit(self.vault, paths, message)
 
     # flush() is a no-op here (operations are synchronous).
     # Kept for API compatibility with any future async variant.
@@ -160,13 +161,22 @@ class MemoryStore:
     def history(self, path: str | None = None, limit: int = 20) -> list[dict]:
         """Git log.  Returns [{hash, author, date, message}] newest-first."""
         fmt = "--format=%H\x1f%an\x1f%ai\x1f%s"
+        # An empty repository is the one honest reason for an empty history,
+        # and `git log` reports it the same way it reports a repository it
+        # refuses to read: exit 128. The old code treated both as "no
+        # history", which is why production answered [] for months while
+        # every command underneath was failing. Establish that the repo
+        # answers before letting emptiness mean emptiness -- asked the other
+        # way round, a broken vault reports "no commits" and the silence
+        # comes straight back.
+        gitvault.require_repo(self.vault)
+        if not gitvault.has_commits(self.vault):
+            return []
         if path:
             rel = str(Path("memory") / path)
-            r = self._run(["git", "log", f"-{limit}", fmt, "--", rel])
+            r = self._run(["log", f"-{limit}", fmt, "--", rel])
         else:
-            r = self._run(["git", "log", f"-{limit}", fmt])
-        if r.returncode != 0:
-            return []
+            r = self._run(["log", f"-{limit}", fmt])
         out: list[dict] = []
         for line in r.stdout.strip().splitlines():
             if not line.strip():
@@ -223,7 +233,8 @@ class MemoryStore:
         if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
             raise ValueError(f"invalid commit hash: {commit!r}")
         with self.write_lock:
-            r = self._run(["git", "revert", "--no-edit", commit])
-            if r.returncode != 0:
-                raise RuntimeError(f"git revert failed: {r.stderr.strip()}")
-            return self._current_hash()
+            self._run(["revert", "--no-edit", commit])
+            reverted = self._current_hash()
+            if not reverted:
+                raise gitvault.GitError(f"git revert left no commit in {self.vault}")
+            return reverted

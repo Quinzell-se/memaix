@@ -6,6 +6,20 @@ services:
     build: ./gateway
     image: memaix/gateway:latest
     restart: unless-stopped
+    # Utan detta kör containern som root medan bind-mountarna nedan behåller
+    # värdens ägarskap. Git ≥2.35 vägrar då operera på ./vaults — "detected
+    # dubious ownership", exit 128, på varje kommando. Det var inte en teori:
+    # sex av sju valv i produktion innehöll noll commits medan `.git` fanns i
+    # alla sju, eftersom `git init` lyckas som root (det finns ännu inget repo
+    # att misstro) och allt därefter föll. Versionerat minne är produktens
+    # kärnlöfte, och det hade aldrig levererat en enda dag.
+    #
+    # Variabel snarare än hårdkodad 1000, för att "en instans per kund" ska
+    # vara sant även när kundens uid inte är 1000. Kontrollera med
+    # `stat -c '%u %g' vaults config data` innan första start: alla tre
+    # monteras skrivbart, så fel uid byter ett trasigt git mot en trasig
+    # databas.
+    user: "${MEMAIX_UID:-1000}:${MEMAIX_GID:-1000}"
     env_file: .env
     environment:
       MEMAIX_TRANSPORT: http
