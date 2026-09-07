@@ -300,6 +300,124 @@ def test_slots_still_returns_raw_windows(rig):
     assert windows[0]["end"] == _dt(9).isoformat()
 
 
+# ---------------------------------------------------------------------
+# /config and the embedded widget
+# ---------------------------------------------------------------------
+
+
+def test_config_tells_the_widget_what_it_needs(rig):
+    """The widget is served to origins we don't control, so it can't carry
+    per-host settings in its own source. Everything it needs to draw itself
+    before it knows a single free time comes from here."""
+    client, _dav = rig
+    body = client.get("/book/alice-30/config").json()
+    assert body["duration_min"] == 30
+    assert body["granularity_min"] == 30
+    assert body["timezone"] == "Europe/Stockholm"
+    assert body["meeting_forms"] == []
+
+
+def test_config_never_publishes_a_meeting_forms_private_config(rig):
+    """A phone form keeps the host's number in its config. The visitor is
+    about to be offered the *choice*; publishing the number to anyone who
+    curls the endpoint is a different thing entirely."""
+    client, _dav = rig
+    from memaix_gateway import server as server_mod
+    from memaix_gateway.tools import calendar as t_cal
+    t_cal.calendar_meeting_form_set(server_mod._acl, "alice", "proj", [
+        {"slug": "ring", "provider": "phone", "label": "Telefon",
+         "config": {"phone_number": "+46701234567"}},
+    ])
+    resp = client.get("/book/alice-30/config")
+    assert "+46701234567" not in resp.text
+    assert resp.json()["meeting_forms"] == [
+        {"slug": "ring", "label": "Telefon", "provider": "phone", "default": True}
+    ]
+
+
+def test_config_404_for_unknown_slug(rig):
+    client, _dav = rig
+    assert client.get("/book/no-such-slug/config").status_code == 404
+
+
+def test_config_404_when_booking_disabled(rig):
+    """Same answer /times and /slots give. A link whose host turned booking
+    off must not still hand out a captcha key and a timezone."""
+    client, _dav = rig
+    from memaix_gateway import server as server_mod
+    BookingSettingsStore(server_mod._acl, "proj", "alice").set(False)
+    assert client.get("/book/alice-30/config").status_code == 404
+
+
+def test_config_prefers_the_links_own_turnstile_key(rig, monkeypatch, tmp_path):
+    """One gateway can front several booking pages, and Turnstile keys are
+    per-domain — so the link wins over the gateway-wide default."""
+    client, _dav = rig
+    monkeypatch.setattr(config, "load", lambda: {
+        "memaix": {"booking": {"turnstile_site_key": "gateway-wide"}}
+    })
+    assert client.get("/book/alice-30/config").json()["turnstile_site_key"] == "gateway-wide"
+
+    (tmp_path / "booking_links" / "alice-own-key.json").write_text(json.dumps({
+        "project": "proj", "user": "alice", "duration_min": 30,
+        "turnstile_site_key": "links-own",
+    }))
+    assert client.get("/book/alice-own-key/config").json()["turnstile_site_key"] == "links-own"
+
+
+def test_the_widget_is_served_as_javascript(rig):
+    client, _dav = rig
+    resp = client.get("/embed/booking.js")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/javascript")
+    # The mount attribute is the whole public contract of the embed. If it
+    # ever gets renamed, every page that already ships a script tag goes
+    # quietly blank — this is the test that makes that a failing build.
+    assert "data-memaix-booking" in resp.text
+
+
+def test_a_missing_widget_file_is_a_404_not_a_crash(rig, monkeypatch, tmp_path):
+    """package-data is a whitelist, and this file is one line in it.
+
+    Drop that line and booking.js is simply absent from the installed wheel —
+    a packaging mistake nobody notices until production. FileResponse answers
+    a missing path with RuntimeError, i.e. a 500 that reads like the gateway
+    fell over. 404 says the true thing: this gateway has no widget.
+    """
+    from memaix_gateway.booking import routes as booking_routes
+
+    monkeypatch.setattr(booking_routes, "_WIDGET_JS", tmp_path / "gone.js")
+    client, _dav = rig
+    assert client.get("/embed/booking.js").status_code == 404
+
+
+def test_a_link_may_allow_its_own_embedding_origin(rig, tmp_path):
+    """The widget's point is that anyone can embed it. Before per-link
+    origins, "anyone" meant the two sites hardcoded in routes.py."""
+    client, _dav = rig
+    (tmp_path / "booking_links" / "alice-guest.json").write_text(json.dumps({
+        "project": "proj", "user": "alice", "duration_min": 30,
+        "origins": ["https://kund.example"],
+    }))
+    resp = client.get("/book/alice-guest/config", headers={"Origin": "https://kund.example"})
+    assert resp.headers.get("access-control-allow-origin") == "https://kund.example"
+
+
+def test_an_unlisted_origin_gets_no_cors_headers(rig):
+    client, _dav = rig
+    resp = client.get("/book/alice-30/config", headers={"Origin": "https://elsewhere.example"})
+    assert resp.status_code == 200
+    assert "access-control-allow-origin" not in resp.headers
+
+
+def test_the_two_original_sites_keep_their_access(rig):
+    """Hardcoded rather than configured on purpose — a typo in a link file
+    must not be able to take booking off the air on the live sites."""
+    client, _dav = rig
+    resp = client.get("/book/alice-30/config", headers={"Origin": "https://memaix.se"})
+    assert resp.headers.get("access-control-allow-origin") == "https://memaix.se"
+
+
 def test_browsing_the_calendar_does_not_spend_the_budget_for_booking(rig):
     """Reading and writing get separate counters. They used to share one, so
     a visitor who clicked through a dozen weeks looking for a time was then
