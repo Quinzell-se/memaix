@@ -204,6 +204,59 @@ async def app_page(request: Request) -> Response:
     return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
+_PRIVACY_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy – Memaix</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:3rem auto;padding:0 1.5rem;line-height:1.6;color:#222}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:2rem}a{color:#0063cc}</style>
+</head><body>
+<h1>Privacy Policy</h1>
+<p>Memaix is a self-hosted personal productivity assistant operated by Jimmy Lövgren (<a href="mailto:jimmy@jimlov.se">jimmy@jimlov.se</a>).</p>
+
+<h2>Data accessed</h2>
+<p>With your explicit consent, Memaix may access the following Google services on your behalf:</p>
+<ul>
+<li><strong>Gmail</strong> – read and compose emails for inbox triage and drafting.</li>
+<li><strong>Google Calendar</strong> – read and create calendar events for scheduling.</li>
+</ul>
+
+<h2>How data is used</h2>
+<p>All data accessed through Google APIs is used solely to provide the productivity features you requested. Data is processed on your own server and is never shared with third parties, sold, or used for advertising.</p>
+
+<h2>Data retention</h2>
+<p>OAuth tokens are stored encrypted on your self-hosted server. No email content or calendar events are persisted beyond the immediate request. You may revoke access at any time via <a href="https://myaccount.google.com/permissions">Google Account Permissions</a>.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy: <a href="mailto:jimmy@jimlov.se">jimmy@jimlov.se</a></p>
+<p><small>Last updated: September 2026</small></p>
+</body></html>"""
+
+_TERMS_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms of Service – Memaix</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:3rem auto;padding:0 1.5rem;line-height:1.6;color:#222}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:2rem}a{color:#0063cc}</style>
+</head><body>
+<h1>Terms of Service</h1>
+<p>Memaix is a personal, self-hosted tool operated by and for Jimmy Lövgren. By using this instance you acknowledge that it is a private service with no uptime guarantees or warranties of any kind.</p>
+
+<h2>Acceptable use</h2>
+<p>This service is intended for personal use only. Unauthorized access is prohibited.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:jimmy@jimlov.se">jimmy@jimlov.se</a></p>
+<p><small>Last updated: September 2026</small></p>
+</body></html>"""
+
+
+async def privacy_page(request: Request) -> HTMLResponse:
+    return HTMLResponse(_PRIVACY_HTML, headers={"Cache-Control": "public, max-age=86400"})
+
+
+async def terms_page(request: Request) -> HTMLResponse:
+    return HTMLResponse(_TERMS_HTML, headers={"Cache-Control": "public, max-age=86400"})
+
+
 async def app_board_frame(request: Request) -> HTMLResponse:
     """The original board UI, served for embedding in the shell's iframe.
 
@@ -333,6 +386,8 @@ from .api import search as _api_search  # noqa: E402
 from .api import timeline as _api_timeline  # noqa: E402
 
 web_routes = [
+    Route("/privacy", privacy_page, methods=["GET"]),
+    Route("/terms", terms_page, methods=["GET"]),
     Route("/app", app_index, methods=["GET"]),
     Route("/app/login", app_login, methods=["GET"]),
     Route("/app/api/me", api_me, methods=["GET"]),
