@@ -99,8 +99,18 @@ def hostile() -> None:
         written = t_memory.memory_write(
             acl, USER, PROJECT, NOTE, "rökprov: fel uid, detta ska inte gå igenom\n"
         )
-    except Exception as exc:  # noqa: BLE001 -- vilket fel som helst duger, tystnad gör inte
-        print(f"OK hostile: skrivningen braket högljutt -- {type(exc).__name__}: {exc}")
+    except Exception as exc:  # noqa: BLE001 -- felets typ är mindre viktig än att det hörs
+        detail = f"{type(exc).__name__}: {exc}"
+        # Att något kastade räcker inte. Första versionen av provet dog på
+        # "attempt to write a readonly database" och nådde aldrig git -- rätt
+        # utfall av fel skäl, och därmed blind för en regression där git blir
+        # tyst igen. Kräv att felet kommer från det lager provet finns för.
+        if "git" not in detail.lower():
+            raise SystemExit(
+                "FAIL: skrivningen braket, men inte i git -- provet nådde aldrig "
+                f"lagret det finns för. Fick: {detail}"
+            ) from exc
+        print(f"OK hostile: git vägrade högljutt -- {detail}")
         return
 
     commit = written.get("commit") or ""

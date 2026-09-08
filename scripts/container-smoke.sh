@@ -63,6 +63,13 @@ run_smoke friendly "$OWNER_UID"
 
 echo
 echo "== 2/2 hostile: containern kör som $OTHER_UID mot samma vault =="
+# Skrivbart för alla, men .git ägs fortfarande av friendly-körningens uid.
+# Det är produktionsformen exakt: containern körde som root och kunde skriva
+# vad som helst -- SQLite-indexet fungerade -- medan git ensamt vägrade på
+# ägarskapet. Utan det här steget dör provet redan på "readonly database" och
+# når aldrig git, vilket är rätt utfall av fel skäl: det hade inte fångat en
+# regression där git blir tyst igen.
+chmod -R a+rwX "$WORK/vaults"
 run_smoke hostile "$OTHER_UID"
 
 echo
