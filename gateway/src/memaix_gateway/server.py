@@ -375,23 +375,14 @@ def _brief_tools_for_user() -> dict:
         if not (isinstance(email_res, dict) and email_res.get("type") == "google"):
             return t_email.email_list(acl, u, project, folder, limit)
         store = _get_token_store()
-        accounts = [a for a in store.list_accounts(u) if a["provider"] == "google"]
-        if not accounts:
+        google_accounts = [a for a in store.list_accounts(u) if a["provider"] == "google"]
+        if not google_accounts:
             return []
-        token_data = store.load_one(u, "google", accounts[0]["account"])
-        if not token_data:
-            return []
+
         import googleapiclient.discovery
         from google.oauth2.credentials import Credentials
+
         provider_cfg = config.load().get("memaix", {}).get("oauth_providers", {}).get("google", {})
-        creds = Credentials(
-            token=token_data.get("access_token"),
-            refresh_token=token_data.get("refresh_token"),
-            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
-            client_id=provider_cfg.get("client_id", ""),
-            client_secret=config.secret(provider_cfg.get("client_secret_ref", "")) or "",
-        )
-        svc = googleapiclient.discovery.build("gmail", "v1", credentials=creds, cache_discovery=False)
 
         def _extract_body(payload: dict, max_chars: int = 800) -> str:
             import base64
@@ -407,21 +398,42 @@ def _brief_tools_for_user() -> dict:
                     return sub
             return ""
 
-        q = f"newer_than:{days}d in:inbox"
-        resp = svc.users().messages().list(userId="me", q=q, maxResults=limit).execute()
-        msgs = []
-        for ref in resp.get("messages", []):
-            msg = svc.users().messages().get(userId="me", id=ref["id"], format="full").execute()
-            payload = msg.get("payload", {})
-            headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
-            body = _extract_body(payload) or msg.get("snippet", "")
-            msgs.append({
-                "subject": headers.get("Subject", "(inget ämne)"),
-                "from": headers.get("From", ""),
-                "seen": "UNREAD" not in msg.get("labelIds", []),
-                "snippet": body,
-            })
-        return msgs
+        def _fetch_from_account(token_data: dict, inbox_label: str) -> list[dict]:
+            creds = Credentials(
+                token=token_data.get("access_token"),
+                refresh_token=token_data.get("refresh_token"),
+                token_uri="https://oauth2.googleapis.com/token",  # nosec B106
+                client_id=provider_cfg.get("client_id", ""),
+                client_secret=config.secret(provider_cfg.get("client_secret_ref", "")) or "",
+            )
+            svc = googleapiclient.discovery.build("gmail", "v1", credentials=creds, cache_discovery=False)
+            q = f"newer_than:{days}d in:inbox"
+            resp = svc.users().messages().list(userId="me", q=q, maxResults=limit).execute()
+            result = []
+            for ref in resp.get("messages", []):
+                msg = svc.users().messages().get(userId="me", id=ref["id"], format="full").execute()
+                payload = msg.get("payload", {})
+                headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+                body = _extract_body(payload) or msg.get("snippet", "")
+                result.append({
+                    "subject": headers.get("Subject", "(inget ämne)"),
+                    "from": headers.get("From", ""),
+                    "seen": "UNREAD" not in msg.get("labelIds", []),
+                    "snippet": body,
+                    "inbox": inbox_label,
+                })
+            return result
+
+        all_msgs: list[dict] = []
+        for acc in google_accounts:
+            token_data = store.load_one(u, "google", acc["account"])
+            if not token_data:
+                continue
+            try:
+                all_msgs.extend(_fetch_from_account(token_data, acc["account"]))
+            except Exception:
+                logger.warning("Gmail fetch failed for account %s", acc["account"])
+        return all_msgs
 
     def _mail_triage(mails: list[dict]) -> list[dict]:
         if not mails:
