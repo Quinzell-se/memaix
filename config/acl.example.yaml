@@ -101,6 +101,6 @@ projects:
   shared:
     vault: /srv/vaults/shared
     allow_send: false
-  memaix-src:
-    vault: /srv/vaults/memaix-src
+  memaix:
+    vault: /srv/vaults/memaix
     allow_send: false
