@@ -94,6 +94,11 @@ select = ["E", "F", "W", "I"]
 # at those comments, so it's silenced here instead.
 "src/memaix_gateway/server.py" = ["F821"]
 
+# routes.py embeds inline HTML/CSS pages (privacy, terms) as triple-quoted
+# string constants; those lines are inherently long and can't carry a per-line
+# noqa, so E501 is silenced for this file only.
+"src/memaix_gateway/web/routes.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
