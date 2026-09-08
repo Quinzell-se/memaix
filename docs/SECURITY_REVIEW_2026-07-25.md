@@ -355,6 +355,6 @@ Utkorgen är approver-scopad end-to-end via en enda sanningskälla.
 
 | Fynd | PR |
 |---|---|
-| S1 — SSRF genom redirects | [#25](https://github.com/Quinzell-se/memaix/pull/25) |
-| `acl.py:51` admin-flaggan accepterade truthy-värden | [#23](https://github.com/Quinzell-se/memaix/pull/23) |
-| `docs/ARCHITECTURE.md` dokumenterade ~30 av 91 verktyg | [#24](https://github.com/Quinzell-se/memaix/pull/24) |
+| S1 — SSRF genom redirects | [#25](https://github.com/jimlov-poc-labs/memaix/pull/25) |
+| `acl.py:51` admin-flaggan accepterade truthy-värden | [#23](https://github.com/jimlov-poc-labs/memaix/pull/23) |
+| `docs/ARCHITECTURE.md` dokumenterade ~30 av 91 verktyg | [#24](https://github.com/jimlov-poc-labs/memaix/pull/24) |
