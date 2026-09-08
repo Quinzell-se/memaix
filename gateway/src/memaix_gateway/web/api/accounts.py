@@ -41,11 +41,31 @@ def _public_url() -> str:
 
 
 async def api_accounts_list(request: Request) -> JSONResponse:
-    """GET /app/api/accounts → [{provider, account, status, scopes}]"""
+    """GET /app/api/accounts → [{provider, account, status, scopes, readonly?, project?}]
+
+    OAuth accounts come from the token store. IMAP/mailbox accounts are read
+    from the ACL's project configs and returned as readonly entries so the UI
+    can display them without offering an unlink action.
+    """
     user = _require_user(request)
     if not user:
         return _json_401()
-    return JSONResponse(t_acc.account_list(_get_acl(), user, _token_store()))
+    acl = _get_acl()
+    oauth = t_acc.account_list(acl, user, _token_store())
+
+    imap: list[dict] = []
+    for proj in acl.visible_projects(user):
+        mailbox = acl.resource(proj, "mailbox")
+        if isinstance(mailbox, dict) and mailbox.get("user"):
+            imap.append({
+                "provider": "imap",
+                "account": mailbox["user"],
+                "status": "configured",
+                "project": proj,
+                "readonly": True,
+            })
+
+    return JSONResponse(oauth + imap)
 
 
 async def api_accounts_link(request: Request) -> JSONResponse:

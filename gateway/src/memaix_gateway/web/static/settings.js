@@ -17,9 +17,11 @@
     for (const acc of accounts) {
       const li = document.createElement('li');
       const dot = document.createElement('span');
-      dot.textContent = acc.status === 'active' ? '🟢' : '🟡';
+      dot.textContent = acc.readonly ? '🔵' : (acc.status === 'active' ? '🟢' : '🟡');
       const label = document.createElement('span');
-      label.textContent = `${acc.provider} · ${acc.account}`;
+      const providerLabel = acc.provider === 'imap' ? 'IMAP' : acc.provider;
+      const projectSuffix = acc.project ? ` (${acc.project})` : '';
+      label.textContent = `${providerLabel} · ${acc.account}${projectSuffix}`;
       li.append(dot, label);
       if (acc.status === 'needs_relink') {
         const note = document.createElement('span');
@@ -27,17 +29,19 @@
         note.textContent = t('web_settings_needs_relink');
         li.append(note);
       }
-      const unlink = document.createElement('button');
-      unlink.className = 'btn btn-danger';
-      unlink.textContent = t('web_settings_unlink');
-      unlink.addEventListener('click', async () => {
-        try {
-          await api('DELETE', `/app/api/accounts/${encodeURIComponent(acc.provider)}?account=${encodeURIComponent(acc.account)}`);
-          toast(t('web_settings_unlinked'), 'success');
-          renderAccounts();
-        } catch (e) { toast(e.message, 'error'); }
-      });
-      li.append(unlink);
+      if (!acc.readonly) {
+        const unlink = document.createElement('button');
+        unlink.className = 'btn btn-danger';
+        unlink.textContent = t('web_settings_unlink');
+        unlink.addEventListener('click', async () => {
+          try {
+            await api('DELETE', `/app/api/accounts/${encodeURIComponent(acc.provider)}?account=${encodeURIComponent(acc.account)}`);
+            toast(t('web_settings_unlinked'), 'success');
+            renderAccounts();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+        li.append(unlink);
+      }
       list.append(li);
     }
   };
