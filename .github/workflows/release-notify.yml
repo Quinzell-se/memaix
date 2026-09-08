@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    uses: Quinzell-se/jimlov-crew/.github/workflows/release-publish.yml@master
+    uses: jimlov-poc-labs/jimlov-crew/.github/workflows/release-publish.yml@master
     with:
       project_slug: memaix
       display_name: Memaix

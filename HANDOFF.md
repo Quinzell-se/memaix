@@ -5,12 +5,12 @@
 
 Läs detta först, sedan **`AGENTS.md`** (hårda guardrails för den byggande AI:n — bindande). Allt
 material (plan, specar, utvecklingsinstruktioner, vault-utkast) ligger i git-repot
-`Quinzell-se/memaix`. Inget viktigt ligger utanför repot.
+`jimlov-poc-labs/memaix`. Inget viktigt ligger utanför repot.
 
 ## 1. Hämta hem allt
 ```bash
 # Om repot inte redan finns lokalt:
-git clone git@github.com:Quinzell-se/memaix.git && cd memaix
+git clone git@github.com:jimlov-poc-labs/memaix.git && cd memaix
 ```
 Allt produktmaterial ligger i roten av repot. Alice & Bob egen driftplan ligger under
 **`docs/ai-assistent-plattform.md`** + seed-innehåll i **`docs/vault-utkast/`**.

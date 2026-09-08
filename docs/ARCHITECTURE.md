@@ -1,7 +1,7 @@
 # Arkitektur
 
 **Senast verifierad mot kod:** 2026-07-25
-**Repo:** `Quinzell-se/memaix` (publikt, anonymiserat)
+**Repo:** `jimlov-poc-labs/memaix` (publikt, anonymiserat)
 
 > Detta dokument beskriver **hur systemet är byggt**. För *varför* — se `AGENTS.md` §1
 > (auktoritativa v2-beslut) och `PRODUCT.md`. För *vad man kan göra* — se `MCP-API.md`
@@ -342,8 +342,8 @@ Arbetsdelningen är rent konventionsbaserad:
 
 | Repo | Innehåll | Synlighet |
 |---|---|---|
-| `Quinzell-se/memaix` (detta) | Kod, docs, `*.example.yaml`-mallar. All riktig config gitignorerad (`config/*.yaml`, `.env`, `cloudflared/*`, `vaults/`). | Publikt, anonymiserat |
-| `Quinzell-se/memaix-config` | Konkreta `config/memaix.yaml` + `config/acl.yaml` för **en** instans, plus egen `.env.example`. | Privat |
+| `jimlov-poc-labs/memaix` (detta) | Kod, docs, `*.example.yaml`-mallar. All riktig config gitignorerad (`config/*.yaml`, `.env`, `cloudflared/*`, `vaults/`). | Publikt, anonymiserat |
+| `jimlov-poc-labs/memaix-config` | Konkreta `config/memaix.yaml` + `config/acl.yaml` för **en** instans, plus egen `.env.example`. | Privat |
 
 Deployment-flödet är manuellt: config kopieras in på värden
 (`cp config/memaix.yaml /srv/memaix/config/memaix.yaml`). Hemligheter ligger i
@@ -409,7 +409,7 @@ bygger på fel antagande.
 
 | # | Avvikelse | Var |
 |---|---|---|
-| 1 | **`README.md` beskriver inte produkten.** Den säger att koden flyttat till `Quinzell-se/memaix` — vilket är exakt det repo filen ligger i. Kvarleva från `git subtree split` 2026-06-30. | `README.md` |
+| 1 | **`README.md` beskriver inte produkten.** Den säger att koden flyttat till `jimlov-poc-labs/memaix` — vilket är exakt det repo filen ligger i. Kvarleva från `git subtree split` 2026-06-30. | `README.md` |
 | 2 | **Git-commits är synkrona, inte asynkrona.** `AGENTS.md` §1 och tidigare versioner av detta dokument slog fast "git asynkront, aldrig commit-per-skrivning". Koden commit:ar synkront inne i `write_lock` så att snapshot-id blir en riktig commit-hash; det finns ett `TODO(perf)` om batchning. `gateway/Dockerfile:5` säger uttryckligen "commit per skrivning". | `backends/memory_store.py:6-10` |
 | 3 | **`make up` startar inte kärntjänsterna.** Målet kör `--profile tunnel --profile nextcloud`, men gateway, caddy, hydra, postgres och login-app ligger alla under profilen `hydra`. | `Makefile:22` vs `docker-compose.yml` |
 | 4 | **Hydra kör i dev-läge med läckande loggar.** `serve all --dev`, `LOG_LEVEL: debug`, `LOG_LEAK_SENSITIVE_VALUES: "true"` — i direkt spänning med `AGENTS.md` §2 ("scrub före sändning, inga hemligheter i loggar"). | `docker-compose.yml:86,93-94` |
