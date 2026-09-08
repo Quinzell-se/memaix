@@ -51,6 +51,24 @@ Se `HANDOFF.md §4` för full kontext. I korthet — bygg **inte** runt dessa:
   `NOTICE` om licensen kräver det (Apache/MIT/BSD).
 - **Commits:** `git commit -s` (DCO). CLA blir aktuellt först om dual-license-försäljning väljs.
 
+## 4b. Commit-konvention: Conventional Commits sedan 2026-09-08
+`semantic-release` (jobbet `release` i `.github/workflows/ci.yml`) läser commit-meddelanden på
+`main` och skapar en riktig GitHub-release automatiskt när något kvalificerar. En publicerad
+release triggar i sin tur `.github/workflows/release-notify.yml`, som skickar en notis till
+jimlov.se:s projektsida. Formatet är **`typ(Modul): text`**:
+
+```
+feat(Gateway): stöd för scoped minnesnycklar per projekt
+fix(RBAC): nekad åtkomst loggades inte vid saknad grant
+chore(CI): automatisk versionshantering via semantic-release
+```
+
+- `feat` → minor, `fix`/`perf` → patch, `feat!`/`BREAKING CHANGE:` i footern → major.
+- `chore`/`docs`/`refactor`/`style`/`test`/`ci`/`build` triggar **ingen** release.
+- Om inget kvalificerande landat sen senaste release gör semantic-release ingenting — det är
+  förväntat, inte ett fel.
+- Squash-merge: det är squash-commiten som analyseras, så PR-titeln bör redan följa formatet.
+
 ## 5. Innan du öppnar PR (checklista)
 Speglar `CONTRIBUTING.md`:
 - [ ] Tester för det du rört — särskilt **deterministiska motorn** och **RBAC-enforcement** (`TESTING.md`).
