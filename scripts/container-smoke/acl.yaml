@@ -1,0 +1,16 @@
+# Minsta möjliga ACL för rökprovet. Ingen hemlighet, inget lösenord — provet
+# anropar verktygslagret direkt med user_id="smoke" och rör aldrig OAuth.
+#
+# Vaultsökvägen matchar bind-mounten i docker-compose.yml (./vaults:/srv/vaults),
+# eftersom det är monteringen provet ska bevisa fungerar — inte en bekvämare
+# sökväg som råkar ligga inne i imagen.
+users:
+  smoke:
+    oauth_subjects:
+      - smoke
+    grants:
+      smoke: owner
+
+projects:
+  smoke:
+    vault: /srv/vaults/smoke

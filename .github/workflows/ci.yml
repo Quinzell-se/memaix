@@ -58,6 +58,18 @@ jobs:
         working-directory: gateway
         run: python -m pytest -q tests_e2e
 
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Den saknade våningen i testpyramiden: fram till nu byggde ingen del av
+      # CI imagen eller startade containern, så Dockerfile och bind-mounts var
+      # otestade artefakter. Kärnlöftet -- versionerat minne -- hade därför
+      # aldrig levererat en dag i produktion utan att en enda av 1 260 gröna
+      # tester sa ifrån. Provet kör det skarpt, i båda ägarskapsfallen.
+      - name: Container-rökprov (bygg imagen, kör git-minnet i den)
+        run: scripts/container-smoke.sh
+
   sbom:
     runs-on: ubuntu-latest
     steps:
