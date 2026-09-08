@@ -84,3 +84,23 @@ jobs:
           name: sbom
           path: sbom.cdx.json
       # TODO: lägg image-scanning (t.ex. trivy/grype) när images byggs.
+
+  release:
+    needs: [checks, e2e, container-smoke, sbom]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Skapa GitHub-release om commits kvalificerar
+        env:
+          GITHUB_TOKEN: ${{ secrets.JIMLOV_RELEASE_TOKEN }}
+        run: npx --yes -p semantic-release -p @semantic-release/commit-analyzer -p @semantic-release/release-notes-generator -p @semantic-release/github semantic-release
