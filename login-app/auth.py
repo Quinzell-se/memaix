@@ -18,7 +18,38 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import threading
+import time
 from collections.abc import Iterable, Mapping
+
+
+class _RateLimiter:
+    """Sliding-window in-memory rate limiter for the login-app.
+
+    Keyed by username; uses a per-key lock so concurrent requests for
+    different users don't serialize. GC runs lazily on each check to
+    keep memory bounded in long-running deployments.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._windows: dict[str, list[float]] = {}
+
+    def check(self, key: str, *, limit: int, window_s: int) -> bool:
+        """Return True (allowed) and record the attempt, or False (blocked)."""
+        now = time.monotonic()
+        cutoff = now - window_s
+        with self._lock:
+            timestamps = [t for t in self._windows.get(key, []) if t > cutoff]
+            if len(timestamps) >= limit:
+                self._windows[key] = timestamps
+                return False
+            timestamps.append(now)
+            self._windows[key] = timestamps
+            return True
+
+
+login_rate_limiter = _RateLimiter()
 
 
 def pbkdf2_check(provided: str, stored_hash: str) -> bool:

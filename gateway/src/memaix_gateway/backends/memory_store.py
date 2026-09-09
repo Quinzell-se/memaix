@@ -21,6 +21,26 @@ from pathlib import Path
 
 from .. import gitvault
 
+# FTS5 metacharacters that indicate an already-structured query: quotes,
+# parentheses, prefix-match wildcard, column filter colon, caret (initial
+# token), or the reserved operators written in all-caps as standalone words.
+_FTS5_META_RE = re.compile(r'["()*^]|(?<!\w)(AND|OR|NOT|NEAR)(?!\w)')
+
+
+def _fts_or_query(query: str) -> str:
+    """Rewrite a plain space-separated query as FTS5 OR so multi-word searches
+    return notes that contain *any* of the terms rather than requiring all.
+
+    A query that already uses FTS5 syntax (quotes, AND/OR/NOT/NEAR, *, ^) is
+    returned unchanged — the caller expressed intent we shouldn't second-guess.
+    """
+    if _FTS5_META_RE.search(query):
+        return query
+    tokens = query.split()
+    if len(tokens) <= 1:
+        return query
+    return " OR ".join(tokens)
+
 
 class MemoryStore:
     """Per-vault note store.  One instance per resolved vault path (singleton)."""
@@ -173,7 +193,7 @@ class MemoryStore:
             rows = self._conn.execute(
                 "SELECT path, snippet(notes_fts, 1, '', '', '...', 15) AS snip "
                 "FROM notes_fts WHERE notes_fts MATCH ?",
-                (query,),
+                (_fts_or_query(query),),
             ).fetchall()
         except sqlite3.OperationalError:
             return []

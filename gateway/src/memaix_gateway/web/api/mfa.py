@@ -142,6 +142,12 @@ async def api_mfa_setup_start(request: Request) -> JSONResponse:
     acl = _get_acl()
     if not acl.is_admin(user):
         return JSONResponse({"error": "forbidden"}, status_code=403)
+    # Re-enrollment without an existing MFA cookie would let someone with only a
+    # password rotate their own TOTP secret and mint an 8h admin cookie — MFA
+    # would never actually be a second factor. Require the current second factor
+    # before replacing it. First-time enrollment (no secret yet) is exempt.
+    if _totp_ref(acl, user) and not mfa_verified(request, user):
+        return JSONResponse({"error": "mfa_required"}, status_code=403)
 
     secret = _totp.generate_secret()
     resp = JSONResponse(
