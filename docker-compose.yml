@@ -41,7 +41,9 @@ services:
     profiles: ["hydra"]
 
   login-app:
-    build: ./login-app
+    build:
+      context: .
+      dockerfile: login-app/Dockerfile
     image: memaix/login-app:latest
     restart: unless-stopped
     env_file: .env
