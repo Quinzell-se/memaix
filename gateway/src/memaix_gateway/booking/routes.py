@@ -671,7 +671,7 @@ async def booking_create(request: Request) -> JSONResponse:
         acl, project, link, title, event, name, email, purpose, start, end, visitor_tz, manage_token,
         meeting_detail_line,
     )
-    return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
+    return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end"), "manage_url": _manage_url(manage_token)})
 
 
 def _format_dt(dt: datetime, tz_name: str | None) -> str:
@@ -686,7 +686,11 @@ def _format_dt(dt: datetime, tz_name: str | None) -> str:
     return f"{local.strftime('%Y-%m-%d %H:%M')} ({suffix})"
 
 
-def _build_ics(uid: str, title: str, start: datetime, end: datetime, description: str | None, attendees: list[str]) -> bytes:
+def _build_ics(
+    uid: str, title: str, start: datetime, end: datetime,
+    description: str | None, attendees: list[str],
+    location: str | None = None,
+) -> bytes:
     import vobject
     from vobject.icalendar import utc as vobject_utc
 
@@ -704,6 +708,8 @@ def _build_ics(uid: str, title: str, start: datetime, end: datetime, description
     vevent.add("dtend").value = end
     if description:
         vevent.add("description").value = description
+    if location:
+        vevent.add("location").value = location
     for attendee in attendees:
         vevent.add("attendee").value = attendee
     return cal.serialize().encode("utf-8")
@@ -776,7 +782,7 @@ def _send_confirmation_emails(
         if not acl.resource(project, "allow_send"):
             return
         uid = event.get("id") or _uuid.uuid4().hex
-        ics_bytes = _build_ics(uid, title, start, end, purpose or None, [visitor_email])
+        ics_bytes = _build_ics(uid, title, start, end, purpose or None, [visitor_email], meeting_detail_line)
         manage_url = _manage_url(manage_token)
 
         t_email.email_send(
@@ -808,14 +814,15 @@ def _send_confirmation_emails(
 
 def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: dict,
                              visitor_email: str, start: datetime, end: datetime, manage_token: str,
-                             meeting_detail_line: str | None = None) -> None:
+                             meeting_detail_line: str | None = None,
+                             meeting_form_detail: str | None = None) -> None:
     """Best-effort, same contract as _send_confirmation_emails."""
     try:
         host_user = link["user"]
         if not acl.resource(project, "allow_send"):
             return
         uid = event.get("id") or _uuid.uuid4().hex
-        ics_bytes = _build_ics(uid, title, start, end, None, [visitor_email])
+        ics_bytes = _build_ics(uid, title, start, end, None, [visitor_email], meeting_form_detail)
         manage_url = _manage_url(manage_token)
 
         t_email.email_send(
@@ -877,6 +884,7 @@ def _send_reminder_email(
     acl, project: str, link: dict, title: str, event_id: str | None,
     visitor_email: str, meeting_start: datetime, meeting_end: datetime,
     offset_min: int, manage_token: str, meeting_detail_line: str | None = None,
+    meeting_form_detail: str | None = None,
 ) -> None:
     """Best-effort, same contract as _send_confirmation_emails. Called from
     reminders.py's send_due_reminders() — see that module for the
@@ -887,7 +895,7 @@ def _send_reminder_email(
         if not acl.resource(project, "allow_send"):
             return
         uid = event_id or _uuid.uuid4().hex
-        ics_bytes = _build_ics(uid, title, meeting_start, meeting_end, None, [visitor_email])
+        ics_bytes = _build_ics(uid, title, meeting_start, meeting_end, None, [visitor_email], meeting_form_detail)
         manage_url = _manage_url(manage_token)
         when = _format_dt(meeting_start, None)
 
@@ -1005,7 +1013,7 @@ async def booking_reschedule(request: Request) -> JSONResponse:
     meeting_detail_line = _format_meeting_detail_line(row.get("meeting_form_provider"), row.get("meeting_form_detail"))
     _send_reschedule_emails(
         acl, project, link, title, event, row["visitor_email"], start, end, request.path_params["token"],
-        meeting_detail_line,
+        meeting_detail_line, row.get("meeting_form_detail"),
     )
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 

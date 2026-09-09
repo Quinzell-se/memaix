@@ -113,7 +113,7 @@ def send_due_reminders(store, acl_fn, link_fn, now: datetime) -> int:
                 _send_reminder_email(
                     acl_fn(), row["project"], link, title, row["event_id"],
                     row["visitor_email"], start_dt, end_dt, offset, row.get("manage_token", ""),
-                    meeting_detail_line,
+                    meeting_detail_line, row.get("meeting_form_detail"),
                 )
                 # Claim only after a successful send — claiming first would
                 # permanently lose the reminder if the send then failed

@@ -245,8 +245,9 @@ def test_send_due_reminders_renders_meeting_detail_line_when_set(store, monkeypa
 
     assert count == 1
     assert len(calls) == 1
-    meeting_detail_line = calls[0][-1]
+    meeting_detail_line = calls[0][-2]  # [-1] is meeting_form_detail (raw URL), [-2] is display line
     assert meeting_detail_line == "Google Meet: https://meet.google.com/abc-defg-hij"
+    assert calls[0][-1] == "https://meet.google.com/abc-defg-hij"
 
 
 def test_send_due_reminders_renders_no_line_when_meeting_form_unset(store, monkeypatch):
