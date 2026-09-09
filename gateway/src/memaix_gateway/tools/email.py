@@ -31,11 +31,21 @@ Outbox gate:
 
 from __future__ import annotations
 
+import datetime
 import smtplib
 from email.message import EmailMessage
 
 from .. import config
 from ..acl import Acl
+
+_IMAP_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _to_imap_date(iso_date: str) -> str:
+    """Convert ISO date string (YYYY-MM-DD or YYYY-MM) to IMAP date literal."""
+    d = datetime.date.fromisoformat(iso_date if len(iso_date) > 7 else iso_date + "-01")
+    return f"{d.day:02d}-{_IMAP_MONTHS[d.month - 1]}-{d.year}"
 
 # ------------------------------------------------------------------
 # Internal helpers
@@ -134,15 +144,43 @@ def email_search(
     acl: Acl,
     user_id: str,
     project: str,
-    query: str,
-    limit: int = 20,
+    query: str | None = None,
+    limit: int = 50,
     *,
+    since: str | None = None,
+    until: str | None = None,
+    from_addr: str | None = None,
+    folder: str = "INBOX",
     _imap=None,
 ) -> list[dict]:
-    """IMAP BODY search.  Returns [{id, subject, from, date}]."""
+    """IMAP search with optional date range and sender filter.
+
+    Returns [{id, subject, from, date}].
+
+    Args:
+        query:     Body/subject substring to match (omit for header-only searches).
+        limit:     Max messages to return (default 50).
+        since:     ISO date string YYYY-MM-DD — only messages on or after this date.
+        until:     ISO date string YYYY-MM-DD — only messages before this date.
+        from_addr: Sender address or domain to filter on (e.g. "anthropic.com").
+        folder:    Mailbox folder to search (default "INBOX").
+    """
     acl.enforce(user_id, project, "collaborator")
     mb = _imap if _imap is not None else _make_mailbox(acl, project)
-    msgs = list(mb.fetch(f'BODY "{_imap_quote(query)}"', mark_seen=False, limit=limit))
+    mb.folder.set(folder)
+
+    parts: list[str] = []
+    if since:
+        parts.append(f"SINCE {_to_imap_date(since)}")
+    if until:
+        parts.append(f"BEFORE {_to_imap_date(until)}")
+    if from_addr:
+        parts.append(f'FROM "{_imap_quote(from_addr)}"')
+    if query:
+        parts.append(f'TEXT "{_imap_quote(query)}"')
+    criteria = " ".join(parts) if parts else "ALL"
+
+    msgs = list(mb.fetch(criteria, mark_seen=False, limit=limit))
     return [_msg_to_dict(m) for m in msgs]
 
 
