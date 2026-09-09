@@ -2136,9 +2136,32 @@ def email_read(project: str, id: str) -> dict:
 
 
 @mcp.tool()
-def email_search(project: str, query: str, limit: int = 20) -> list:
-    """Search messages by body content."""
-    return _tool_call("email_search", project, _with_mail_backend(t_email.email_search), query, limit)
+def email_search(
+    project: str,
+    query: str | None = None,
+    limit: int = 50,
+    since: str | None = None,
+    until: str | None = None,
+    from_addr: str | None = None,
+    folder: str = "INBOX",
+) -> list:
+    """Search messages in a mailbox with optional filters.
+
+    Args:
+        project:   Memaix project whose mailbox to search.
+        query:     Body/subject text to match. Omit to search by date/sender only.
+        limit:     Max messages to return (default 50).
+        since:     ISO date YYYY-MM-DD — only messages on or after this date.
+        until:     ISO date YYYY-MM-DD — only messages before this date.
+        from_addr: Sender address or domain, e.g. "anthropic.com" or "noreply@loopia.se".
+        folder:    Mailbox folder (default "INBOX").
+    """
+    return _tool_call(
+        "email_search", project,
+        _with_mail_backend(t_email.email_search),
+        query, limit,
+        since=since, until=until, from_addr=from_addr, folder=folder,
+    )
 
 
 @mcp.tool()
