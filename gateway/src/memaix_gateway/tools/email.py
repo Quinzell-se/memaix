@@ -266,10 +266,11 @@ def email_send(
     cfg = _mailbox_cfg(acl, project)
     smtp_cfg: dict = acl.resource(project, "smtp") or {}
 
+    from_addr = smtp_cfg.get("from_addr") or cfg.get("user", "")
     msg = EmailMessage()
     msg["To"] = to
     msg["Subject"] = subject
-    msg["From"] = cfg.get("user", "")
+    msg["From"] = from_addr
     if cc:
         msg["Cc"] = cc
     msg.set_content(body)
@@ -287,8 +288,9 @@ def email_send(
     else:
         host = smtp_cfg.get("host", cfg.get("host", "localhost"))
         port = int(smtp_cfg.get("port", 587))
-        user = cfg.get("user", "")
-        password = config.secret(cfg.get("password_ref"))
+        user = smtp_cfg.get("user") or cfg.get("user", "")
+        password_ref = smtp_cfg.get("password_ref") or cfg.get("password_ref")
+        password = config.secret(password_ref)
         if password is None:
             raise ValueError(f"no password configured for mailbox (project {project!r})")
         with smtplib.SMTP(host, port) as s:
