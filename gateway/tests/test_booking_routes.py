@@ -112,6 +112,7 @@ def rig(tmp_path, monkeypatch):
 
     dav = _MockDav()
     monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
 
     monkeypatch.setenv("TEST_TURNSTILE_SECRET", "shh")
     monkeypatch.setattr(config, "load", lambda: {"memaix": {"booking": {"turnstile_secret_ref": "env:TEST_TURNSTILE_SECRET"}}})

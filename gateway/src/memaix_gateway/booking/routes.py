@@ -134,6 +134,71 @@ def _resolve_dav(project: str, user: str):
     return _srv_resolve_dav(project, user)
 
 
+def _resolve_dav_filtered(project: str, user: str, acl) -> object:
+    """Like _resolve_dav but honours SourceSelectionStore's disabled-set.
+
+    SA source is labelled "calendar_sa" in the disabled-set; registry
+    sources use their existing label from registry.get_all(). Falls back
+    to _resolve_dav when no vault is configured (SourceSelectionStore
+    needs a vault path to persist state).
+    """
+    import json
+    import os
+
+    from ..connectors.calendar_sources import SourceSelectionStore, resolve_effective_sources
+    from ..server import _get_token_store
+    from ..tools.calendar import (
+        _MultiCalendarAdapter,
+        _ServiceAccountGoogleCalendarAdapter,
+    )
+
+    vault = acl.resource(project, "vault")
+    if not vault:
+        return _resolve_dav(project, user)
+
+    store = SourceSelectionStore(acl, project, user)
+    disabled = set(store.list()["disabled"])
+
+    adapters: list = []
+
+    sa_res = acl.resource(project, "calendar_sa")
+    if (
+        isinstance(sa_res, dict)
+        and sa_res.get("auth") == "service_account"
+        and "calendar_sa" not in disabled
+    ):
+        try:
+            ref = sa_res["service_account_ref"]
+            if ref.startswith("env:"):
+                env_var = ref[4:]
+                sa_json = os.environ.get(env_var, "")
+                if not sa_json:
+                    raise CalendarAuthRequired(f"Env-var {env_var} saknas för SA-kalender")
+                sa_info = json.loads(sa_json)
+            elif ref.startswith("file:"):
+                with open(ref[5:]) as f:
+                    sa_info = json.load(f)
+            else:
+                raise CalendarAuthRequired(f"Okänd service_account_ref: {ref}")
+        except CalendarAuthRequired:
+            raise
+        except (ValueError, FileNotFoundError, json.JSONDecodeError, KeyError, OSError) as exc:
+            raise CalendarAuthRequired(f"SA-konfigfel för {project}: {exc}") from exc
+        adapters.append(_ServiceAccountGoogleCalendarAdapter(sa_info, sa_res["impersonate"]))
+
+    token_store = _get_token_store()
+    for _label, adapter in resolve_effective_sources(acl, token_store, project, user):
+        adapters.append(adapter)
+
+    if not adapters:
+        raise CalendarAuthRequired(f"Inga aktiva kalenderadaptrar för {project}/{user}")
+
+    if len(adapters) == 1:
+        return adapters[0]
+
+    return _MultiCalendarAdapter(adapters)
+
+
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
@@ -291,7 +356,7 @@ def _find_free(request: Request) -> tuple[dict, list, int]:
     )
 
     try:
-        dav = _resolve_dav(project, host_user)
+        dav = _resolve_dav_filtered(project, host_user, acl)
         windows = t_cal.calendar_find_free(
             acl, host_user, project, duration_min,
             within_start.isoformat(), within_end.isoformat(), _dav=dav,
@@ -501,7 +566,7 @@ async def booking_create(request: Request) -> JSONResponse:
                 return _json(request, {"error": "invalid_meeting_form"}, status_code=400)
 
     try:
-        dav = _resolve_dav(project, host_user)
+        dav = _resolve_dav_filtered(project, host_user, acl)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -898,7 +963,7 @@ async def booking_reschedule(request: Request) -> JSONResponse:
     acl = _get_acl()
     project, host_user, event_id = row["project"], row["host_user"], row["event_id"]
     try:
-        dav = _resolve_dav(project, host_user)
+        dav = _resolve_dav_filtered(project, host_user, acl)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -963,7 +1028,7 @@ async def booking_cancel(request: Request) -> JSONResponse:
 
     if event_id:
         try:
-            dav = _resolve_dav(project, host_user)
+            dav = _resolve_dav_filtered(project, host_user, acl)
             try:
                 t_cal.calendar_delete(acl, host_user, project, event_id, _dav=dav)
             except FileNotFoundError:
