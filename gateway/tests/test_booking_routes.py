@@ -33,7 +33,7 @@ class _MockDav:
 
     find_events = list_events
 
-    def create_event(self, uid, title, start, end, attendees=None, location=None, description=None):
+    def create_event(self, uid, title, start, end, attendees=None, location=None, description=None, want_conference=False):
         ev = {
             "id": uid, "title": title, "start": start.isoformat(), "end": end.isoformat(),
             "description": description, "location": location,
@@ -1089,9 +1089,11 @@ def test_create_booking_provider_error_surfaces_as_502(rig, monkeypatch):
 
 def test_create_booking_google_meet_form_resolves_after_calendar_create(rig, monkeypatch):
     from memaix_gateway import server as server_mod
+    import memaix_gateway.booking.routes as booking_routes_mod
 
     dav = _MockDavWithMeet()
     monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
     client, _old_dav = rig
 
     _set_forms(server_mod._acl, "proj", "alice", [
@@ -1117,6 +1119,7 @@ def test_create_booking_google_meet_missing_meet_url_rolls_back_event(rig, monke
     # meet_url, MeetingProviderError fires, and the handler must not leave
     # an orphaned event (visitor invited, no consent record) behind.
     from memaix_gateway import server as server_mod
+    import memaix_gateway.booking.routes as booking_routes_mod
 
     class _MockDavMeetProvisionFails(_MockDav):
         def __init__(self, *a, **kw):
@@ -1139,6 +1142,7 @@ def test_create_booking_google_meet_missing_meet_url_rolls_back_event(rig, monke
 
     dav = _MockDavMeetProvisionFails()
     monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
     client, _old_dav = rig
 
     _set_forms(server_mod._acl, "proj", "alice", [
