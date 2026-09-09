@@ -31,6 +31,11 @@ def _require_admin(request: Request):
     if not user:
         return None, w._json_401()
     acl = _get_acl()
+    # Kill-switch must apply to web sessions too — is_admin() alone doesn't
+    # check disabled, only enforce() does. A disabled admin keeps their cookie
+    # for up to 2 days and could otherwise reach admin write paths unhindered.
+    if acl.is_disabled(user):
+        return None, JSONResponse({"error": "forbidden"}, status_code=403)
     if not acl.is_admin(user):
         return None, JSONResponse({"error": "forbidden"}, status_code=403)
     return (user, acl), None

@@ -327,6 +327,25 @@ def _generate_setup_page(public_url: str, admin_user: str) -> None:
 # ─────────────────────────── befintliga funktioner ──────────────────────────
 
 
+_DB_DEFAULTS = {
+    "MEMAIX_NOTIFY_DB":       "/data/memaix-notify.db",
+    "MEMAIX_AUDIT_DB":        "/data/memaix-audit.db",
+    "MEMAIX_OUTBOX_DB":       "/data/memaix-outbox.db",
+    "MEMAIX_ACTIONS_DB":      "/data/memaix-actions.db",
+    "MEMAIX_INDEX_DB":        "/data/memaix-index.db",
+    "MEMAIX_TOKEN_DB":        "/data/memaix-tokens.db",
+    "MEMAIX_RULES_DB":        "/data/memaix-rules.db",
+    "MEMAIX_PM_DB":           "/data/memaix-pm.db",
+    "MEMAIX_IDEMPOTENCY_DB":  "/data/memaix-idempotency.db",
+    "MEMAIX_NUDGE_DB":        "/data/memaix-nudges.db",
+    "MEMAIX_CHAT_DB":         "/data/memaix-chat.db",
+    "MEMAIX_NOTES_LINK_DB":   "/data/memaix-notes-link.db",
+    "MEMAIX_CONSENT_DB":      "/data/memaix-consent.db",
+    "MEMAIX_RATELIMIT_DB":    "/data/memaix-ratelimit.db",
+    "MEMAIX_STATE_DB":        "/data/memaix-state.db",
+}
+
+
 def ensure_secrets() -> None:
     if not ENV.exists():
         example = ROOT / ".env.example"
@@ -340,6 +359,9 @@ def ensure_secrets() -> None:
         env_set("HYDRA_SYSTEM_SECRET", secrets.token_hex(32))
     if not env_get("TOKEN_MASTER_KEY"):
         env_set("TOKEN_MASTER_KEY", _fernet_key())
+    for key, default in _DB_DEFAULTS.items():
+        if not env_get(key):
+            env_set(key, default)
 
 
 def load_acl() -> dict:

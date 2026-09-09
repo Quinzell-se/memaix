@@ -34,6 +34,8 @@ def _require_admin_mfa(request: Request):
     if not user:
         return None, w._json_401()
     acl = w._get_acl()
+    if acl.is_disabled(user):
+        return None, JSONResponse({"error": "forbidden"}, status_code=403)
     if not acl.is_admin(user):
         return None, JSONResponse({"error": "forbidden"}, status_code=403)
     if not mfa_verified(request, user):

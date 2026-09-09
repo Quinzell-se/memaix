@@ -659,7 +659,16 @@ def calendar_find_free(
     duration = timedelta(minutes=duration_min)
     dav = _get_dav(acl, project, _dav)
 
-    busy = sorted(dav.find_events(ws, we), key=lambda e: to_utc(e["start"]))
+    all_events = dav.find_events(ws, we)
+    # Respect the adapter's transparency flag: events marked "free" by the
+    # calendar owner (Google transparency=transparent, CalDAV TRANSP=TRANSPARENT)
+    # carry source_busy=False and must not block booking slots. Week-number and
+    # informational calendars use this convention; real busy blocks (ATEA,
+    # conferences, OOTO) are opaque and continue to block correctly.
+    busy = sorted(
+        [e for e in all_events if e.get("source_busy", True)],
+        key=lambda e: to_utc(e["start"]),
+    )
     if _exclude_event_id is not None:
         busy = [e for e in busy if e.get("id") != _exclude_event_id]
 

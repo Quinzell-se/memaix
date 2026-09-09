@@ -16,6 +16,7 @@ from starlette.routing import Route
 
 from ..acl import AccessDenied, Acl
 from ..safety.audit import AuditLog
+from ..safety.rate_limit import rate_limiter
 from . import store as s
 
 _BOARD_HTML = Path(__file__).parent / "board.html"
@@ -175,6 +176,8 @@ async def board_login(request: Request) -> JSONResponse:
     username = body.get("username", "").strip()
     password = body.get("password", "")
 
+    if not rate_limiter.check(f"board_login:{username}", limit=5, window_s=600):
+        return JSONResponse({"error": "rate_limited"}, status_code=429)
     if username not in _ALLOWED_USERS or not _verify_password(username, password):
         return JSONResponse({"error": "invalid credentials"}, status_code=401)
 

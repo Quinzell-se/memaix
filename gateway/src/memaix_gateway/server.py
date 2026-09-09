@@ -2654,18 +2654,23 @@ def _resolve_calendar_dav(project: str, user: str):
     if isinstance(sa_res, dict) and sa_res.get("auth") == "service_account":
         import json
         import os
-        ref = sa_res["service_account_ref"]
-        if ref.startswith("env:"):
-            env_var = ref[4:]
-            sa_json = os.environ.get(env_var, "")
-            if not sa_json:
-                raise ValueError(f"Env-var {env_var} saknas för SA-kalender")
-            sa_info = json.loads(sa_json)
-        elif ref.startswith("file:"):
-            with open(ref[5:]) as f:
-                sa_info = json.load(f)
-        else:
-            raise ValueError(f"Okänd service_account_ref: {ref}")
+        try:
+            ref = sa_res["service_account_ref"]
+            if ref.startswith("env:"):
+                env_var = ref[4:]
+                sa_json = os.environ.get(env_var, "")
+                if not sa_json:
+                    raise CalendarAuthRequired(f"Env-var {env_var} saknas för SA-kalender")
+                sa_info = json.loads(sa_json)
+            elif ref.startswith("file:"):
+                with open(ref[5:]) as f:
+                    sa_info = json.load(f)
+            else:
+                raise CalendarAuthRequired(f"Okänd service_account_ref: {ref}")
+        except CalendarAuthRequired:
+            raise
+        except (ValueError, FileNotFoundError, json.JSONDecodeError, KeyError, OSError) as exc:
+            raise CalendarAuthRequired(f"SA-konfigfel för {project}: {exc}") from exc
         sa_adapter = _ServiceAccountGoogleCalendarAdapter(sa_info, sa_res["impersonate"])
         normal_adapter = None
         try:
@@ -3228,7 +3233,9 @@ def build_http_app():
             self._cors_app = cors_app
 
         async def __call__(self, scope, receive, send):
-            if scope["type"] == "http" and scope["path"].startswith("/book/"):
+            path = scope.get("path", "")
+            is_booking = path.startswith("/book/") or path.startswith("/booking/")
+            if scope["type"] == "http" and is_booking:
                 await self._plain_app(scope, receive, send)
             else:
                 await self._cors_app(scope, receive, send)

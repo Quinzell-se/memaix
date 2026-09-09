@@ -145,6 +145,12 @@ async def login_post(
     password: str = Form(...),
 ):
     t, locale = _t_for_request(request)
+    if not auth.login_rate_limiter.check(username, limit=5, window_s=600):
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"challenge": login_challenge, "error": t("login_error_credentials"), "t": t, "locale": locale},
+            status_code=429,
+        )
     if username not in ALLOWED_USERS or not _verify_password(username, password):
         return templates.TemplateResponse(
             request, "login.html",
