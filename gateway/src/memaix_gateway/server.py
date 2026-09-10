@@ -3025,9 +3025,12 @@ def build_http_app():
         """Inbound trigger for webhook-type automation rules (FEATURE-AUTOMATION-RULES.md §6).
 
         The token is itself the shared secret (a random 'token' generated when
-        the rule was created) — a sufficiently random URL segment, compared in
-        constant time (rules/match.py). Rate-limited per client IP so the token
-        can't be brute-forced.
+        the rule was created), compared in constant time (rules/match.py).
+        Rate-limited per client IP so the token can't be brute-forced.
+
+        Token resolution order:
+          1. X-Webhook-Token header (preferred — keeps secret out of server logs)
+          2. URL path param /hooks/{token} (backward-compatible, deprecated)
         """
         # Unauthenticated endpoint — rate-limit per client IP so a valid token
         # can't be guessed by volume (30 attempts / 60 s).
@@ -3035,7 +3038,10 @@ def build_http_app():
         if not _rate_limiter.check(f"webhook:{client_ip}", limit=30, window_s=60):
             return JSONResponse({"error": "rate_limited"}, status_code=429)
 
-        token = request.path_params["token"]
+        # Prefer header over URL path so the token never appears in access logs.
+        token = request.headers.get("X-Webhook-Token") or request.path_params.get("token", "")
+        if not token:
+            return JSONResponse({"error": "missing webhook token"}, status_code=401)
         try:
             body = await request.json()
         except Exception:
@@ -3097,6 +3103,7 @@ def build_http_app():
         Route("/oauth2/register", dcr_handler, methods=["POST"]),
         Route("/link/{provider}", link_start),
         Route("/link/{provider}/callback", link_callback),
+        Route("/hooks", rule_webhook, methods=["POST"]),
         Route("/hooks/{token}", rule_webhook, methods=["POST"]),
         *board_routes,
         *web_routes,
