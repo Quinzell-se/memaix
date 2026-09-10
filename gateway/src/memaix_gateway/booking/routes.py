@@ -757,7 +757,10 @@ def _format_meeting_detail_line(provider: str | None, detail: str | None) -> str
     return f"{label}: {detail}" if label else None
 
 
-def _manage_url(manage_token: str) -> str:
+def _manage_url(manage_token: str, link: dict | None = None) -> str:
+    frontend = (link or {}).get("manage_frontend_url", "")
+    if frontend:
+        return f"{frontend.rstrip('/')}?token={manage_token}"
     cfg = config.load()
     public_url = cfg.get("memaix", {}).get("server", {}).get("public_url", "http://localhost:8080")
     return f"{public_url.rstrip('/')}/booking/{manage_token}"
@@ -783,7 +786,7 @@ def _send_confirmation_emails(
             return
         uid = event.get("id") or _uuid.uuid4().hex
         ics_bytes = _build_ics(uid, title, start, end, purpose or None, [visitor_email], meeting_detail_line)
-        manage_url = _manage_url(manage_token)
+        manage_url = _manage_url(manage_token, link)
 
         t_email.email_send(
             acl, host_user, project, visitor_email,
@@ -823,7 +826,7 @@ def _send_reschedule_emails(acl, project: str, link: dict, title: str, event: di
             return
         uid = event.get("id") or _uuid.uuid4().hex
         ics_bytes = _build_ics(uid, title, start, end, None, [visitor_email], meeting_form_detail)
-        manage_url = _manage_url(manage_token)
+        manage_url = _manage_url(manage_token, link)
 
         t_email.email_send(
             acl, host_user, project, visitor_email,
@@ -896,7 +899,7 @@ def _send_reminder_email(
             return
         uid = event_id or _uuid.uuid4().hex
         ics_bytes = _build_ics(uid, title, meeting_start, meeting_end, None, [visitor_email], meeting_form_detail)
-        manage_url = _manage_url(manage_token)
+        manage_url = _manage_url(manage_token, link)
         when = _format_dt(meeting_start, None)
 
         t_email.email_send(
@@ -923,17 +926,23 @@ def _send_reminder_email(
 
 
 async def booking_manage_get(request: Request) -> JSONResponse:
-    """GET /booking/{token} — {status, meeting_end} for the booking the
-    token manages, or 404 if the token is unknown. Powers a "manage your
-    booking" page on jimlov.se; never exposes anything not already visible
-    to whoever holds the token. Deliberately doesn't re-fetch the calendar
-    event's own start/end — consent_store's meeting_end is already the
-    source of truth this route needs, and calendar_find_free/calendar_list
-    aren't shaped for "look up one specific event by id"."""
+    """GET /booking/{token} — booking state for whoever holds the manage token.
+
+    Returns {status, meeting_end, slug, duration_min, host_timezone}.
+    slug + duration_min let the manage page fetch available slots for
+    rescheduling without a separate config call. Never exposes anything
+    beyond what is already visible to whoever holds the token."""
     row = get_consent_store().get_by_manage_token(request.path_params["token"])
     if row is None:
         return _json(request, {"error": "not_found"}, status_code=404)
-    return _json(request, {"status": row["status"], "meeting_end": row["meeting_end"]})
+    link = get_link(row["slug"]) if row.get("slug") else None
+    return _json(request, {
+        "status": row["status"],
+        "meeting_end": row["meeting_end"],
+        "slug": row.get("slug"),
+        "duration_min": (link or {}).get("duration_min"),
+        "host_timezone": (link or {}).get("host_timezone"),
+    })
 
 
 async def booking_reschedule(request: Request) -> JSONResponse:
