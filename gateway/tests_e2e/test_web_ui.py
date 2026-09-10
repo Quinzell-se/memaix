@@ -375,17 +375,18 @@ def test_mfa_enrollment_and_kill_switch_flow(context, page):
     assert next(u for u in users if u["id"] == "bob")["disabled"] is True
 
     # …and bob is locked out of project data immediately (live acl reload).
-    # Navigate to about:blank first to stop the admin page's pollBadge interval
-    # from firing a 401→window.location redirect that could race later gotos.
-    context.clear_cookies()
+    # Navigate away BEFORE clearing cookies so pollBadge's interval is already
+    # stopped when the session disappears — clearing first leaves a live interval
+    # that can fire a 401→redirect and race the next goto.
     page.goto("about:blank", wait_until="commit")
+    context.clear_cookies()
     login_as(context, "bob")
     resp = page.request.get("/app/api/memory/notes?project=demo")
     assert resp.status == 403
 
     # 4) Re-enable via the UI so later tests see a clean state.
-    context.clear_cookies()
     page.goto("about:blank", wait_until="commit")
+    context.clear_cookies()
     login_as(context, "alice")
     _inject_mfa_cookie(context, "alice")
     page.goto("/app/admin", wait_until="commit")
