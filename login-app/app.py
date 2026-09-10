@@ -203,6 +203,15 @@ async def consent_get(consent_challenge: str = ""):
     except Exception as exc:
         return HTMLResponse(f"<p>Hydra-fel: {exc}</p>", status_code=502)
 
+    subject = info.get("subject", "")
+    if subject not in ALLOWED_USERS:
+        redirect = _hydra_reject(
+            "/admin/oauth2/auth/requests/consent",
+            "consent_challenge", consent_challenge,
+            "user not in allowed list",
+        )
+        return RedirectResponse(redirect, status_code=303)
+
     requested_scope = info.get("requested_scope", [])
 
     # Hydra v2.2 doesn't map the `resource` param to requested_access_token_audience

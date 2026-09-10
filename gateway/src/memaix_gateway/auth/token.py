@@ -54,6 +54,11 @@ class HydraTokenVerifier:
                 # token with no/mismatching aud will raise and be rejected.
                 decode_kwargs["audience"] = self._audiences
             else:
+                logger.warning(
+                    "HydraTokenVerifier: no audiences configured — aud claim will NOT be "
+                    "verified. Set auth.resource_server_url in gateway config to enable "
+                    "audience verification and prevent confused-deputy attacks."
+                )
                 decode_kwargs["options"] = {"verify_aud": False}
             claims: dict[str, Any] = jwt.decode(
                 token,
