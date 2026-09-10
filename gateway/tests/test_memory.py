@@ -289,3 +289,42 @@ def test_whoami_carries_memory_rules(acl):
     result = whoami(acl, "carol")
     assert "memory_rules" in result
     assert "hypotes" in result["memory_rules"] and "verifierad" in result["memory_rules"]
+
+
+# ------------------------------------------------------------------
+# Provenance (02db3094)
+# ------------------------------------------------------------------
+
+
+def test_memory_write_returns_provenance_field(acl, store):
+    result = memory_write(acl, "carol", "proj", "prov/a.md", "ingen filreferens här")
+    assert "provenance" in result
+    assert result["provenance"]["grade"] in ("verified", "unverifiable")
+
+
+def test_provenance_verified_when_no_path_references(acl, store):
+    result = memory_write(acl, "carol", "proj", "prov/b.md", "bara text, inga sökvägar")
+    assert result["provenance"]["grade"] == "verified"
+    assert result["provenance"]["dead_refs"] == []
+
+
+def test_provenance_unverifiable_when_path_missing(acl, store, tmp_path):
+    content = f"Vi använder /tmp/finns-inte-alls/fil.py som config"
+    result = memory_write(acl, "carol", "proj", "prov/c.md", content)
+    assert result["provenance"]["grade"] == "unverifiable"
+    assert any("finns-inte-alls" in r for r in result["provenance"]["dead_refs"])
+
+
+def test_provenance_verified_when_path_exists(acl, store, tmp_path):
+    real_file = tmp_path / "real.py"
+    real_file.write_text("exists")
+    content = f"Se implementationen i {real_file}"
+    result = memory_write(acl, "carol", "proj", "prov/d.md", content)
+    assert result["provenance"]["grade"] == "verified"
+
+
+def test_provenance_does_not_override_explicit_verifierad(acl, store):
+    content = "sökväg /tmp/finns-inte/x.py nämns"
+    result = memory_write(acl, "carol", "proj", "prov/e.md", content, status="verifierad")
+    assert result["status"] == "verifierad"
+    assert result["provenance"]["grade"] == "unverifiable"

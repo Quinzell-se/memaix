@@ -22,6 +22,8 @@ kräver källbekräftelse eller mänskligt besked, aldrig "låter rimligt"
 
 from __future__ import annotations
 
+import os
+import re
 from pathlib import Path
 
 import yaml
@@ -32,6 +34,24 @@ from ..backends.memory_store import MemoryStore
 from ..paths import validate_relative_path
 
 VALID_STATUS = ("hypotes", "verifierad")
+
+# Matches absolute paths with ≥2 segments: /foo/bar, /srv/vaults/x.md
+# Negative lookbehind prevents matching after :// (URLs) or word chars (identifiers).
+_PATH_RE = re.compile(r"(?<![:/\w])((?:/[\w][\w.\-]*){2,})")
+
+
+def _check_provenance(content: str) -> dict:
+    """Extract absolute file-path references from content and verify they exist.
+
+    Returns {"grade": "verified"|"unverifiable", "dead_refs": [...]}.
+    Grade is "verified" when no path-like references are found, or all found
+    paths resolve. Informational only — never changes the note's status.
+    """
+    refs = _PATH_RE.findall(content)
+    dead = [r for r in refs if not os.path.exists(r)]
+    if dead:
+        return {"grade": "unverifiable", "dead_refs": dead}
+    return {"grade": "verified", "dead_refs": []}
 
 
 def note_status(content: str) -> str:
@@ -136,18 +156,26 @@ def memory_write(
     acl: Acl, user_id: str, project: str, note: str, content: str,
     status: str | None = None,
 ) -> dict:
-    """Overwrite note.  Returns {path, commit, status}.
+    """Overwrite note.  Returns {path, commit, status, provenance}.
 
     status=None: innehållet skrivs orört (extern trohet — synkflöden);
     dess status läses ur befintlig frontmatter, saknas den gäller hypotes.
-    Explicit status stämplas i frontmatter och vinner över innehållets."""
+    Explicit status stämplas i frontmatter och vinner över innehållets.
+
+    provenance: informationsfält — anger om filreferenser i innehållet
+    löser sig på disk. Påverkar aldrig status (mänskligt besked vinner)."""
     acl.enforce(user_id, project, "collaborator")
     _validate_note_path(note)
     if status is not None:
         content = set_note_status(content, status)
     store = _get_store(acl, project)
     commit = store.write(note, content, user_id)
-    return {"path": note, "commit": commit, "status": note_status(content)}
+    return {
+        "path": note,
+        "commit": commit,
+        "status": note_status(content),
+        "provenance": _check_provenance(content),
+    }
 
 
 def memory_append(

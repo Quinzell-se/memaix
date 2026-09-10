@@ -8,6 +8,9 @@ answer and is expected to cite `ref`.
 
 from __future__ import annotations
 
+import math
+from datetime import datetime, timezone
+
 import numpy as np
 
 _ROLES = ("reader", "collaborator", "owner")
@@ -64,6 +67,35 @@ def _reciprocal_rank_fusion(rank_lists: list[list[dict]], k: int = 60) -> list[d
             payload.setdefault(key, item)
     ordered = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     return [{**payload[key], "score": score} for key, score in ordered]
+
+
+def _apply_decay(fused: list[dict], store, decay_lambda: float) -> list[dict]:
+    """Re-weight RRF scores by exponential time decay: score *= exp(-λ * days_old).
+
+    λ=0 (default) leaves ranking identical to today. A value of ~0.005 halves
+    a score after ~140 days. Configured under memaix.search.decay_lambda.
+    """
+    if not decay_lambda or not fused:
+        return fused
+    now = datetime.now(timezone.utc)
+    out = []
+    for item in fused:
+        score = item.get("score", 0.0)
+        updated_at_str = store.get_ref_updated_at(
+            item["project"], item["source_type"], item["ref"]
+        )
+        if updated_at_str:
+            try:
+                updated_at = datetime.fromisoformat(updated_at_str)
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                days_old = max(0.0, (now - updated_at).total_seconds() / 86400)
+                score = score * math.exp(-decay_lambda * days_old)
+            except (ValueError, TypeError):
+                pass
+        out.append({**item, "score": round(score, 6)})
+    out.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+    return out
 
 
 def _memory_status(acl, project: str, ref: str) -> str:
@@ -139,6 +171,10 @@ def search_all(
 
     rank_lists = [lst for lst in (lexical_hits, semantic_hits, email_hits) if lst]
     fused = _reciprocal_rank_fusion(rank_lists) if rank_lists else []
+
+    decay_lambda = ((cfg or {}).get("memaix", {}) or {}).get("search", {}).get("decay_lambda", 0.0)
+    if decay_lambda:
+        fused = _apply_decay(fused, store, decay_lambda)
 
     results = []
     for item in fused:
