@@ -1437,7 +1437,23 @@ def memory_search(project: str, query: str) -> list:
 def memory_write(project: str, note: str, content: str, status: str | None = None) -> dict:
     """Write (overwrite) a memory note. status: 'hypotes' (default) eller
     'verifierad' — sätt verifierad ENDAST efter källbekräftelse eller
-    mänskligt besked (minnestrappan, se whoami.memory_rules)."""
+    mänskligt besked (minnestrappan, se whoami.memory_rules).
+
+    Returnerar {"stored": false, "merged_into": path, "similarity": float} om
+    innehållet är ett nära-duplikat av ett befintligt minne (novelty gate)."""
+    embedder = _get_search_embedder()
+    if embedder is not None:
+        from .search.novelty import check_novelty
+        threshold = (
+            config.load().get("memaix", {}).get("memory", {}).get("novelty_threshold", 0.88)
+        )
+        match = check_novelty(content, project, note, embedder, _get_search_store(), threshold)
+        if match is not None:
+            return {
+                "stored": False,
+                "merged_into": match["existing_path"],
+                "similarity": match["similarity"],
+            }
     return _tool_call("memory_write", project, t_memory.memory_write, note, content, status)
 
 

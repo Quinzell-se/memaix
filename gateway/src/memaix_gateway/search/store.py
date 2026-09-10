@@ -158,6 +158,16 @@ class EmbeddingStore:
                 return []
         return [dict(r) for r in rows]
 
+    def get_ref_updated_at(self, project: str, source_type: str, ref: str) -> str | None:
+        """Return MAX(updated_at) for a (project, source_type, ref) triple, or None."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(updated_at) as updated_at FROM chunks "
+                "WHERE project=? AND source_type=? AND ref=?",
+                (project, source_type, ref),
+            ).fetchone()
+        return row["updated_at"] if row and row["updated_at"] else None
+
     def count_by_project(self, projects: list[str]) -> dict[str, int]:
         if not projects:
             return {}
