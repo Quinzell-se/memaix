@@ -75,6 +75,7 @@ class WebhookChannel:
             http = requests
             from ..safety.net import validate_external_url
             validate_external_url(self._url)  # authoritative SSRF check before the real request
+        payload: dict[str, object]
         if self._fmt == "slack":
             payload = {"text": f"*{subject}*\n{text}"}
         elif self._fmt == "discord":
