@@ -82,7 +82,7 @@ def _imap_quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _msg_to_dict(m, full: bool = False) -> dict:
+def _msg_to_dict(m, full: bool = False, *, inbox: str = "") -> dict:
     base: dict = {
         "id": str(m.uid),
         "subject": m.subject,
@@ -90,6 +90,8 @@ def _msg_to_dict(m, full: bool = False) -> dict:
         "date": m.date_str,
         "seen": "\\Seen" in m.flags if hasattr(m, "flags") else bool(m.seen),
     }
+    if inbox:
+        base["inbox"] = inbox
     if full:
         base.update(
             {
@@ -115,12 +117,13 @@ def email_list(
     *,
     _imap=None,
 ) -> list[dict]:
-    """List recent messages.  Returns [{id, subject, from, date, seen}]."""
+    """List recent messages.  Returns [{id, subject, from, date, seen, inbox}]."""
     acl.enforce(user_id, project, "collaborator")
     mb = _imap if _imap is not None else _make_mailbox(acl, project)
     mb.folder.set(folder)
     msgs = list(mb.fetch("ALL", mark_seen=False, limit=limit))
-    return [_msg_to_dict(m) for m in msgs]
+    inbox = _mailbox_cfg(acl, project).get("user", "")
+    return [_msg_to_dict(m, inbox=inbox) for m in msgs]
 
 
 def email_read(

@@ -176,6 +176,11 @@ def test_email_list_respects_limit(acl):
     assert len(results) == 2
 
 
+def test_email_list_tags_messages_with_mailbox_address(acl, imap):
+    results = email_list(acl, "carol", "proj", _imap=imap)
+    assert all(m["inbox"] == "jimmy@example.com" for m in results)
+
+
 # ------------------------------------------------------------------
 # email_read
 # ------------------------------------------------------------------
