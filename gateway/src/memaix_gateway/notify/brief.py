@@ -28,6 +28,23 @@ def _day_bounds(now: datetime, tz_name: str) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=1)
 
 
+def _fmt_event_time(start: str, tz_name: str) -> str:
+    """Calendar sources return 'start' as an ISO datetime (usually UTC) or a
+    bare date for all-day events. Render it in the recipient's timezone so
+    the brief matches their wall clock, not the source's."""
+    if not start:
+        return ""
+    if len(start) <= 10:  # date-only — all-day event, nothing to convert
+        return start
+    try:
+        dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+    except ValueError:
+        return start
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_tz_or_utc(tz_name)).strftime("%H:%M")
+
+
 def build(
     acl, user: str, cfg: dict | None, prefs: dict, *,
     now: datetime, tools: dict | None = None, last_run_iso: str | None = None,
@@ -65,7 +82,8 @@ def build(
         if calendar_events_fn and acl.resource(project, "calendar"):
             try:
                 for ev in (calendar_events_fn(acl, user, project, day_start, day_end) or []):
-                    calendar_lines.append(f"- [{project}] {ev.get('title', '(ingen titel)')} — {ev.get('start', '')}")
+                    when = _fmt_event_time(ev.get('start', ''), tz_name)
+                    calendar_lines.append(f"- [{project}] {ev.get('title', '(ingen titel)')} — {when}")
             except Exception:
                 pass
 
