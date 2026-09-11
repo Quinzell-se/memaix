@@ -54,6 +54,24 @@ def test_build_includes_recent_mail():
     assert "Seen one" in result["markdown"]
 
 
+def test_build_tags_mail_with_source_account_when_present():
+    tools = {"email_list": lambda acl, u, p, f, lim, **kw: [
+        {"subject": "From work", "from": "a@b.com", "inbox": "jimmy@jimlov.se"},
+        {"subject": "From personal", "from": "c@d.com", "inbox": "mrjimlov@gmail.com"},
+    ]}
+    result = build(_acl(), "alice", None, _prefs(), now=NOW, tools=tools)
+    assert "[jimmy@jimlov.se]" in result["markdown"]
+    assert "[mrjimlov@gmail.com]" in result["markdown"]
+
+
+def test_build_leaves_mail_untagged_when_no_source_account():
+    tools = {"email_list": lambda acl, u, p, f, lim, **kw: [
+        {"subject": "Plain IMAP mail", "from": "a@b.com"},
+    ]}
+    result = build(_acl(), "alice", None, _prefs(), now=NOW, tools=tools)
+    assert "Plain IMAP mail — a@b.com" in result["markdown"]
+
+
 def test_build_includes_backlog_changes_since_last_run():
     tools = {"backlog_list": lambda acl, u, p: [
         {"id": "a1", "title": "Old item", "status": "done", "updated_at": "2026-01-01T00:00:00"},

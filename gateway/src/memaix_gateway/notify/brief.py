@@ -98,7 +98,9 @@ def build(
                     subject = m.get("subject", "(inget ämne)")
                     sender = m.get("from", "")
                     summary = m.get("summary", "")
-                    line = f"- [{project}] {icon} {subject} — {sender}"
+                    inbox = m.get("inbox", "")
+                    account_tag = f" [{inbox}]" if inbox else ""
+                    line = f"- [{project}]{account_tag} {icon} {subject} — {sender}"
                     if summary:
                         line += f"\n  {summary}"
                     mail_lines.append(line)
