@@ -47,6 +47,27 @@ def test_webhook_slack_format_posts_text_payload():
     assert "plain text" in kwargs["json"]["text"]
 
 
+def test_webhook_discord_format_posts_embed_payload():
+    http = _FakeHttp()
+    ch = WebhookChannel("https://discord.com/api/webhooks/1/abc", "discord", _http=http)
+    ch.send("Subject", "**md**", "plain text")
+    _, kwargs = http.calls[0]
+    embed = kwargs["json"]["embeds"][0]
+    assert embed["title"] == "Subject"
+    assert embed["description"] == "**md**"
+    assert embed["color"] == 0x2ECC71
+
+
+def test_webhook_discord_format_truncates_long_description():
+    http = _FakeHttp()
+    ch = WebhookChannel("https://discord.com/api/webhooks/1/abc", "discord", _http=http)
+    ch.send("Subject", "x" * 5000, "plain text")
+    _, kwargs = http.calls[0]
+    desc = kwargs["json"]["embeds"][0]["description"]
+    assert len(desc) == 4096
+    assert desc.endswith("…")
+
+
 def test_webhook_raw_format_posts_structured_payload():
     http = _FakeHttp()
     ch = WebhookChannel("https://example.com/hook", "raw", _http=http)
