@@ -66,6 +66,8 @@ class WebhookChannel:
         self._fmt = fmt
         self._http = _http
 
+    _DISCORD_DESC_LIMIT = 4096
+
     def send(self, subject: str, markdown: str, text: str) -> None:
         http = self._http
         if http is None:
@@ -73,10 +75,16 @@ class WebhookChannel:
             http = requests
             from ..safety.net import validate_external_url
             validate_external_url(self._url)  # authoritative SSRF check before the real request
-        payload = (
-            {"text": f"*{subject}*\n{text}"} if self._fmt == "slack"
-            else {"subject": subject, "text": text, "markdown": markdown}
-        )
+        payload: dict[str, object]
+        if self._fmt == "slack":
+            payload = {"text": f"*{subject}*\n{text}"}
+        elif self._fmt == "discord":
+            desc = markdown
+            if len(desc) > self._DISCORD_DESC_LIMIT:
+                desc = desc[: self._DISCORD_DESC_LIMIT - 1] + "…"
+            payload = {"embeds": [{"title": subject, "description": desc, "color": 0x2ECC71}]}
+        else:
+            payload = {"subject": subject, "text": text, "markdown": markdown}
         # allow_redirects=False — se kommentaren i safety/net.py. 307 bevarar POST-body,
         # så en omdirigering skickar hela nyttolasten vidare till målet.
         resp = http.post(self._url, json=payload, timeout=10, allow_redirects=False)

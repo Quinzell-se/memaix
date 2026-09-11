@@ -32,6 +32,18 @@ def test_build_includes_calendar_event():
     assert not result["empty"]
 
 
+def test_build_renders_calendar_time_in_recipient_timezone():
+    tools = {"calendar_events": lambda acl, u, p, s, e: [{"title": "Daily", "start": "2026-01-15T07:00:00Z"}]}
+    result = build(_acl(), "alice", None, _prefs(timezone="Europe/Stockholm"), now=NOW, tools=tools)
+    assert "Daily — 08:00" in result["markdown"]
+
+
+def test_build_leaves_all_day_event_start_untouched():
+    tools = {"calendar_events": lambda acl, u, p, s, e: [{"title": "Semester", "start": "2026-01-15"}]}
+    result = build(_acl(), "alice", None, _prefs(timezone="Europe/Stockholm"), now=NOW, tools=tools)
+    assert "Semester — 2026-01-15" in result["markdown"]
+
+
 def test_build_includes_recent_mail():
     tools = {"email_list": lambda acl, u, p, f, lim, **kw: [
         {"subject": "Seen one", "from": "a@b.com", "seen": True},
