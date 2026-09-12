@@ -134,46 +134,68 @@ class ConnectorRegistry:
         Returns [(label, adapter), ...]. label is for cache/debugging only,
         never surfaced as a stable identifier."""
         resource_cfg = acl.resource(project, RESOURCE_KEYS.get(capability, capability))
-        if not resource_cfg:
-            return []
-
         results: list[tuple[str, object]] = []
-        base_type = resource_cfg.get("type", DEFAULT_TYPES.get(capability, capability))
-        base_spec = self._specs.get((capability, base_type))
+        handled_types: set[str] = set()
 
-        if base_spec is not None:
-            if base_spec.auth == "per_user":
-                provider = base_spec.provider or base_spec.type
-                accounts = token_store.list_accounts(user)
-                for account in accounts:
-                    if account["provider"] != provider:
+        if resource_cfg:
+            base_type = resource_cfg.get("type", DEFAULT_TYPES.get(capability, capability))
+            base_spec = self._specs.get((capability, base_type))
+            handled_types.add(base_type)
+
+            if base_spec is not None:
+                if base_spec.auth == "per_user":
+                    provider = base_spec.provider or base_spec.type
+                    accounts = token_store.list_accounts(user)
+                    for account in accounts:
+                        if account["provider"] != provider:
+                            continue
+                        token = token_store.load_one(user, provider, account["account"])
+                        if token is None:
+                            continue
+                        label = f"{base_spec.type}:{account['account']}"
+                        results.append((label, base_spec.factory(acl, project, user, resource_cfg, token)))
+                else:
+                    label = f"{base_spec.type}:{project}"
+                    results.append((label, base_spec.factory(acl, project, user, resource_cfg, None)))
+
+            for i, extra_cfg in enumerate(resource_cfg.get("sources") or []):
+                extra_type = extra_cfg.get("type", base_type)
+                spec = self._specs.get((capability, extra_type))
+                if spec is None:
+                    continue
+                token = None
+                if spec.auth == "per_user":
+                    provider = spec.provider or spec.type
+                    accounts = token_store.list_accounts(user)
+                    match = next((a for a in accounts if a["provider"] == provider), None)
+                    if match is None:
                         continue
-                    token = token_store.load_one(user, provider, account["account"])
+                    token = token_store.load_one(user, provider, match["account"])
                     if token is None:
                         continue
-                    label = f"{base_spec.type}:{account['account']}"
-                    results.append((label, base_spec.factory(acl, project, user, resource_cfg, token)))
-            else:
-                label = f"{base_spec.type}:{project}"
-                results.append((label, base_spec.factory(acl, project, user, resource_cfg, None)))
+                label = extra_cfg.get("label") or f"{extra_type}:{i}"
+                results.append((label, spec.factory(acl, project, user, extra_cfg, token)))
 
-        for i, extra_cfg in enumerate(resource_cfg.get("sources") or []):
-            extra_type = extra_cfg.get("type", base_type)
-            spec = self._specs.get((capability, extra_type))
-            if spec is None:
+        # Per-user sweep: pick up any linked per-user accounts not already
+        # covered by the base type or extra sources above.  This makes Google
+        # OAuth and iCal-secret tokens appear as calendar sources automatically
+        # without requiring a matching `type:` in acl.yaml — the token_store
+        # is the source of truth for "which accounts has this user linked?"
+        for (cap, type_), spec in self._specs.items():
+            if cap != capability or type_ in handled_types:
                 continue
-            token = None
-            if spec.auth == "per_user":
-                provider = spec.provider or spec.type
-                accounts = token_store.list_accounts(user)
-                match = next((a for a in accounts if a["provider"] == provider), None)
-                if match is None:
+            if spec.auth != "per_user":
+                continue
+            handled_types.add(type_)
+            provider = spec.provider or spec.type
+            for account in token_store.list_accounts(user):
+                if account["provider"] != provider:
                     continue
-                token = token_store.load_one(user, provider, match["account"])
+                token = token_store.load_one(user, provider, account["account"])
                 if token is None:
                     continue
-            label = extra_cfg.get("label") or f"{extra_type}:{i}"
-            results.append((label, spec.factory(acl, project, user, extra_cfg, token)))
+                label = f"{type_}:{account['account']}"
+                results.append((label, spec.factory(acl, project, user, resource_cfg or {}, token)))
 
         return results
 

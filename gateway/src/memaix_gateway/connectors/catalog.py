@@ -68,6 +68,18 @@ def _public_ics_factory(acl, project, user, resource_cfg, token):
     return _ICalAdapter(resource_cfg["url"])
 
 
+def _google_calendar_factory(acl, project, user, resource_cfg, token):
+    from ..tools.calendar import _PerUserGoogleAdapter
+
+    return _PerUserGoogleAdapter(token["access_token"])
+
+
+def _ical_secret_factory(acl, project, user, resource_cfg, token):
+    from ..tools.calendar import _ICalAdapter
+
+    return _ICalAdapter(token["ical_url"])
+
+
 def _microsoft_mail_factory(acl, project, user, resource_cfg, token):
     from .adapters.mail_microsoft import GraphMailAdapter
 
@@ -120,6 +132,8 @@ def register_defaults(registry: ConnectorRegistry) -> None:
         ConnectorSpec(type="microsoft", capability="mail", auth="per_user", factory=_microsoft_mail_factory),
         ConnectorSpec(type="caldav", capability="calendar", auth="shared", factory=_caldav_factory),
         ConnectorSpec(type="public_ics", capability="calendar", auth="shared", factory=_public_ics_factory),
+        ConnectorSpec(type="google", capability="calendar", auth="per_user", factory=_google_calendar_factory),
+        ConnectorSpec(type="ical_secret", capability="calendar", auth="per_user", provider="ical_secret", factory=_ical_secret_factory),
         ConnectorSpec(type="carddav", capability="contacts", auth="shared", factory=_carddav_factory),
         ConnectorSpec(type="webdav", capability="files", auth="shared", factory=_webdav_files_factory),
         ConnectorSpec(type="caldav", capability="tasks", auth="shared", factory=_tasks_caldav_factory),
