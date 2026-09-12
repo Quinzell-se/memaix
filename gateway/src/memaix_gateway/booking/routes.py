@@ -60,6 +60,7 @@ start time without a second lookup against the calendar.
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 import time
@@ -241,6 +242,32 @@ def _json(request: Request, payload: dict, status_code: int = 200) -> JSONRespon
     return JSONResponse(payload, status_code=status_code, headers=_cors_headers(request))
 
 
+def _with_cors_on_error(handler):
+    """Guarantee a CORS-header-bearing response even when *handler* raises.
+
+    Every clean/handled response in this module goes through _json(), which
+    sets the CORS header — but an unhandled exception (a bug, an adapter
+    that doesn't implement the method the write path needs, ...) bypasses
+    _json() entirely and falls into Starlette's default error middleware,
+    which returns a bare 500 with no CORS header at all. A browser then
+    reports that as a generic net::ERR_FAILED with no status the frontend
+    can act on, instead of a 500 it could show the visitor. Wrapping every
+    route here means a future bug in a handler still surfaces as a real,
+    CORS-compliant error instead of a silent failure in someone else's
+    browser console.
+    """
+
+    @functools.wraps(handler)
+    async def _wrapped(request: Request):
+        try:
+            return await handler(request)
+        except Exception:
+            logger.exception("unhandled error in booking route %s", handler.__name__)
+            return _json(request, {"error": "internal_error"}, status_code=500)
+
+    return _wrapped
+
+
 def _clamp_duration(duration_min: int) -> int:
     return max(_MIN_DURATION_MIN, min(_MAX_DURATION_MIN, duration_min))
 
@@ -395,6 +422,7 @@ def _host_timezone(link: dict) -> str:
     return tz
 
 
+@_with_cors_on_error
 async def booking_slots(request: Request) -> JSONResponse:
     """GET /book/{slug}/slots?within_start=&within_end=&duration_min= —
     free {start, end} windows only, never event details or which calendar
@@ -411,6 +439,7 @@ async def booking_slots(request: Request) -> JSONResponse:
     return _json(request, {"slots": windows, "duration_min": duration_min})
 
 
+@_with_cors_on_error
 async def booking_times(request: Request) -> JSONResponse:
     """GET /book/{slug}/times?within_start=&within_end=&duration_min=&granularity_min= —
     bookable start times, already cut from the free windows and aligned to
@@ -459,6 +488,7 @@ def _refuse_unless_bookable(request: Request) -> dict:
     return link
 
 
+@_with_cors_on_error
 async def booking_config(request: Request) -> JSONResponse:
     """GET /book/{slug}/config — everything the embedded widget needs to draw
     itself before it knows a single free time.
@@ -498,6 +528,7 @@ async def booking_config(request: Request) -> JSONResponse:
     })
 
 
+@_with_cors_on_error
 async def booking_create(request: Request) -> JSONResponse:
     """POST /book/{slug} — {start, end, name, email, turnstile_token, purpose?}."""
     client_ip = _client_ip(request)
@@ -565,8 +596,18 @@ async def booking_create(request: Request) -> JSONResponse:
             if meeting_form is None:
                 return _json(request, {"error": "invalid_meeting_form"}, status_code=400)
 
+    # _resolve_dav_filtered aggregates every enabled source (SA, registry,
+    # public ICS...) into a read-only _MultiCalendarAdapter whenever more
+    # than one is configured — exactly what the TOCTOU free-check below
+    # wants, since a false "free" from ignoring a source would double-book.
+    # calendar_create/_update/_delete need the opposite: a single adapter
+    # that actually implements create_event/update_event/delete_event, the
+    # same one the authenticated calendar_create MCP tool resolves via
+    # _resolve_calendar_dav. Using _resolve_dav_filtered's result for the
+    # write below crashes with AttributeError on _MultiCalendarAdapter.
     try:
         dav = _resolve_dav_filtered(project, host_user, acl)
+        write_dav = _resolve_dav(project, host_user)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -619,7 +660,7 @@ async def booking_create(request: Request) -> JSONResponse:
             location=meeting_detail["join_url"] or meeting_detail["phone_number"] if meeting_detail else None,
             description=purpose or None,
             want_conference=bool(meeting_form is not None and meeting_form["provider"] == "google_meet"),
-            _dav=dav, _confirmed=True,
+            _dav=write_dav, _confirmed=True,
         )
 
         if meeting_form is not None and meeting_form["provider"] == "google_meet":
@@ -641,7 +682,7 @@ async def booking_create(request: Request) -> JSONResponse:
                 # actually clean, same fail-closed guarantee as the Zoom
                 # path gets for free.
                 try:
-                    t_cal.calendar_delete(acl, host_user, project, event["id"], _dav=dav)
+                    t_cal.calendar_delete(acl, host_user, project, event["id"], _dav=write_dav)
                 except Exception:
                     logger.exception(
                         "failed to roll back orphaned google_meet event=%s project=%s host=%s",
@@ -925,6 +966,7 @@ def _send_reminder_email(
         logger.exception("booking reminder email failed for project=%s slug-host=%s", project, link.get("user"))
 
 
+@_with_cors_on_error
 async def booking_manage_get(request: Request) -> JSONResponse:
     """GET /booking/{token} — booking state for whoever holds the manage token.
 
@@ -945,6 +987,7 @@ async def booking_manage_get(request: Request) -> JSONResponse:
     })
 
 
+@_with_cors_on_error
 async def booking_reschedule(request: Request) -> JSONResponse:
     """POST /booking/{token}/reschedule — {start, end}. The token is the
     capability (card 8056150d) — no turnstile, but still IP rate-limited."""
@@ -980,7 +1023,11 @@ async def booking_reschedule(request: Request) -> JSONResponse:
     acl = _get_acl()
     project, host_user, event_id = row["project"], row["host_user"], row["event_id"]
     try:
+        # See booking_create for why the free-check and the write need two
+        # different adapters: _resolve_dav_filtered's merged read-only view
+        # for the former, a real single writable adapter for the latter.
         dav = _resolve_dav_filtered(project, host_user, acl)
+        write_dav = _resolve_dav(project, host_user)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -1005,7 +1052,7 @@ async def booking_reschedule(request: Request) -> JSONResponse:
         event = t_cal.calendar_update(
             acl, host_user, project, event_id,
             start=start.isoformat(), end=end.isoformat(),
-            _dav=dav, _confirmed=True,
+            _dav=write_dav, _confirmed=True,
         )
 
     get_consent_store().update_booking(
@@ -1027,6 +1074,7 @@ async def booking_reschedule(request: Request) -> JSONResponse:
     return _json(request, {"ok": True, "start": event.get("start"), "end": event.get("end")})
 
 
+@_with_cors_on_error
 async def booking_cancel(request: Request) -> JSONResponse:
     """POST /booking/{token}/cancel — the token is the capability."""
     client_ip = _client_ip(request)
@@ -1045,7 +1093,10 @@ async def booking_cancel(request: Request) -> JSONResponse:
 
     if event_id:
         try:
-            dav = _resolve_dav_filtered(project, host_user, acl)
+            # Deleting is a write — needs the real single adapter, not
+            # _resolve_dav_filtered's merged read-only view (see
+            # booking_create for the full explanation).
+            dav = _resolve_dav(project, host_user)
             try:
                 t_cal.calendar_delete(acl, host_user, project, event_id, _dav=dav)
             except FileNotFoundError:

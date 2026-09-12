@@ -453,6 +453,80 @@ def test_create_booking_succeeds_and_stores_event(rig):
     assert any(e["title"] == "Möte med Bob" for e in dav._events)
 
 
+def test_create_booking_uses_writable_adapter_not_readonly_multi_adapter(rig, monkeypatch):
+    """Regression for '_MultiCalendarAdapter' object has no attribute
+    'create_event': _resolve_dav_filtered may legitimately return a
+    read-only, merge-only adapter (what _MultiCalendarAdapter actually is)
+    when more than one calendar source is enabled — fine for the
+    availability check, but must never be the adapter calendar_create
+    writes through. This pins _resolve_dav_filtered and
+    _resolve_dav/_resolve_calendar_dav to two different fakes, so the test
+    only passes if booking_create resolves its write adapter independently
+    instead of reusing whatever _resolve_dav_filtered returned.
+    """
+    import memaix_gateway.booking.routes as booking_routes_mod
+
+    client, write_dav = rig
+
+    class _ReadOnlyMultiDav:
+        """Mirrors _MultiCalendarAdapter's actual shape: list_events/
+        find_events only, no create_event/update_event/delete_event."""
+
+        def __init__(self, events):
+            self._events = events
+
+        def list_events(self, start, end):
+            return [e for e in self._events if _parse(e["start"]) < end and _parse(e["end"]) > start]
+
+        find_events = list_events
+
+    read_dav = _ReadOnlyMultiDav(write_dav._events)
+    monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: read_dav)
+    # _resolve_dav (write path) still resolves through server's
+    # _resolve_calendar_dav, already patched by `rig` to return the
+    # writable `write_dav` mock — left untouched here on purpose.
+
+    resp = client.post(
+        "/book/alice-30",
+        json={
+            "start": _dt(11).isoformat(), "end": _dt(11, 30).isoformat(),
+            "name": "Carol", "email": "carol@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker till lagring i 1 år.",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert any(e["title"] == "Möte med Carol" for e in write_dav._events)
+
+
+def test_create_booking_unhandled_error_still_carries_cors_header(rig, monkeypatch):
+    """The secondary CORS bug: an unhandled exception in the route used to
+    bypass _json() entirely and fall into Starlette's default error
+    middleware, which drops the CORS header — the browser then reports
+    net::ERR_FAILED with no usable status instead of a real 500."""
+    import memaix_gateway.booking.routes as booking_routes_mod
+
+    client, _dav = rig
+
+    def _boom(*a, **kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(booking_routes_mod.t_cal, "calendar_create", _boom)
+
+    resp = client.post(
+        "/book/alice-30",
+        headers={"Origin": "https://memaix.se"},
+        json={
+            "start": _dt(12).isoformat(), "end": _dt(12, 30).isoformat(),
+            "name": "Dave", "email": "dave@example.com", "turnstile_token": "tok",
+            "consent": True, "consent_text": "Jag samtycker till lagring i 1 år.",
+        },
+    )
+    assert resp.status_code == 500
+    assert resp.headers.get("access-control-allow-origin") == "https://memaix.se"
+    assert resp.json()["error"] == "internal_error"
+
+
 def test_create_booking_without_consent_is_rejected(rig):
     client, dav = rig
     resp = client.post(
