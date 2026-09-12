@@ -6,11 +6,81 @@ on:
 
 jobs:
   publish:
-    uses: jimlov-poc-labs/jimlov-crew/.github/workflows/release-publish.yml@master
-    with:
-      project_slug: memaix
-      display_name: Memaix
-      tag: ${{ github.event.release.tag_name }}
-      release_body: ${{ github.event.release.body }}
-      release_url: ${{ github.event.release.html_url }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse semver
+        id: semver
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${TAG#v}"
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+
+          if [ -n "$PATCH" ] && [ "$PATCH" != "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Patch release ($TAG) — skipping jimlov.se publish."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            if [ "$MINOR" = "0" ]; then
+              echo "level=major" >> "$GITHUB_OUTPUT"
+            else
+              echo "level=minor" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Checkout jimlov-se
+        if: steps.semver.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          repository: jimlov-poc-labs/jimlov-se
+          token: ${{ secrets.JIMLOV_RELEASE_TOKEN }}
+
+      - name: Write release entry
+        if: steps.semver.outputs.skip == 'false'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_LEVEL: ${{ steps.semver.outputs.level }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          python3 << 'EOF'
+          import json, os
+          from datetime import datetime, timezone
+
+          slug      = "memaix"
+          file_path = f"content/releases/{slug}.json"
+
+          body  = os.environ['RELEASE_BODY']
+          entry = {
+              "version": os.environ['RELEASE_TAG'],
+              "date":    datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+              "type":    os.environ['RELEASE_LEVEL'],
+              "notes":   {"sv": body, "en": body},
+              "url":     os.environ['RELEASE_URL'],
+          }
+
+          if os.path.exists(file_path):
+              with open(file_path) as f:
+                  releases = json.load(f)
+          else:
+              os.makedirs("content/releases", exist_ok=True)
+              releases = []
+
+          releases.insert(0, entry)
+
+          with open(file_path, "w") as f:
+              json.dump(releases, f, indent=2, ensure_ascii=False)
+              f.write("\n")
+          EOF
+
+      - name: Commit and push
+        if: steps.semver.outputs.skip == 'false'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git config user.name "jimlov-release-bot"
+          git config user.email "bot@jimlov.se"
+          git add content/releases/
+          git commit -m "Release: Memaix $RELEASE_TAG"
+          git push
