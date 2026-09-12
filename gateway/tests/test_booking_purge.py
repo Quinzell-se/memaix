@@ -70,7 +70,7 @@ def test_purge_due_deletes_calendar_event_and_scrubs_row(store):
     dav = _FakeDav()
     now = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-    purged = purge_due(store, _acl, lambda project, user: dav, now)
+    purged = purge_due(store, _acl, lambda project, user, **_: dav, now)
 
     assert purged == 1
     assert dav.deleted == ["ev1"]
@@ -86,7 +86,7 @@ def test_purge_due_skips_row_still_within_retention(store):
     dav = _FakeDav()
     now = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-    purged = purge_due(store, _acl, lambda project, user: dav, now)
+    purged = purge_due(store, _acl, lambda project, user, **_: dav, now)
 
     assert purged == 0
     assert dav.deleted == []
@@ -103,7 +103,7 @@ def test_purge_due_scrubs_row_when_event_already_deleted(store):
             raise FileNotFoundError(id)
 
     now = datetime(2026, 6, 1, tzinfo=timezone.utc)
-    purged = purge_due(store, _acl, lambda project, user: _GoneDav(), now)
+    purged = purge_due(store, _acl, lambda project, user, **_: _GoneDav(), now)
 
     # Event was already gone (host deleted it manually) — nothing left to
     # delete, so the row is scrubbed immediately rather than retried forever.
@@ -127,7 +127,7 @@ def test_purge_due_swallows_a_single_row_failure_and_continues(store):
                 raise RuntimeError("caldav unreachable")
 
     now = datetime(2026, 6, 1, tzinfo=timezone.utc)
-    purged = purge_due(store, _acl, lambda project, user: _BoomDav(), now)
+    purged = purge_due(store, _acl, lambda project, user, **_: _BoomDav(), now)
 
     # ev1's row errors and is left for a future tick; ev2's still purges.
     assert purged == 1

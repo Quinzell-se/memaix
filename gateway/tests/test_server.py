@@ -584,4 +584,87 @@ def test_backlog_status_change_conflict_does_not_trigger_rule(wired):
         assert result.get("conflict") is True
     finally:
         actions_mod._run_notify = orig_run_notify
-    assert sent == []
+
+
+# ------------------------------------------------------------------
+# _resolve_calendar_dav write= — regression for the '_MultiCalendarAdapter'
+# object has no attribute 'create_event' bug (PR #100 shipped a half-fix
+# that patched booking/routes.py but never fixed the actual resolver, so
+# an authenticated calendar_create call still crashed for any project with
+# both calendar_sa and a linked per-user account).
+# ------------------------------------------------------------------
+
+
+class _FakeNormalDav:
+    """Stands in for whatever _resolve_normal_calendar_dav would return
+    (e.g. _PerUserGoogleAdapter) — the important bit is it implements the
+    write methods, unlike _ServiceAccountGoogleCalendarAdapter/
+    _MultiCalendarAdapter."""
+
+    def create_event(self, *a, **kw):
+        return {"id": "ev1"}
+
+
+class _FakeSaDav:
+    """Stands in for _ServiceAccountGoogleCalendarAdapter — read-only,
+    no create_event/update_event/delete_event."""
+
+    def list_events(self, start, end):
+        return []
+
+    find_events = list_events
+
+
+@pytest.fixture()
+def sa_and_normal_calendar(monkeypatch, tmp_path):
+    """A project with both calendar_sa and a normal per-user Google account
+    configured — the exact production shape that made _resolve_calendar_dav
+    return a read-only _MultiCalendarAdapter for a write caller."""
+    acl = Acl(
+        users={"alice": {"grants": {"proj": "owner"}}},
+        projects={"proj": {
+            "calendar": {"type": "google", "auth": "per_user"},
+            "calendar_sa": {
+                "type": "google", "auth": "service_account",
+                "service_account_ref": "env:FAKE_SA_JSON",
+                "impersonate": "alice@example.com",
+            },
+        }},
+    )
+    monkeypatch.setattr(server, "_acl", acl)
+    monkeypatch.setenv("FAKE_SA_JSON", "{}")
+
+    class _FakeTokenStore:
+        def list_accounts(self, user):
+            return [{"provider": "google", "account": "alice@example.com"}]
+
+    monkeypatch.setattr(server, "_get_token_store", lambda: _FakeTokenStore())
+    monkeypatch.setattr(server.config, "load", lambda: {"memaix": {}})
+    monkeypatch.setattr(
+        server, "_resolve_normal_calendar_dav",
+        lambda acl, cfg, store, project, user, all_accounts, require_per_user, public_url: _FakeNormalDav(),
+    )
+    monkeypatch.setattr(
+        server, "_ServiceAccountGoogleCalendarAdapter",
+        lambda sa_info, impersonate: _FakeSaDav(),
+    )
+    return acl
+
+
+def test_resolve_calendar_dav_write_skips_sa_merge(sa_and_normal_calendar):
+    """The write path must get back the single writable adapter, never the
+    SA adapter or a _MultiCalendarAdapter merge of the two — neither of
+    those implements create_event/update_event/delete_event."""
+    dav = server._resolve_calendar_dav("proj", "alice", write=True)
+    assert isinstance(dav, _FakeNormalDav)
+    dav.create_event()  # would raise AttributeError before the fix
+
+
+def test_resolve_calendar_dav_read_still_merges_sa(sa_and_normal_calendar):
+    """Unchanged behaviour for read callers (calendar_list/_find_free):
+    the SA calendar's events should still show up alongside the user's own,
+    via the merged adapter."""
+    from memaix_gateway.tools.calendar import _MultiCalendarAdapter
+
+    dav = server._resolve_calendar_dav("proj", "alice")
+    assert isinstance(dav, _MultiCalendarAdapter)
