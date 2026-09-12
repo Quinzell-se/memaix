@@ -129,10 +129,10 @@ def _get_acl():
     return _srv_get_acl()
 
 
-def _resolve_dav(project: str, user: str):
+def _resolve_dav(project: str, user: str, *, write: bool = False):
     from ..server import _resolve_calendar_dav as _srv_resolve_dav
 
-    return _srv_resolve_dav(project, user)
+    return _srv_resolve_dav(project, user, write=write)
 
 
 def _resolve_dav_filtered(project: str, user: str, acl) -> object:
@@ -607,7 +607,7 @@ async def booking_create(request: Request) -> JSONResponse:
     # write below crashes with AttributeError on _MultiCalendarAdapter.
     try:
         dav = _resolve_dav_filtered(project, host_user, acl)
-        write_dav = _resolve_dav(project, host_user)
+        write_dav = _resolve_dav(project, host_user, write=True)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -1027,7 +1027,7 @@ async def booking_reschedule(request: Request) -> JSONResponse:
         # different adapters: _resolve_dav_filtered's merged read-only view
         # for the former, a real single writable adapter for the latter.
         dav = _resolve_dav_filtered(project, host_user, acl)
-        write_dav = _resolve_dav(project, host_user)
+        write_dav = _resolve_dav(project, host_user, write=True)
     except CalendarAuthRequired:
         return _json(request, {"error": "not_found"}, status_code=404)
 
@@ -1096,7 +1096,7 @@ async def booking_cancel(request: Request) -> JSONResponse:
             # Deleting is a write — needs the real single adapter, not
             # _resolve_dav_filtered's merged read-only view (see
             # booking_create for the full explanation).
-            dav = _resolve_dav(project, host_user)
+            dav = _resolve_dav(project, host_user, write=True)
             try:
                 t_cal.calendar_delete(acl, host_user, project, event_id, _dav=dav)
             except FileNotFoundError:

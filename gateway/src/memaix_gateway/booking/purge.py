@@ -42,7 +42,10 @@ def purge_due(store: ConsentStore, acl_fn, resolve_dav_fn, now: datetime) -> int
             if event_id:
                 acl = acl_fn()
                 try:
-                    dav = resolve_dav_fn(project, host_user)
+                    # write=True: purge is a delete, must get the single
+                    # writable adapter, never a read-only SA/merged one
+                    # (see _resolve_calendar_dav's write= docstring).
+                    dav = resolve_dav_fn(project, host_user, write=True)
                     t_cal.calendar_delete(acl, host_user, project, event_id, _dav=dav)
                 except CalendarAuthRequired:
                     # Host revoked calendar access since booking — nothing left

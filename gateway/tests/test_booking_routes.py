@@ -111,7 +111,7 @@ def rig(tmp_path, monkeypatch):
     BookingSettingsStore(acl, "proj", "alice").set(True)
 
     dav = _MockDav()
-    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user, write=False: dav)
     monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
 
     monkeypatch.setenv("TEST_TURNSTILE_SECRET", "shh")
@@ -1166,7 +1166,7 @@ def test_create_booking_google_meet_form_resolves_after_calendar_create(rig, mon
     import memaix_gateway.booking.routes as booking_routes_mod
 
     dav = _MockDavWithMeet()
-    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user, write=False: dav)
     monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
     client, _old_dav = rig
 
@@ -1215,7 +1215,7 @@ def test_create_booking_google_meet_missing_meet_url_rolls_back_event(rig, monke
             super().delete_event(id)
 
     dav = _MockDavMeetProvisionFails()
-    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user: dav)
+    monkeypatch.setattr(server_mod, "_resolve_calendar_dav", lambda project, user, write=False: dav)
     monkeypatch.setattr(booking_routes_mod, "_resolve_dav_filtered", lambda project, user, acl: dav)
     client, _old_dav = rig
 

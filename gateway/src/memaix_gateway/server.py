@@ -2526,7 +2526,7 @@ def calendar_create(
     user = _user()
     _rl(user, project)
     try:
-        dav = _resolve_calendar_dav(project, user)
+        dav = _resolve_calendar_dav(project, user, write=True)
         return _audited(
             user, project, "calendar_create",
             t_cal.calendar_create,
@@ -2551,7 +2551,7 @@ def calendar_update(project: str, id: str, idempotency_key: str | None = None, *
     # _confirmed=True and bypass the outbox gate in tools/calendar.py.
     fields = {k: v for k, v in fields.items() if not k.startswith("_")}
     try:
-        dav = _resolve_calendar_dav(project, user)
+        dav = _resolve_calendar_dav(project, user, write=True)
         return _audited(
             user, project, "calendar_update",
             t_cal.calendar_update,
@@ -2645,7 +2645,7 @@ def _ensure_fresh_microsoft_mail_token(user: str) -> None:
             store.mark_needs_relink(user, "microsoft", account)
 
 
-def _resolve_calendar_dav(project: str, user: str):
+def _resolve_calendar_dav(project: str, user: str, *, write: bool = False):
     """Return a calendar adapter for the project/user.
 
     Checks TokenStore for the user's configured mode in priority order:
@@ -2654,6 +2654,15 @@ def _resolve_calendar_dav(project: str, user: str):
       3. FreeBusy (read-only) — provider='free_busy'
       None → fall back to static CalDAV config from acl.yaml.
     Raises CalendarAuthRequired if project requires per_user but nothing is configured.
+
+    write=True (memaix-src PR #100 follow-up) skips the service-account
+    merge below: _ServiceAccountGoogleCalendarAdapter is read-only
+    (calendar.readonly scope, no create/update/delete_event) and
+    _MultiCalendarAdapter never implements those either, so a caller that
+    needs to write (calendar_create/_update/_delete) must get back the
+    single normal per-user/fallback adapter, never the SA or merged one —
+    even though a read caller (calendar_list/_find_free/...) still wants
+    the merged view so SA-only calendars show up as busy/free.
     """
     acl = _get_acl()
     cal_cfg = acl.resource(project, "calendar")
@@ -2668,6 +2677,13 @@ def _resolve_calendar_dav(project: str, user: str):
     # alongside whatever the user has linked. Runs before OAuth on purpose.
     sa_res = acl.resource(project, "calendar_sa")
     if isinstance(sa_res, dict) and sa_res.get("auth") == "service_account":
+        if write:
+            # SA adapter can't write and merging it in would only ever
+            # produce a read-only _MultiCalendarAdapter — go straight to
+            # the normal/fallback adapter instead of resolving the SA.
+            return _resolve_normal_calendar_dav(
+                acl, cfg, store, project, user, all_accounts, require_per_user, public_url
+            )
         import json
         import os
         try:
