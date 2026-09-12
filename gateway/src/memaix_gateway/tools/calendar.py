@@ -115,14 +115,39 @@ class _PerUserGoogleAdapter:
         }
 
     def list_events(self, start: datetime, end: datetime) -> list[dict]:
-        data = self._get(
-            "/calendars/primary/events",
-            timeMin=start.isoformat() if start.tzinfo else start.isoformat() + "Z",
-            timeMax=end.isoformat() if end.tzinfo else end.isoformat() + "Z",
-            singleEvents="true",
-            orderBy="startTime",
-        )
-        return [self._to_dict(e) for e in data.get("items", [])]
+        from urllib.parse import quote as _quote
+
+        time_min = start.isoformat() if start.tzinfo else start.isoformat() + "Z"
+        time_max = end.isoformat() if end.tzinfo else end.isoformat() + "Z"
+
+        try:
+            cal_list = self._get("/users/me/calendarList", minAccessRole="reader")
+            calendar_ids = [c["id"] for c in cal_list.get("items", [])]
+        except Exception:
+            calendar_ids = []
+        if not calendar_ids:
+            calendar_ids = ["primary"]
+
+        seen: set[str] = set()
+        events: list[dict] = []
+        for cal_id in calendar_ids:
+            try:
+                data = self._get(
+                    f"/calendars/{_quote(cal_id, safe='')}/events",
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents="true",
+                    orderBy="startTime",
+                )
+            except Exception:
+                continue
+            for e in data.get("items", []):
+                ev = self._to_dict(e)
+                if ev["id"] not in seen:
+                    seen.add(ev["id"])
+                    events.append(ev)
+
+        return sorted(events, key=lambda e: e.get("start", ""))
 
     find_events = list_events
 
@@ -1284,3 +1309,4 @@ def get_status(user_id: str, project: str, acl: Acl, store) -> dict:
         "details": details,
         "available_modes": ["oauth", "ical_secret", "free_busy"],
     }
+
