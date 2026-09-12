@@ -230,3 +230,49 @@ def test_default_registry_is_a_lazy_singleton():
     first = default_registry()
     second = default_registry()
     assert first is second
+
+
+def test_catalog_registers_google_calendar_spec(registry, monkeypatch):
+    """Google per_user spec is registered — get_all sweep can pick it up."""
+    sentinel = object()
+    import memaix_gateway.tools.calendar as t_cal
+
+    monkeypatch.setattr(t_cal, "_PerUserGoogleAdapter", lambda token: sentinel)
+
+    acl_no_cal = Acl(
+        users={"alice": {"grants": {"acme": "owner"}}},
+        projects={"acme": {"vault": "/srv/vaults/acme"}},
+    )
+
+    class _GoogleStore:
+        def list_accounts(self, user):
+            return [{"provider": "google", "account": "a@gmail.com"}]
+
+        def load_one(self, user, provider, account):
+            return {"access_token": "tok"}
+
+    result = registry.get_all(acl_no_cal, _GoogleStore(), "acme", "calendar", "alice")
+    assert any(adapter is sentinel for _, adapter in result)
+
+
+def test_catalog_registers_ical_secret_calendar_spec(registry, monkeypatch):
+    """iCal-secret per_user spec is registered — get_all sweep can pick it up."""
+    sentinel = object()
+    import memaix_gateway.tools.calendar as t_cal
+
+    monkeypatch.setattr(t_cal, "_ICalAdapter", lambda url: sentinel)
+
+    acl_no_cal = Acl(
+        users={"alice": {"grants": {"acme": "owner"}}},
+        projects={"acme": {"vault": "/srv/vaults/acme"}},
+    )
+
+    class _ICalStore:
+        def list_accounts(self, user):
+            return [{"provider": "ical_secret", "account": "ical_secret"}]
+
+        def load_one(self, user, provider, account):
+            return {"ical_url": "https://cal.example/secret.ics"}
+
+    result = registry.get_all(acl_no_cal, _ICalStore(), "acme", "calendar", "alice")
+    assert any(adapter is sentinel for _, adapter in result)

@@ -134,3 +134,63 @@ def test_get_all_extra_source_per_user_without_linked_account_is_skipped():
     acl = _acl({"type": "caldav", "url": "https://x", "sources": [{"type": "microsoft"}]})
     result = registry.get_all(acl, _FakeTokenStore(), "acme", "calendar", "alice")
     assert result == [("caldav:acme", "caldav")]
+
+
+def test_get_all_per_user_sweep_finds_google_when_base_type_is_caldav():
+    """Google is linked but acl.yaml still says caldav — the sweep must pick it up."""
+    registry = ConnectorRegistry()
+    registry.register(
+        ConnectorSpec(type="caldav", capability="calendar", auth="shared", factory=lambda a, p, u, c, t: "caldav")
+    )
+    registry.register(
+        ConnectorSpec(
+            type="google", capability="calendar", auth="per_user",
+            factory=lambda a, p, u, c, t: f"google:{t['email']}",
+        )
+    )
+    acl = _acl({"url": "https://x/cal"})  # no type key — defaults to caldav
+    store = _FakeTokenStore(
+        accounts={"alice": [{"provider": "google", "account": "a@gmail.com"}]},
+        tokens={("alice", "google", "a@gmail.com"): {"email": "a@gmail.com"}},
+    )
+    result = registry.get_all(acl, store, "acme", "calendar", "alice")
+    labels = {label for label, _ in result}
+    assert "caldav:acme" in labels
+    assert "google:a@gmail.com" in labels
+
+
+def test_get_all_per_user_sweep_finds_ical_secret_when_linked():
+    """iCal-secret linked user sees it in sources even when base type is caldav."""
+    registry = ConnectorRegistry()
+    registry.register(
+        ConnectorSpec(type="caldav", capability="calendar", auth="shared", factory=lambda a, p, u, c, t: "caldav")
+    )
+    registry.register(
+        ConnectorSpec(
+            type="ical_secret", capability="calendar", auth="per_user", provider="ical_secret",
+            factory=lambda a, p, u, c, t: f"ical:{t['ical_url']}",
+        )
+    )
+    acl = _acl({"url": "https://x/cal"})
+    store = _FakeTokenStore(
+        accounts={"alice": [{"provider": "ical_secret", "account": "ical_secret"}]},
+        tokens={("alice", "ical_secret", "ical_secret"): {"ical_url": "https://cal.example/secret.ics"}},
+    )
+    result = registry.get_all(acl, store, "acme", "calendar", "alice")
+    labels = {label for label, _ in result}
+    assert "ical_secret:ical_secret" in labels
+
+
+def test_get_all_per_user_sweep_works_without_resource_cfg():
+    """Even without any calendar resource in acl.yaml, per_user sweep finds linked accounts."""
+    registry = ConnectorRegistry()
+    registry.register(
+        ConnectorSpec(type="google", capability="calendar", auth="per_user", factory=lambda a, p, u, c, t: "google")
+    )
+    acl = Acl(users={"alice": {"grants": {"acme": "owner"}}}, projects={"acme": {"vault": "/x"}})
+    store = _FakeTokenStore(
+        accounts={"alice": [{"provider": "google", "account": "a@gmail.com"}]},
+        tokens={("alice", "google", "a@gmail.com"): {}},
+    )
+    result = registry.get_all(acl, store, "acme", "calendar", "alice")
+    assert result == [("google:a@gmail.com", "google")]
