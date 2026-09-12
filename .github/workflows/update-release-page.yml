@@ -1,0 +1,128 @@
+name: Update memaix-site release page
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse semver
+        id: semver
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${TAG#v}"
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+
+          if [ "$PATCH" != "0" ]; then
+            echo "type=fix" >> "$GITHUB_OUTPUT"
+            echo "badge_class=tag-fix" >> "$GITHUB_OUTPUT"
+          elif [ "$MINOR" != "0" ]; then
+            echo "type=feature" >> "$GITHUB_OUTPUT"
+            echo "badge_class=tag-new" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=new" >> "$GITHUB_OUTPUT"
+            echo "badge_class=tag-violet" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout memaix-site
+        uses: actions/checkout@v4
+        with:
+          repository: jimlov-poc-labs/memaix-site
+          token: ${{ secrets.JIMLOV_RELEASE_TOKEN }}
+
+      - name: Update releases.html
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TITLE: ${{ github.event.release.name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_TYPE: ${{ steps.semver.outputs.type }}
+          BADGE_CLASS: ${{ steps.semver.outputs.badge_class }}
+        run: |
+          python3 << 'EOF'
+          import os, re
+          from datetime import datetime, timezone
+
+          tag       = os.environ['RELEASE_TAG']
+          title     = os.environ.get('RELEASE_TITLE') or tag
+          body      = os.environ.get('RELEASE_BODY', '')
+          rel_type  = os.environ['RELEASE_TYPE']
+          badge_cls = os.environ['BADGE_CLASS']
+          today     = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+          # First non-empty line of body becomes the subtitle.
+          lines    = [l for l in body.splitlines() if l.strip()]
+          subtitle = lines[0].strip() if lines else ''
+
+          # Optional "Tests: 1300p" anywhere in body.
+          test_match = re.search(r'Tests:\s*(\S+)', body, re.IGNORECASE)
+          tests = test_match.group(1) if test_match else '—'
+
+          with open('releases.html', encoding='utf-8') as f:
+              html = f.read()
+
+          row_count = html.count('<tr class="rel-row">')
+          new_count = row_count + 1
+
+          subtitle_html = (
+              f'\n            <div class="mono mt-0.5" style="font-size:11px;color:var(--muted)">{subtitle}</div>'
+              if subtitle else ''
+          )
+          new_row = (
+              f'        <tr class="rel-row">\n'
+              f'          <td class="mono px-6 py-4" style="font-size:12px;color:var(--amber);font-weight:500">{tag}</td>\n'
+              f'          <td class="px-4 py-4">\n'
+              f'            <div style="font-size:13px;font-weight:600;color:var(--text)">{title}</div>{subtitle_html}\n'
+              f'          </td>\n'
+              f'          <td class="c-date px-4 py-4 mono" style="font-size:11px;color:var(--muted)">{today}</td>\n'
+              f'          <td class="c-type px-4 py-4"><span class="badge-xs-tag {badge_cls}">{rel_type}</span></td>\n'
+              f'          <td class="c-tests px-6 py-4 text-right mono" style="font-size:11px;color:var(--green);font-weight:500">{tests}</td>\n'
+              f'        </tr>\n'
+          )
+
+          # Dim the previously-current row's version cell.
+          html = re.sub(
+              r'(<td class="mono px-6 py-4" style="font-size:12px;color:var\(--amber\);font-weight:500">)',
+              '<td class="mono px-6 py-4" style="font-size:12px;color:var(--muted)">',
+              html,
+              count=1,
+          )
+
+          html = html.replace('<tbody>\n', f'<tbody>\n{new_row}', 1)
+
+          html = re.sub(
+              r'(<span class="amber-pill ml-1">)[^<]*(</span>)',
+              rf'\g<1>{tag}\2',
+              html,
+          )
+
+          html = re.sub(
+              r'(current: )v[\d.]+',
+              rf'\g<1>{tag}',
+              html,
+          )
+
+          html = re.sub(
+              r'(<span class="amber-pill">)\d+ releases(</span>)',
+              rf'\g<1>{new_count} releases\2',
+              html,
+          )
+
+          with open('releases.html', 'w', encoding='utf-8') as f:
+              f.write(html)
+
+          print(f"Updated: {new_count} releases, current {tag}")
+          EOF
+
+      - name: Commit and push
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git config user.name "jimlov-release-bot"
+          git config user.email "bot@jimlov.se"
+          git add releases.html
+          git commit -m "Release: Memaix $RELEASE_TAG"
+          git push
